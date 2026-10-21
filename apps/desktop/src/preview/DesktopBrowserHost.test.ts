@@ -134,6 +134,83 @@ const watchPainting = (host: DesktopBrowserHost.DesktopBrowserHost["Service"]) =
   });
 
 describe("DesktopBrowserHost", () => {
+  it.effect.each(["set", "clear"] as const)(
+    "waits for the native viewport acknowledgement on %s",
+    (operation) =>
+      Effect.gen(function* () {
+        const host = yield* DesktopBrowserHost.make;
+        const debuggee = makeDebuggee();
+        const applied = Promise.withResolvers<void>();
+        const sizes: Array<{ width: number; height: number } | null> = [];
+        host.attach(key, {
+          ...debuggee.tab,
+          applyViewport: (size) => {
+            sizes.push(size);
+            return applied.promise;
+          },
+        });
+        const reader = yield* takeEvents(host, 2).pipe(Effect.forkScoped);
+        yield* Effect.yieldNow;
+        yield* host.handleCommandLine(
+          encodeJson({
+            type: "cdp",
+            ...key,
+            message: encodeJson({
+              id: 41,
+              sessionId: "t3-preview-page",
+              method:
+                operation === "set"
+                  ? "Emulation.setDeviceMetricsOverride"
+                  : "Emulation.clearDeviceMetricsOverride",
+              params:
+                operation === "set"
+                  ? { width: 390, height: 844, deviceScaleFactor: 0, mobile: false }
+                  : {},
+            }),
+          }),
+        );
+        expect(sizes).toEqual([operation === "set" ? { width: 390, height: 844 } : null]);
+        expect(reader.pollUnsafe()).toBeUndefined();
+        applied.resolve();
+        const [, reply] = yield* Fiber.join(reader);
+        expect(reply).toMatchObject({ type: "cdp" });
+        expect(JSON.parse((reply as { message: string }).message)).toMatchObject({
+          id: 41,
+          result: {},
+        });
+      }).pipe(Effect.scoped),
+  );
+
+  it.effect("reports native viewport failure without acknowledging a successful resize", () =>
+    Effect.gen(function* () {
+      const host = yield* DesktopBrowserHost.make;
+      host.attach(key, {
+        ...makeDebuggee().tab,
+        applyViewport: async () => {
+          throw new Error("synthetic native failure");
+        },
+      });
+      const reader = yield* takeEvents(host, 2).pipe(Effect.forkScoped);
+      yield* Effect.yieldNow;
+      yield* host.handleCommandLine(
+        encodeJson({
+          type: "cdp",
+          ...key,
+          message: encodeJson({
+            id: 42,
+            sessionId: "t3-preview-page",
+            method: "Emulation.setDeviceMetricsOverride",
+            params: { width: 390, height: 844, deviceScaleFactor: 0, mobile: false },
+          }),
+        }),
+      );
+      const [, reply] = yield* Fiber.join(reader);
+      const response = JSON.parse((reply as { message: string }).message);
+      expect(response).toMatchObject({ id: 42, error: { message: "synthetic native failure" } });
+      expect(response).not.toHaveProperty("result");
+    }).pipe(Effect.scoped),
+  );
+
   it.effect("announces tabs already attached to a backend that starts later", () =>
     Effect.gen(function* () {
       const host = yield* DesktopBrowserHost.make;

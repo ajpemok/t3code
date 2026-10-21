@@ -625,7 +625,20 @@ const make = Effect.gen(function* () {
   const applySetting = async (tab: ServerTab, setting: PreviewViewportSetting) => {
     tab.setting = setting;
 
-    if (tab.desktop) return;
+    if (tab.desktop) {
+      const size = fixedViewportSize(setting);
+      if (size) {
+        await tab.cdp.send("Emulation.setDeviceMetricsOverride", {
+          width: size.width,
+          height: size.height,
+          deviceScaleFactor: 0,
+          mobile: false,
+        });
+      } else {
+        await tab.cdp.send("Emulation.clearDeviceMetricsOverride");
+      }
+      return;
+    }
     const size =
       fixedViewportSize(setting) ??
       [...tab.viewers]
@@ -778,6 +791,8 @@ const make = Effect.gen(function* () {
     };
     if (!desktop) {
       await page.setViewportSize(fixedViewportSize(tab.setting) ?? UNATTACHED_FILL_VIEWPORT);
+    } else {
+      await applySetting(tab, tab.setting);
     }
     await applyRendering(tab, snapshot);
     const isMainNavigation = (request: { isNavigationRequest(): boolean; frame(): unknown }) =>
@@ -1943,10 +1958,13 @@ const make = Effect.gen(function* () {
           manager.resize({ threadId: tab.threadId, tabId: tab.tabId, viewport: setting }),
         );
         await applySetting(tab, setting);
+        const measured = tab.desktop
+          ? await ServerBrowserPage.readPageMetrics(tab.cdp)
+          : (tab.page.viewportSize() ?? UNATTACHED_FILL_VIEWPORT);
         return {
           tabId: tab.tabId,
           setting,
-          viewport: tab.page.viewportSize() ?? UNATTACHED_FILL_VIEWPORT,
+          viewport: { width: measured.width, height: measured.height },
         };
       }
       case "setColorScheme": {
