@@ -15,6 +15,7 @@ import { ExecutionEnvironmentDescriptor } from "./environment.ts";
 import { type ClientSettings, type QuitConfirmationMode, SnapShotShortcut } from "./settings.ts";
 import type { EditorId } from "./editor.ts";
 import type { PreviewForwardedShortcut } from "./keybindings.ts";
+import { PreviewViewportSize } from "./preview.ts";
 
 import type {
   DesktopAppActivationRequest,
@@ -943,6 +944,13 @@ export interface DesktopPreviewTabDefaults {
   readonly serverTab?: { readonly threadId: string; readonly tabId: string } | undefined;
 }
 
+export type DesktopPreviewViewport = PreviewViewportSize | null;
+
+export const DesktopPreviewSetViewportInputSchema = Schema.Struct({
+  tabId: DesktopPreviewTabIdSchema,
+  viewport: Schema.NullOr(PreviewViewportSize),
+});
+
 export const DesktopPreviewRegisterWebviewInputSchema = Schema.Struct({
   tabId: DesktopPreviewTabIdSchema,
   webContentsId: Schema.Int.check(Schema.isGreaterThan(0)),
@@ -1141,6 +1149,8 @@ export interface DesktopPreviewBridge {
   zoomOut: (tabId: string) => Promise<void>;
   resetZoom: (tabId: string) => Promise<void>;
   setZoomFactor: (tabId: string, zoomFactor: number) => Promise<void>;
+  /** Fixed logical CSS size; null restores the guest's native viewport for Fill. */
+  setViewport: (tabId: string, viewport: DesktopPreviewViewport) => Promise<void>;
   hardReload: (tabId: string) => Promise<void>;
   setColorScheme: (tabId: string, colorScheme: DesktopPreviewColorScheme) => Promise<void>;
   setAudioMuted: (tabId: string, audioMuted: boolean) => Promise<void>;
