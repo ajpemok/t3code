@@ -32,6 +32,9 @@ export interface DesktopBrowserTabKey {
 export interface DesktopBrowserTabDebugger {
   readonly webContents: Electron.WebContents;
   readonly debugger: Electron.Debugger;
+  readonly applyViewport?: (
+    size: { readonly width: number; readonly height: number } | null,
+  ) => Promise<void>;
 }
 
 const keyOf = ({ threadId, tabId }: DesktopBrowserTabKey) => `${threadId}\u0000${tabId}`;
@@ -128,10 +131,43 @@ export const make = Effect.gen(function* () {
         : debuggee.sendCommand(method, params, sessionId);
     const relay: CdpRelayConnection = createCdpRelayConnection(
       {
-        send: (method, params, sessionId) =>
-          method === "Page.captureScreenshot"
+        send: (method, params, sessionId) => {
+          if (
+            sessionId === undefined &&
+            (method === "Emulation.clearDeviceMetricsOverride" ||
+              (method === "Emulation.setDeviceMetricsOverride" &&
+                params.deviceScaleFactor === 0 &&
+                params.mobile === false))
+          ) {
+            if (!tab.debuggee.applyViewport) {
+              return Promise.reject(new Error("The native viewport handler is unavailable."));
+            }
+            const width = params.width;
+            const height = params.height;
+            if (
+              method !== "Emulation.clearDeviceMetricsOverride" &&
+              (typeof width !== "number" ||
+                typeof height !== "number" ||
+                !Number.isInteger(width) ||
+                !Number.isInteger(height) ||
+                width <= 0 ||
+                height <= 0)
+            ) {
+              return Promise.reject(new Error("The native viewport dimensions are invalid."));
+            }
+            // The desktop owns OS zoom and must retain the logical size across guest reattachment.
+            return tab.debuggee
+              .applyViewport(
+                method === "Emulation.clearDeviceMetricsOverride"
+                  ? null
+                  : { width: width as number, height: height as number },
+              )
+              .then(() => ({}));
+          }
+          return method === "Page.captureScreenshot"
             ? takeScreenshot(tab, relay, () => send(method, params, sessionId))
-            : send(method, params, sessionId),
+            : send(method, params, sessionId);
+        },
         targetId: () =>
           debuggee
             .sendCommand("Target.getTargetInfo")
