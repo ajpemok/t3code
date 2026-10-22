@@ -444,6 +444,22 @@ export const readPageMetrics = async (cdp: CDPSession) => {
   );
 };
 
+export const setDesktopViewport = async (cdp: CDPSession, size: Viewport | null) => {
+  if (size === null) {
+    await cdp.send("Emulation.clearDeviceMetricsOverride");
+    return;
+  }
+  const { zoom } = await readPageMetrics(cdp);
+  if (!Number.isFinite(zoom) || zoom <= 0) throw new Error("The desktop page zoom is unavailable.");
+  // CDP expects device-independent pixels; the request is in CSS pixels.
+  await cdp.send("Emulation.setDeviceMetricsOverride", {
+    width: Math.max(1, Math.round(size.width * zoom)),
+    height: Math.max(1, Math.round(size.height * zoom)),
+    deviceScaleFactor: 0,
+    mobile: false,
+  });
+};
+
 // Never pass a clip scale: Chromium mirrors the top-left of the page into a `backdrop-filter`
 // in any capture it shrinks.
 export const captureViewport = async (
