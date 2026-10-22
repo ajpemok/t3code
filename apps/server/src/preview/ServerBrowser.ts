@@ -627,17 +627,7 @@ const make = Effect.gen(function* () {
     tab.setting = setting;
 
     if (tab.desktop) {
-      const size = fixedViewportSize(setting);
-      if (size) {
-        await tab.cdp.send("Emulation.setDeviceMetricsOverride", {
-          width: size.width,
-          height: size.height,
-          deviceScaleFactor: 0,
-          mobile: false,
-        });
-      } else {
-        await tab.cdp.send("Emulation.clearDeviceMetricsOverride");
-      }
+      await ServerBrowserPage.setDesktopViewport(tab.cdp, fixedViewportSize(setting));
       return;
     }
     const size =
@@ -1960,6 +1950,16 @@ const make = Effect.gen(function* () {
         const measured = tab.desktop
           ? await ServerBrowserPage.readPageMetrics(tab.cdp)
           : (tab.page.viewportSize() ?? UNATTACHED_FILL_VIEWPORT);
+        const expected = fixedViewportSize(setting);
+        if (
+          tab.desktop &&
+          expected &&
+          (measured.width !== expected.width || measured.height !== expected.height)
+        ) {
+          throw new Error(
+            "The desktop browser has not reached the requested viewport. Retry the resize.",
+          );
+        }
         return {
           tabId: tab.tabId,
           setting,
