@@ -1280,3 +1280,72 @@ it.live(
       }),
     ).pipe(Effect.provide(layer)),
 );
+
+it.live.each([1, 1.25, 1.095])(
+  "desktop resize preserves CSS dimensions at native zoom %s",
+  (zoom) =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        desktopRendersNext = true;
+        const { broker, tabId } = yield* ready;
+        const context = desktopConnections[0]!.context;
+        const cdp = context.sessions[0]!;
+        const send = cdp.send.getMockImplementation()!;
+        let measured = { width: 800, height: 600 };
+        let refuseResize = false;
+        cdp.send.mockImplementation(async (method, input) => {
+          if (method === "Page.getLayoutMetrics")
+            return { cssVisualViewport: { pageX: 0, pageY: 0, zoom } };
+          if (method === "Runtime.evaluate" && (input as { contextId?: number }).contextId === 7) {
+            return { result: { value: { ratio: zoom, ...measured } } };
+          }
+          if (method === "Emulation.setDeviceMetricsOverride") {
+            if (!refuseResize) {
+              const size = input as { width: number; height: number };
+              measured = {
+                width: Math.round(size.width / zoom),
+                height: Math.round(size.height / zoom),
+              };
+            }
+            return {};
+          }
+          if (method === "Emulation.clearDeviceMetricsOverride") {
+            measured = { width: 800, height: 600 };
+            return {};
+          }
+          return send(method, input);
+        });
+        for (const size of [
+          { width: 390, height: 844 },
+          { width: 844, height: 390 },
+        ]) {
+          const result = yield* broker.invoke<{ viewport: typeof size }>({
+            scope,
+            tabId,
+            operation: "resize",
+            input: { mode: "freeform", ...size },
+          });
+          expect(result.viewport).toEqual(size);
+          expect(measured).toEqual(size);
+        }
+        const filled = yield* broker.invoke<{ viewport: typeof measured }>({
+          scope,
+          tabId,
+          operation: "resize",
+          input: { mode: "fill" },
+        });
+        expect(filled.viewport).toEqual({ width: 800, height: 600 });
+        refuseResize = true;
+        const error = yield* broker
+          .invoke<{ viewport: { width: number; height: number } }>({
+            scope,
+            tabId,
+            operation: "resize",
+            input: { mode: "freeform", width: 390, height: 844 },
+          })
+          .pipe(Effect.flip);
+        expect(error.message).toContain("has not reached the requested viewport");
+        expect(context.page.setViewportSize).not.toHaveBeenCalled();
+      }),
+    ).pipe(Effect.provide(layer)),
+);
