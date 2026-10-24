@@ -1099,6 +1099,8 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     return (
       <li
         data-thread-item={threadKey}
+        data-project-color={projectTintColor(props.project)}
+        data-project-working={status === "working" ? "true" : undefined}
         {...sortableRootProps}
         {...(fileDropHandlers ?? {})}
         className={cn(
