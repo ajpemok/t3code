@@ -80,8 +80,6 @@
 
 [data-project-working="true"] .project-tint-row::before,
 .project-tint-header[data-project-working="true"][data-project-color]::before {
-  --project-work-opacity-low: 0.35;
-  --project-work-opacity-high: 0.8;
   content: "";
   position: absolute;
   pointer-events: none;
@@ -97,6 +95,8 @@
 }
 
 .project-tint-header[data-project-working="true"][data-project-color]::before {
+  --project-work-opacity-low: 0.35;
+  --project-work-opacity-high: 0.8;
   inset-inline-start: 1rem;
   bottom: 0;
   width: 3rem;
