@@ -1,3 +1,4 @@
+import type { ProjectIconColor } from "@t3tools/contracts";
 import { type CSSProperties, type ReactNode, useLayoutEffect, useRef, useState } from "react";
 import {
   type PreviewPanelInlineSize,
@@ -11,6 +12,7 @@ import { RightPanelResizeHandle } from "./RightPanelResizeHandle";
 export type PreviewPanelMode = "inline" | "sheet" | "sidebar" | "embedded";
 
 interface PreviewPanelShellProps {
+  projectColor?: ProjectIconColor | undefined;
   mode: PreviewPanelMode;
   maximized?: boolean;
   inlineSize?: PreviewPanelInlineSize;
@@ -112,6 +114,7 @@ function PreviewPanelShellFrame(
       ref={attachHost}
       className={cn(
         "relative flex h-full min-h-0 min-w-0 max-w-full flex-col self-stretch bg-background",
+        props.projectColor && "project-tint-panel",
         isInline
           ? maximized
             ? // Maximizing meets the sidebar border or window edge; omit the duplicate border.
@@ -137,6 +140,7 @@ function PreviewPanelShellFrame(
           : undefined
       }
       data-preview-panel-mode={props.mode}
+      data-project-color={props.projectColor}
       data-preview-panel-maximized={maximized ? "true" : "false"}
     >
       {isInline && !maximized ? <RightPanelResizeHandle handlers={handlers} /> : null}
