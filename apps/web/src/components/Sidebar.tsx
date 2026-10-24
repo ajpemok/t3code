@@ -1,3 +1,4 @@
+import { projectTintColor } from "~/projectIdentity";
 import { type EnvironmentId, type ScopedProjectRef } from "@t3tools/contracts";
 import type { EnvironmentServerConfig } from "@t3tools/client-runtime/connection";
 import { ThreadContextDragGhost } from "./chat/ThreadContextDragGhost";
@@ -2784,6 +2785,8 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                         return (
                           <ComboboxItem
                             key={item.value}
+                            variant={project ? "project" : "default"}
+                            data-project-color={projectTintColor(project)}
                             hideIndicator
                             value={item}
                             onContextMenu={(event) => {
