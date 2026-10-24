@@ -222,6 +222,11 @@ When no image is found, web and desktop show a two-character monogram with a col
 from the icon palette, derived from the saved project name. For example, `Nebula` becomes `NA`,
 `Silver Orchard` becomes `SO`, and `M7 Forge` becomes `M7`.
 
+In the AJPEMOK fork, the project colour lightly shades the conversation header, right panel and
+sidebar rows. Automatic and emoji icons use the project name's derived colour. Working rows keep
+their normal contrast and breathe subtly until the work stops or waits for input. Reduced-motion
+preferences keep the cue still.
+
 ## Keep the default branch current
 
 In Source control, enable **Automatically pull** to keep the default-branch checkout up to date
