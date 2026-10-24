@@ -42,9 +42,12 @@ export function deriveProjectIdentity(projectName: string): ProjectIdentity {
 }
 
 export function projectTintColor(
-  project: Pick<EnvironmentProject, "title" | "projectIcon"> | null | undefined,
+  project:
+    | (Pick<EnvironmentProject, "title" | "projectIcon"> & { readonly isScratch?: boolean })
+    | null
+    | undefined,
 ): ProjectIconColor | undefined {
-  if (!project) return undefined;
+  if (!project || project.isScratch) return undefined;
   const icon = project.projectIcon;
   return icon && "color" in icon ? icon.color : deriveProjectIdentity(project.title).color;
 }
