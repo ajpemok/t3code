@@ -34,3 +34,9 @@ it("leaves a conversation without a project untinted", () => {
   expect(projectTintColor(null)).toBeUndefined();
   expect(projectTintColor(undefined)).toBeUndefined();
 });
+
+it("keeps scratch conversations neutral", () => {
+  expect(
+    projectTintColor({ title: "No Project", projectIcon: null, isScratch: true }),
+  ).toBeUndefined();
+});
