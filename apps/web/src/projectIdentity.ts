@@ -1,5 +1,6 @@
 import { PROJECT_ICON_COLORS } from "./projectIconColors";
 import type { ProjectIconColor } from "@t3tools/contracts";
+import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
 
 export interface ProjectIdentity {
   readonly monogram: string;
@@ -38,4 +39,12 @@ export function deriveProjectIdentity(projectName: string): ProjectIdentity {
     monogram: projectMonogram(projectName),
     color: projectColor(projectName),
   };
+}
+
+export function projectTintColor(
+  project: Pick<EnvironmentProject, "title" | "projectIcon"> | null | undefined,
+): ProjectIconColor | undefined {
+  if (!project) return undefined;
+  const icon = project.projectIcon;
+  return icon && "color" in icon ? icon.color : deriveProjectIdentity(project.title).color;
 }
