@@ -226,6 +226,7 @@ In the AJPEMOK fork, the project colour lightly shades the conversation header, 
 sidebar rows. Automatic and emoji icons use the project name's derived colour. Working rows keep
 their normal contrast and breathe subtly until the work stops or waits for input. Reduced-motion
 preferences keep the cue still.
+Dark mode uses softer tints to preserve text contrast.
 
 ## Keep the default branch current
 

@@ -56,26 +56,62 @@
 }
 
 .project-tint-header[data-project-color] {
-  background-color: color-mix(in srgb, var(--project-accent) 9%, var(--background));
+  background-color: color-mix(
+    in srgb,
+    var(--project-accent) var(--project-header-tint, 9%),
+    var(--background)
+  );
 }
 
 .project-tint-panel[data-project-color] {
-  background-color: color-mix(in srgb, var(--project-accent) 5%, var(--background));
+  background-color: color-mix(
+    in srgb,
+    var(--project-accent) var(--project-panel-tint, 5%),
+    var(--background)
+  );
 }
 
 .project-tint-row {
   isolation: isolate;
-  background-color: color-mix(in srgb, var(--project-accent) 5%, var(--sidebar));
+  background-color: color-mix(
+    in srgb,
+    var(--project-accent) var(--project-row-tint, 5%),
+    var(--sidebar)
+  );
 }
 
 .project-tint-row:hover,
 .project-tint-row:focus-within,
 .project-tint-row[data-highlighted] {
-  background-color: color-mix(in srgb, var(--project-accent) 10%, var(--sidebar));
+  background-color: color-mix(
+    in srgb,
+    var(--project-accent) var(--project-row-hover-tint, 10%),
+    var(--sidebar)
+  );
 }
 
 .project-tint-row.project-tint-selected {
-  background-color: color-mix(in srgb, var(--project-accent) 14%, var(--sidebar));
+  background-color: color-mix(
+    in srgb,
+    var(--project-accent) var(--project-row-selected-tint, 14%),
+    var(--sidebar)
+  );
+}
+
+.dark .project-tint-header {
+  --project-header-tint: 7%;
+}
+.dark .project-tint-panel {
+  --project-panel-tint: 4%;
+}
+.dark .project-tint-row {
+  --project-row-tint: 4%;
+  --project-row-hover-tint: 6%;
+  --project-row-selected-tint: 8%;
+}
+.dark [data-project-working="true"] .project-tint-row::before {
+  --project-work-opacity-low: 0.025;
+  --project-work-opacity-high: 0.045;
 }
 
 [data-project-working="true"] .project-tint-row::before,
