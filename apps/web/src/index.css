@@ -1,5 +1,126 @@
 @import "tailwindcss";
 
+[data-project-color="gray"] {
+  --project-accent: var(--color-gray-500);
+}
+[data-project-color="red"] {
+  --project-accent: var(--color-red-500);
+}
+[data-project-color="orange"] {
+  --project-accent: var(--color-orange-500);
+}
+[data-project-color="amber"] {
+  --project-accent: var(--color-amber-500);
+}
+[data-project-color="yellow"] {
+  --project-accent: var(--color-yellow-500);
+}
+[data-project-color="lime"] {
+  --project-accent: var(--color-lime-500);
+}
+[data-project-color="green"] {
+  --project-accent: var(--color-green-500);
+}
+[data-project-color="emerald"] {
+  --project-accent: var(--color-emerald-500);
+}
+[data-project-color="teal"] {
+  --project-accent: var(--color-teal-500);
+}
+[data-project-color="cyan"] {
+  --project-accent: var(--color-cyan-500);
+}
+[data-project-color="sky"] {
+  --project-accent: var(--color-sky-500);
+}
+[data-project-color="blue"] {
+  --project-accent: var(--color-blue-500);
+}
+[data-project-color="indigo"] {
+  --project-accent: var(--color-indigo-500);
+}
+[data-project-color="violet"] {
+  --project-accent: var(--color-violet-500);
+}
+[data-project-color="purple"] {
+  --project-accent: var(--color-purple-500);
+}
+[data-project-color="fuchsia"] {
+  --project-accent: var(--color-fuchsia-500);
+}
+[data-project-color="pink"] {
+  --project-accent: var(--color-pink-500);
+}
+[data-project-color="rose"] {
+  --project-accent: var(--color-rose-500);
+}
+
+.project-tint-header[data-project-color] {
+  background-color: color-mix(in srgb, var(--project-accent) 9%, var(--background));
+}
+
+.project-tint-panel[data-project-color] {
+  background-color: color-mix(in srgb, var(--project-accent) 5%, var(--background));
+}
+
+.project-tint-row {
+  isolation: isolate;
+  background-color: color-mix(in srgb, var(--project-accent) 5%, var(--sidebar));
+}
+
+.project-tint-row:hover,
+.project-tint-row:focus-within,
+.project-tint-row[data-highlighted] {
+  background-color: color-mix(in srgb, var(--project-accent) 10%, var(--sidebar));
+}
+
+.project-tint-row.project-tint-selected {
+  background-color: color-mix(in srgb, var(--project-accent) 14%, var(--sidebar));
+}
+
+[data-project-working="true"] .project-tint-row::before,
+.project-tint-header[data-project-working="true"][data-project-color]::before {
+  --project-work-opacity-low: 0.35;
+  --project-work-opacity-high: 0.8;
+  content: "";
+  position: absolute;
+  pointer-events: none;
+  background-color: var(--project-accent);
+  animation: project-work-breathe 3.6s ease-in-out infinite;
+}
+
+[data-project-working="true"] .project-tint-row::before {
+  z-index: -1;
+  inset: 0;
+  opacity: 0.06;
+  border-radius: inherit;
+}
+
+.project-tint-header[data-project-working="true"][data-project-color]::before {
+  inset-inline-start: 1rem;
+  bottom: 0;
+  width: 3rem;
+  height: 2px;
+  opacity: 0.5;
+}
+
+@keyframes project-work-breathe {
+  0%,
+  100% {
+    opacity: var(--project-work-opacity-low, 0.04);
+  }
+  50% {
+    opacity: var(--project-work-opacity-high, 0.1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-project-working="true"] .project-tint-row::before,
+  .project-tint-header[data-project-working="true"]::before {
+    animation: none;
+  }
+}
+
 @custom-variant dark (&:is(.dark, .dark *));
 @custom-variant light (&:not(.dark, .dark *));
 /* Window Controls Overlay: active when Electron exposes native titlebar control geometry. */
