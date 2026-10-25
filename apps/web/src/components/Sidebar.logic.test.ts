@@ -14,6 +14,7 @@ import {
   orderItemsByPreferredIds,
   pinOrderKeyBetween,
   resolveProjectStatusIndicator,
+  projectThreadPinTargets,
   resolveSidebarSweepKeys,
   resolveSidebarThreadStatus,
   resolveSidebarV2TopStatus,
@@ -51,6 +52,38 @@ import {
 } from "./sidebar/routeReveal";
 
 const localEnvironmentId = EnvironmentId.make("environment-local");
+
+describe("projectThreadPinTargets", () => {
+  it("pins only visible unsettled threads that are not already pinned", () => {
+    const active = makeThreadFixture({ id: ThreadId.make("active") });
+    const pinned = makeThreadFixture({ pinnedAt: "2026-10-25T01:00:00.000Z" });
+    const settled = makeThreadFixture({ settledOverride: "settled" });
+    const archived = makeThreadFixture({ archivedAt: "2026-10-25T01:00:00.000Z" });
+    expect(projectThreadPinTargets([active, pinned, settled, archived], "pin")).toEqual([active]);
+  });
+
+  it("leaves settled and archived pins untouched when unpinning a project", () => {
+    const pinnedAt = "2026-10-25T01:00:00.000Z";
+    const active = makeThreadFixture({ pinnedAt });
+    const settled = makeThreadFixture({ pinnedAt, settledOverride: "settled" });
+    const archived = makeThreadFixture({ pinnedAt, archivedAt: pinnedAt });
+    const unpinned = makeThreadFixture();
+    expect(projectThreadPinTargets([active, settled, archived, unpinned], "unpin")).toEqual([
+      active,
+    ]);
+  });
+
+  it("rechecks settlement and pin state before a delayed action", () => {
+    const original = makeThreadFixture();
+    expect(projectThreadPinTargets([original], "pin")).toEqual([original]);
+    expect(projectThreadPinTargets([{ ...original, settledOverride: "settled" }], "pin")).toEqual(
+      [],
+    );
+    expect(
+      projectThreadPinTargets([{ ...original, pinnedAt: "2026-10-25T01:00:00.000Z" }], "pin"),
+    ).toEqual([]);
+  });
+});
 
 describe("deleteSelectedThreadEntries", () => {
   const entries = [{ threadKey: "one" }, { threadKey: "two" }, { threadKey: "three" }] as const;
