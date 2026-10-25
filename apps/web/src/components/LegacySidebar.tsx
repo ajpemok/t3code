@@ -222,6 +222,8 @@ import { CommandDialogTrigger } from "./ui/command";
 import { useClientSettings, updateClientSettings } from "~/hooks/useSettings";
 import { useProject } from "~/state/entities";
 import { projectTintColor } from "~/projectIdentity";
+import { useCloseInactiveProjectTabs } from "~/hooks/useCloseInactiveProjectTabs";
+import { ThreadSurfaceUseIndicator } from "./sidebar/ThreadSurfaceUseIndicator";
 import { primaryServerKeybindingsAtom, serverEnvironment } from "../state/server";
 import { appAtomRegistry } from "../rpc/atomRegistry";
 import { canShareWithGuestAtom } from "./chat/guestShareAvailability";
@@ -676,6 +678,12 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
       className="w-full"
       data-thread-item
       data-project-working={threadStatus?.pulse === true}
+      data-project-inactive={
+        threadStatus?.pulse !== true &&
+        !thread.hasPendingApprovals &&
+        !thread.hasPendingUserInput &&
+        !thread.pendingSubagentRequest
+      }
       {...fileDropHandlers}
       onMouseLeave={handleMouseLeave}
       onBlurCapture={handleBlurCapture}
@@ -747,6 +755,10 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
             </a>
           ) : null}
           {threadStatus && <ThreadStatusLabel status={threadStatus} />}
+          <ThreadSurfaceUseIndicator
+            threadRef={scopeThreadRef(thread.environmentId, thread.id)}
+            enabled={leaseLiveStatus}
+          />
           {canOperateThread && renamingThreadKey === threadKey ? (
             <input
               ref={handleRenameInputRef}
@@ -1374,6 +1386,14 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
     lastVisitedAtByThreadKey,
   } = useProjectThreads(project);
   const readSidebarThreadByKey = useStableCallback(() => sidebarThreadByKey);
+  const {
+    closeInactiveTabs,
+    getInactiveTabCount,
+    pending: closingInactiveTabs,
+  } = useCloseInactiveProjectTabs({
+    threads: sidebarThreads,
+    selectedThreadKey: activeRouteThreadKey,
+  });
   const projectEngaged = projectStatus !== null && projectStatus.label !== "Completed";
   const projectAttention =
     projectStatus?.label === "Awaiting Input" ||
@@ -1790,17 +1810,19 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
       });
       actionHandlers.set("pin-threads", () => changeProjectPins("pin"));
       actionHandlers.set("unpin-threads", () => changeProjectPins("unpin"));
+      actionHandlers.set("close-inactive-tabs", () => closeInactiveTabs());
 
+      const inactiveTabCount = getInactiveTabCount();
       const clicked = await api.contextMenu.show(
         [
           {
             id: "pin-threads",
-            label: `Pin Unsettled Threads (${pinTargets.length})`,
+            label: `Pin unsettled threads (${pinTargets.length})`,
             disabled: projectPinPending || !canChangeProjectPins(pinTargets),
           },
           {
             id: "unpin-threads",
-            label: `Unpin Unsettled Threads (${unpinTargets.length})`,
+            label: `Unpin unsettled threads (${unpinTargets.length})`,
             disabled: projectPinPending || !canChangeProjectPins(unpinTargets),
           },
           buildTargetedItem("rename", "Rename", {
@@ -1809,6 +1831,11 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
           }),
           buildTargetedItem("grouping", "Group into..."),
           buildTargetedItem("copy-path", "Copy Path"),
+          {
+            id: "close-inactive-tabs",
+            label: `Close all inactive tabs (${inactiveTabCount})`,
+            disabled: closingInactiveTabs || inactiveTabCount === 0,
+          },
           { id: "project-settings", label: "Project settings", icon: "settings" },
           buildTargetedItem("delete", "Remove", {
             destructive: true,
@@ -2385,6 +2412,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
       <div
         className={cn("project-tint-row project-tint-section group/project-header relative")}
         data-project-color={projectTintColor(project)}
+        data-project-inactive={!projectEngaged}
       >
         <SidebarMenuButton
           ref={isManualProjectSorting ? dragHandleProps?.setActivatorNodeRef : undefined}
@@ -2448,7 +2476,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
             render={
               <button
                 type="button"
-                aria-label={`${projectPinAction === "pin" ? "Pin" : "Unpin"} Unsettled Threads in ${project.displayName}`}
+                aria-label={`${projectPinAction === "pin" ? "Pin" : "Unpin"} unsettled threads in ${project.displayName}`}
                 disabled={
                   projectPinPending ||
                   !canChangeProjectPins(projectPinAction === "pin" ? pinTargets : unpinTargets)
@@ -2468,7 +2496,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
             />
           </TooltipTrigger>
           <TooltipPopup side="top">
-            {projectPinAction === "pin" ? "Pin Unsettled Threads" : "Unpin Unsettled Threads"}
+            {projectPinAction === "pin" ? "Pin unsettled threads" : "Unpin unsettled threads"}
           </TooltipPopup>
         </Tooltip>
 
