@@ -6,6 +6,7 @@ const path = require("node:path");
 const root = path.resolve(__dirname, "../..");
 
 const INERT = [
+  /^\.ajpemok\/(README\.md|CHANGES\.md|upstream\.json)$/,
   /^docs\//,
   /^\.(agents|cursor|vscode|devcontainer|macroscope|repos)\//,
   /^[^/]+\.md$/,
