@@ -3,6 +3,19 @@
 Use a new thread for a separate task. Choose **New worktree** when its code changes
 need a separate branch and working directory.
 
+## Project Sections and Header
+
+Turn on **Project Sections** in **Settings → Appearance** to group tasks into
+collapsible project trees. Each project shows its activity even when collapsed.
+Turn it off to return to the flat list. Collapse choices are saved on this client.
+Use a project's pin button to pin all its unsettled threads. When all are pinned,
+the same button unpins them. The project menu also offers both actions for a
+partly pinned project. Settled and archived threads keep their existing state.
+
+Choose **Header Scene** in the same settings to select a Sydney backdrop.
+**Header Effects** controls brief hover and idle light sweeps. Effects pause while
+the window is hidden or unfocused and respect your reduced-motion preference.
+
 ## Start a thread
 
 On web and desktop, a new thread keeps the current project and carries your model

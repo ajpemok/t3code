@@ -699,9 +699,21 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "legacy-sidebar",
-    title: "Sidebar (legacy)",
-    to: "/settings/labs",
-    searchTerms: ["project thread tree old flat list"],
+    title: "Project Sections",
+    to: "/settings/appearance",
+    searchTerms: ["project thread tree group collapse active inactive flat list legacy"],
+  },
+  {
+    id: "ajpemok-header-scene",
+    title: "Header Scene",
+    to: "/settings/appearance",
+    searchTerms: ["Sydney harbour copper skyline background image sidebar"],
+  },
+  {
+    id: "ajpemok-header-motion",
+    title: "Header Effects",
+    to: "/settings/appearance",
+    searchTerms: ["hover idle animation motion sweep sidebar"],
   },
   {
     id: "keybindings",
