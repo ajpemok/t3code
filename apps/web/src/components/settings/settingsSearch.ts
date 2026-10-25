@@ -687,8 +687,8 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "legacy-context-window-indicator",
-    title: "Context window indicator (legacy)",
-    to: "/settings/labs",
+    title: "Context and Token Usage",
+    to: "/settings/general",
     searchTerms: ["composer meter usage tokens circle old"],
   },
   {
