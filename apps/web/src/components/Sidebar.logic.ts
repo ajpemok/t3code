@@ -620,6 +620,19 @@ export function buildBulkUnpinContextMenuItem(input: {
   return { id: "unpin", label: `Unpin (${input.pinnedCount})` };
 }
 
+export function projectThreadPinTargets<
+  T extends Pick<
+    SidebarThreadSummary,
+    "archivedAt" | "lineage" | "environmentId" | "projectId" | "settledOverride" | "pinnedAt"
+  >,
+>(threads: readonly T[], action: "pin" | "unpin"): T[] {
+  return filterSidebarV2VisibleThreads(threads, null).filter(
+    (thread) =>
+      thread.settledOverride !== "settled" &&
+      (action === "pin" ? thread.pinnedAt == null : thread.pinnedAt != null),
+  );
+}
+
 export interface ThreadStatusPill {
   label:
     | "Working"
