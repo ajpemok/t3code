@@ -82,7 +82,7 @@
   );
   background-color: color-mix(
     in srgb,
-    var(--project-accent) var(--project-row-tint, 5%),
+    var(--project-tint-accent, var(--project-accent)) var(--project-row-tint, 5%),
     var(--sidebar)
   );
 }
@@ -92,7 +92,7 @@
 .project-tint-row[data-highlighted] {
   background-color: color-mix(
     in srgb,
-    var(--project-accent) var(--project-row-hover-tint, 10%),
+    var(--project-tint-accent, var(--project-accent)) var(--project-row-hover-tint, 10%),
     var(--sidebar)
   );
 }
@@ -100,7 +100,7 @@
 .project-tint-row.project-tint-selected {
   background-color: color-mix(
     in srgb,
-    var(--project-accent) var(--project-row-selected-tint, 14%),
+    var(--project-tint-accent, var(--project-accent)) var(--project-row-selected-tint, 14%),
     var(--sidebar)
   );
 }
@@ -126,12 +126,52 @@
   --project-row-hover-tint: 22%;
 }
 
+.project-tint-row[data-project-inactive="true"],
+[data-project-inactive="true"] > .project-tint-row {
+  --project-tint-accent: color-mix(
+    in srgb,
+    var(--project-accent) 25%,
+    var(--sidebar-muted-foreground)
+  );
+  --project-row-tint: 4%;
+  --project-row-hover-tint: 7%;
+  --project-row-selected-tint: 10%;
+}
+
+.project-tint-section[data-project-inactive="true"] {
+  --project-row-tint: 9%;
+  --project-row-hover-tint: 12%;
+}
+
+.project-thread-guide {
+  position: relative;
+}
+
+.project-thread-guide::before {
+  content: "";
+  position: absolute;
+  inset-block: 2px;
+  inset-inline-start: 0;
+  width: 1px;
+  pointer-events: none;
+  background-color: color-mix(in srgb, var(--project-accent) 55%, var(--sidebar));
+}
+
 .project-thread-guide > [data-sidebar="menu-sub"] {
-  border-inline-start-color: color-mix(in srgb, var(--project-accent) 55%, var(--sidebar));
+  border-inline-start-color: transparent;
 }
 .dark [data-project-working="true"] .project-tint-row::before {
   --project-work-opacity-low: 0.025;
-  --project-work-opacity-high: 0.045;
+  --project-work-opacity-high: 0.075;
+}
+
+.project-tint-row:has([data-thread-surface-use])::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border: 1px solid color-mix(in srgb, var(--color-info) 65%, transparent);
+  border-radius: inherit;
 }
 
 [data-project-working="true"] .project-tint-row::before,
