@@ -15,6 +15,8 @@ import {
   pinOrderKeyBetween,
   resolveProjectStatusIndicator,
   projectThreadPinTargets,
+  filterProjectSectionThreads,
+  activeSubagentsByParent,
   resolveSidebarSweepKeys,
   resolveSidebarThreadStatus,
   resolveSidebarV2TopStatus,
@@ -52,6 +54,123 @@ import {
 } from "./sidebar/routeReveal";
 
 const localEnvironmentId = EnvironmentId.make("environment-local");
+
+describe("project section visibility", () => {
+  const now = "2026-10-25T12:00:00.000Z";
+  const capabilities = new Map([
+    ["environment-test", { threadSettlement: true, threadSnooze: true }],
+  ]);
+
+  it("keeps idle unsettled tasks and hides settled tasks even when pinned", () => {
+    const idle = makeThreadFixture({ id: ThreadId.make("idle") });
+    const settled = makeThreadFixture({ settledOverride: "settled" });
+    const pinnedSettled = makeThreadFixture({
+      pinnedAt: now,
+      settledOverride: "settled",
+    });
+    expect(
+      filterProjectSectionThreads([idle, settled, pinnedSettled], { now, capabilities }),
+    ).toEqual([idle]);
+  });
+
+  it("hides snoozed tasks, including pins, until the reset boundary", () => {
+    const snoozed = makeThreadFixture({
+      snoozedAt: "2026-10-25T11:00:00.000Z",
+      snoozedUntil: "2026-10-25T13:00:00.000Z",
+      pinnedAt: now,
+    });
+    expect(filterProjectSectionThreads([snoozed], { now, capabilities })).toEqual([]);
+    expect(
+      filterProjectSectionThreads([snoozed], {
+        now: "2026-10-25T13:00:00.000Z",
+        capabilities,
+      }),
+    ).toEqual([snoozed]);
+  });
+
+  it("lets a pending question wake a snoozed task", () => {
+    const question = makeThreadFixture({
+      snoozedAt: "2026-10-25T11:00:00.000Z",
+      snoozedUntil: "2026-10-25T13:00:00.000Z",
+      hasPendingUserInput: true,
+    });
+    expect(filterProjectSectionThreads([question], { now, capabilities })).toEqual([question]);
+  });
+
+  it("preserves tasks from servers without parking capabilities", () => {
+    const older = makeThreadFixture({
+      settledOverride: "settled",
+      snoozedUntil: "2099-01-01T00:00:00.000Z",
+    });
+    expect(filterProjectSectionThreads([older], { now, capabilities: new Map() })).toEqual([older]);
+  });
+
+  it("still excludes archived tasks and subagents from project roots", () => {
+    const archived = makeThreadFixture({ archivedAt: now });
+    const child = makeThreadFixture({
+      lineage: {
+        rootThreadId: ThreadId.make("parent"),
+        parentThreadId: ThreadId.make("parent"),
+        relationshipToParent: "subagent",
+      },
+    });
+    expect(filterProjectSectionThreads([archived, child], { now, capabilities })).toEqual([]);
+  });
+});
+
+describe("active subagent groups", () => {
+  const parentId = ThreadId.make("parent");
+  const runtime = {
+    status: "running" as const,
+    activeRunId: null,
+    providerInstanceId: ProviderInstanceId.make("codex"),
+    providerName: "Codex",
+    lastError: null,
+    updatedAt: "2026-10-25T12:00:00.000Z",
+  };
+  const lineage = {
+    rootThreadId: parentId,
+    parentThreadId: parentId,
+    relationshipToParent: "subagent" as const,
+  };
+
+  it("shows a running child and removes it when its runtime stops", () => {
+    const child = makeThreadFixture({ id: ThreadId.make("child"), lineage, runtime });
+    expect(activeSubagentsByParent([child]).get("environment-test:parent")).toEqual([child]);
+    expect(
+      activeSubagentsByParent([{ ...child, runtime: { ...runtime, status: "completed" } }]).size,
+    ).toBe(0);
+  });
+
+  it("hides idle, settled and archived children plus ordinary forks", () => {
+    const child = makeThreadFixture({ id: ThreadId.make("child"), lineage, runtime });
+    const idle = { ...child, runtime: { ...runtime, status: "idle" as const } };
+    const settled = { ...child, settledOverride: "settled" as const };
+    const archived = { ...child, archivedAt: runtime.updatedAt };
+    const fork = { ...child, lineage: { ...lineage, relationshipToParent: "fork" as const } };
+    expect(activeSubagentsByParent([idle, settled, archived, fork]).size).toBe(0);
+  });
+
+  it("keeps a child awaiting input visible until the question is resolved", () => {
+    const child = makeThreadFixture({ lineage, hasPendingUserInput: true });
+    expect(activeSubagentsByParent([child]).get("environment-test:parent")).toEqual([child]);
+    expect(activeSubagentsByParent([{ ...child, hasPendingUserInput: false }]).size).toBe(0);
+  });
+
+  it("keeps identical parent IDs in different environments separate", () => {
+    const first = makeThreadFixture({ lineage, runtime });
+    const second = { ...first, environmentId: EnvironmentId.make("other") };
+    const groups = activeSubagentsByParent([first, second]);
+    expect(groups.get("environment-test:parent")).toEqual([first]);
+    expect(groups.get("other:parent")).toEqual([second]);
+  });
+
+  it("refuses a self-parented child", () => {
+    expect(
+      activeSubagentsByParent([makeThreadFixture({ id: parentId, lineage, runtime })]).size,
+    ).toBe(0);
+  });
+});
 
 describe("projectThreadPinTargets", () => {
   it("pins only visible unsettled threads that are not already pinned", () => {

@@ -508,6 +508,65 @@ it.effect("a stalled tab request times out without disconnecting another agent",
   ).pipe(Effect.provide(layer)),
 );
 
+it.effect("a timed-out recording seed releases capture without starting a late recording", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const { broker, tabId } = yield* ready;
+      const started = Promise.withResolvers<void>();
+      const frame = Promise.withResolvers<Record<string, unknown>>();
+      const session = contexts[0]!.sessions[0]!;
+      const send = session.send.getMockImplementation()!;
+      session.send.mockImplementation((method, input) => {
+        if (
+          method === "Page.captureScreenshot" &&
+          (input as { format: string }).format === "jpeg"
+        ) {
+          started.resolve();
+          return frame.promise;
+        }
+        return send(method, input);
+      });
+      try {
+        const recording = yield* broker
+          .invoke<{ recording: boolean }>({
+            scope,
+            tabId,
+            operation: "recordingStart",
+            input: {},
+            timeoutMs: 2_000,
+          })
+          .pipe(Effect.flip, Effect.forkScoped);
+        yield* Effect.promise(() => started.promise);
+        yield* TestClock.adjust(3_001);
+        expect(yield* Fiber.join(recording)).toMatchObject({
+          _tag: "PreviewAutomationTimeoutError",
+        });
+        const snapshot = yield* broker.invoke<PreviewAutomationSnapshot>({
+          scope,
+          tabId,
+          operation: "snapshot",
+          input: {},
+          timeoutMs: 1_000,
+        });
+        expect(snapshot).toMatchObject({ title: "test page" });
+        frame.resolve({ data: "ZnJhbWU=" });
+        const stopped = yield* broker
+          .invoke<void>({ scope, tabId, operation: "recordingStop", input: {} })
+          .pipe(Effect.flip);
+        expect(stopped).toMatchObject({
+          _tag: "PreviewAutomationExecutionError",
+          remoteTag: "PreviewAutomationRecordingNotActiveError",
+        });
+        expect(
+          session.send.mock.calls.filter(([method]) => method === "Page.startScreencast"),
+        ).toHaveLength(0);
+      } finally {
+        frame.resolve({ data: "ZnJhbWU=" });
+      }
+    }),
+  ).pipe(Effect.provide(layer)),
+);
+
 it.effect("an expired queued navigation is not replayed after the blocked action finishes", () =>
   Effect.scoped(
     Effect.gen(function* () {
