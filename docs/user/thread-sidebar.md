@@ -12,6 +12,24 @@ Use a project's pin button to pin all its unsettled threads. When all are pinned
 the same button unpins them. The project menu also offers both actions for a
 partly pinned project. Settled and archived threads keep their existing state.
 
+Choose **Close all inactive tabs** from a project's menu to close its idle right-panel
+views and release unclaimed browser sessions. The selected tab, active tasks,
+controlled or recording browsers, unsaved files and terminal sessions stay open.
+This closes views; it does not delete files or stop development servers or emulators.
+
+While a tool call runs, a small icon beside the task identifies computer use,
+browser use or T3 browser use. The normal Working status remains. This depends on
+the provider reporting the tool activity; opaque shell or script wrappers may not
+expose it.
+
+The composer shows context usage and a token count when the provider supplies
+them. Hover or open the indicator for the reported input, cached input, output
+and reasoning breakdown. A processed-token total appears only when reported;
+otherwise the compact count is the current context's token count. Search settings
+for **Context and Token Usage** to change its visibility.
+The fork defaults this indicator on; saved choices from an existing installation
+are preserved.
+
 Choose **Header Scene** in the same settings to select a Sydney backdrop.
 **Header Effects** controls brief hover and idle light sweeps. Effects pause while
 the window is hidden or unfocused and respect your reduced-motion preference.
