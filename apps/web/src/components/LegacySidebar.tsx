@@ -3,11 +3,13 @@ import { resolveThreadCurrentPullRequestLink } from "@t3tools/client-runtime/thr
 import { Spinner } from "~/components/ui/spinner";
 import {
   ArchiveIcon,
+  CheckIcon,
   ArrowUpDownIcon,
   ChevronRightIcon,
   FolderPlusIcon,
   Globe2Icon,
   PinIcon,
+  PinOffIcon,
   SearchIcon,
   SquarePenIcon,
   TriangleAlertIcon,
@@ -100,8 +102,10 @@ import {
   readThreadShell,
   useProjects,
   readEnvironmentSupportsPinning,
-  useThreadShells,
+  readEnvironmentSupportsSettlement,
+  useQuietThreadShells,
   useThreadShellsForProjectRefs,
+  useServerConfigs,
   waitForProjectRemoval,
 } from "../state/entities";
 import { selectThreadTerminalUiState, useTerminalUiStateStore } from "../terminalUiStateStore";
@@ -196,7 +200,6 @@ import {
   archiveSelectedThreadEntries,
   buildMultiSelectThreadContextMenuItems,
   deleteSelectedThreadEntries,
-  filterSidebarV2VisibleThreads,
   projectThreadPinTargets,
   getSidebarThreadIdsToPrewarm,
   resolveAdjacentThreadId,
@@ -219,12 +222,27 @@ import { SidebarChromeFooter, SidebarChromeHeader } from "./sidebar/SidebarChrom
 import { useCopyToClipboard } from "~/hooks/useCopyToClipboard";
 import { useIsMobile } from "~/hooks/useMediaQuery";
 import { CommandDialogTrigger } from "./ui/command";
-import { useClientSettings, updateClientSettings } from "~/hooks/useSettings";
+import {
+  useClientSettings,
+  usePrimarySettings,
+  updateClientSettings,
+  getClientSettings,
+} from "~/hooks/useSettings";
+import { SnoozeMenuButton } from "./sidebar/SidebarThreadRow";
+import { useCanSnoozeThread } from "~/hooks/useCanSnoozeThread";
+import { registerSettleAndAdvance } from "../settleAndAdvance";
+import { isThreadRoutePathname } from "../threadRoutes";
+import { buildThreadActionMenuItems, threadActionRequiresOperate } from "./threadActionMenu.logic";
+import { resolveSnoozePresets } from "./Sidebar.snooze";
+import { requestCustomSnooze } from "./CustomSnoozeDialog";
+import { canSnooze } from "@t3tools/client-runtime/state/thread-settled";
+import { ProjectThreadShelves, useProjectThreadSections } from "./sidebar/ProjectThreadShelves";
+import { ActiveSubagentThreads, ActiveSubagentsToggle } from "./sidebar/ActiveSubagentThreads";
 import { useProject } from "~/state/entities";
 import { projectTintColor } from "~/projectIdentity";
 import { useCloseInactiveProjectTabs } from "~/hooks/useCloseInactiveProjectTabs";
-import { ThreadSurfaceUseIndicator } from "./sidebar/ThreadSurfaceUseIndicator";
-import { primaryServerKeybindingsAtom, serverEnvironment } from "../state/server";
+import { ThreadActivityStatus } from "./sidebar/ThreadSurfaceUseIndicator";
+import { primaryServerKeybindingsAtom } from "../state/server";
 import { appAtomRegistry } from "../rpc/atomRegistry";
 import { canShareWithGuestAtom } from "./chat/guestShareAvailability";
 import { openGuestShareDialog } from "./chat/guestShareDialogState";
@@ -297,6 +315,10 @@ function projectExpansionPreferenceKeys(project: SidebarProjectSnapshot): string
     ...project.memberProjects.map((member) => member.physicalProjectKey),
     ...project.memberProjects.map((member) => legacyProjectCwdPreferenceKey(member.workspaceRoot)),
   ];
+}
+
+function projectPinPreferenceKeys(project: SidebarProjectSnapshot): string[] {
+  return [project.projectKey, ...project.memberProjects.map((member) => member.physicalProjectKey)];
 }
 
 function projectGroupingModeDescription(mode: SidebarProjectGroupingMode): string {
@@ -375,6 +397,9 @@ interface SidebarThreadRowProps {
   ) => Promise<void>;
   cancelRename: () => void;
   attemptArchiveThread: (threadRef: ScopedThreadRef) => Promise<void>;
+  attemptSettleThread: (threadRef: ScopedThreadRef) => Promise<void>;
+  attemptSnoozeThread: (threadRef: ScopedThreadRef, until: string) => Promise<void>;
+  attemptPinThread: (threadRef: ScopedThreadRef, pinned: boolean) => Promise<void>;
   openPrLink: (
     event: React.MouseEvent<HTMLElement>,
     prUrl: string,
@@ -424,6 +449,9 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     commitRename,
     cancelRename,
     attemptArchiveThread,
+    attemptSettleThread,
+    attemptSnoozeThread,
+    attemptPinThread,
     openPrLink,
     onFileDropThreads,
     thread,
@@ -513,10 +541,20 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
   const prStatus = prStatusIndicator(pr, linkedPullRequestStatus?.sourceControlProvider);
   const isConfirmingArchive =
     canOperateThread && confirmingArchiveThreadKey === threadKey && !isThreadRunning;
+  const capabilities = useServerConfigs().get(thread.environmentId)?.environment.capabilities;
+  const settlementSupported = capabilities?.threadSettlement === true;
+  const timestampFormat = usePrimarySettings((settings) => settings.timestampFormat);
+  const [snoozeOpen, setSnoozeOpen] = useState(false);
+  const canSnoozeNow = useCanSnoozeThread(thread);
+  const showSnooze = canOperateThread && capabilities?.threadSnooze === true && canSnoozeNow;
+  const canSettle = canOperateThread && settlementSupported;
   const threadMetaClassName = isConfirmingArchive
     ? "pointer-events-none opacity-0"
-    : canOperateThread && !isThreadRunning
-      ? "pointer-events-none transition-opacity duration-150 max-sm:pr-6 group-hover/menu-sub-item:opacity-0 group-focus-within/menu-sub-item:opacity-0"
+    : canOperateThread && (settlementSupported || !isThreadRunning)
+      ? cn(
+          "pointer-events-none transition-opacity duration-150 group-hover/menu-sub-item:opacity-0 group-focus-within/menu-sub-item:opacity-0",
+          settlementSupported ? "max-sm:opacity-0" : "max-sm:pr-6",
+        )
       : "pointer-events-none";
   const clearConfirmingArchive = () => {
     setConfirmingArchiveThreadKey((current) => (current === threadKey ? null : current));
@@ -677,6 +715,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
       ref={rowRef}
       className="w-full"
       data-thread-item
+      data-project-color={projectTintColor(project)}
       data-project-working={threadStatus?.pulse === true}
       data-project-inactive={
         threadStatus?.pulse !== true &&
@@ -754,11 +793,6 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
               <PullRequestGlyph.pullRequest className="size-3" />
             </a>
           ) : null}
-          {threadStatus && <ThreadStatusLabel status={threadStatus} />}
-          <ThreadSurfaceUseIndicator
-            threadRef={scopeThreadRef(thread.environmentId, thread.id)}
-            enabled={leaseLiveStatus}
-          />
           {canOperateThread && renamingThreadKey === threadKey ? (
             <input
               ref={handleRenameInputRef}
@@ -814,11 +848,75 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
             onThreadActivate={navigateToThread}
           />
           <div
-            className={`flex min-w-12 justify-end ${
-              isRemoteThread ? "max-sm:min-w-24" : "max-sm:min-w-20"
+            className={`flex min-w-12 justify-end group-hover/menu-sub-item:min-w-28 group-focus-within/menu-sub-item:min-w-28 ${
+              canSettle ? "max-sm:min-w-28" : isRemoteThread ? "max-sm:min-w-24" : "max-sm:min-w-20"
             }`}
           >
-            {isConfirmingArchive ? (
+            {canSettle ? (
+              <div
+                className={cn(
+                  "pointer-events-none absolute top-1/2 right-1 flex h-6 -translate-y-1/2 items-center opacity-0 max-sm:pointer-events-auto max-sm:opacity-100 group-hover/menu-sub-item:pointer-events-auto group-hover/menu-sub-item:opacity-100 group-focus-within/menu-sub-item:pointer-events-auto group-focus-within/menu-sub-item:opacity-100",
+                  snoozeOpen && "pointer-events-auto opacity-100",
+                )}
+              >
+                {showSnooze ? (
+                  <SnoozeMenuButton
+                    open={snoozeOpen}
+                    onOpenChange={setSnoozeOpen}
+                    timestampFormat={timestampFormat}
+                    onSnooze={(preset) => void attemptSnoozeThread(threadRef, preset.snoozedUntil)}
+                  />
+                ) : null}
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <button
+                        type="button"
+                        data-thread-selection-safe
+                        aria-label={`Settle ${thread.title}`}
+                        className="inline-flex h-6 cursor-pointer items-center gap-1 rounded-sm px-1 text-xs text-sidebar-foreground hover:bg-sidebar-row-hover focus-visible:outline-1 focus-visible:outline-ring"
+                        onPointerDown={stopPropagationOnPointerDown}
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          void attemptSettleThread(threadRef);
+                        }}
+                      />
+                    }
+                  >
+                    <CheckIcon className="size-3.5" />
+                    <span>Settle</span>
+                  </TooltipTrigger>
+                  <TooltipPopup side="top">Settle thread</TooltipPopup>
+                </Tooltip>
+                {capabilities?.threadPinning ? (
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <button
+                          type="button"
+                          aria-label={`${thread.pinnedAt ? "Unpin" : "Pin"} ${thread.title}`}
+                          className={SIDEBAR_ICON_ACTION_BUTTON_CLASS}
+                          onPointerDown={stopPropagationOnPointerDown}
+                          onClick={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            void attemptPinThread(threadRef, thread.pinnedAt != null);
+                          }}
+                        />
+                      }
+                    >
+                      {thread.pinnedAt ? (
+                        <PinOffIcon className="size-3.5" />
+                      ) : (
+                        <PinIcon className="size-3.5" />
+                      )}
+                    </TooltipTrigger>
+                    <TooltipPopup>{thread.pinnedAt ? "Unpin thread" : "Pin thread"}</TooltipPopup>
+                  </Tooltip>
+                ) : null}
+              </div>
+            ) : isConfirmingArchive ? (
               <button
                 ref={handleConfirmArchiveRef}
                 type="button"
@@ -905,12 +1003,18 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                   </Tooltip>
                 ) : (
                   <span
-                    className={`text-3xs tabular-nums ${
+                    className={`inline-flex flex-col items-end text-3xs leading-tight tabular-nums ${
                       isHighlighted ? "text-foreground" : "text-secondary-label"
                     }`}
                   >
+                    <ThreadActivityStatus
+                      threadRef={scopeThreadRef(thread.environmentId, thread.id)}
+                      enabled={leaseLiveStatus}
+                      status={threadStatus}
+                    />
                     <RelativeTime
                       timestamp={thread.latestUserMessageAt ?? thread.updatedAt ?? thread.createdAt}
+                      nowLabel="now"
                     />
                   </span>
                 )}
@@ -919,6 +1023,10 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
           </div>
         </div>
       </div>
+      <ActiveSubagentThreads
+        threadRef={scopeThreadRef(thread.environmentId, thread.id)}
+        enabled={leaseLiveStatus}
+      />
     </SidebarMenuSubItem>
   );
 });
@@ -970,6 +1078,9 @@ interface SidebarProjectThreadListProps {
   ) => Promise<void>;
   cancelRename: () => void;
   attemptArchiveThread: (threadRef: ScopedThreadRef) => Promise<void>;
+  attemptSettleThread: (threadRef: ScopedThreadRef) => Promise<void>;
+  attemptSnoozeThread: (threadRef: ScopedThreadRef, until: string) => Promise<void>;
+  attemptPinThread: (threadRef: ScopedThreadRef, pinned: boolean) => Promise<void>;
   openPrLink: (
     event: React.MouseEvent<HTMLElement>,
     prUrl: string,
@@ -1015,6 +1126,9 @@ const SidebarProjectThreadList = memo(function SidebarProjectThreadList(
     commitRename,
     cancelRename,
     attemptArchiveThread,
+    attemptSettleThread,
+    attemptSnoozeThread,
+    attemptPinThread,
     openPrLink,
     expandThreadListForProject,
     collapseThreadListForProject,
@@ -1072,6 +1186,9 @@ const SidebarProjectThreadList = memo(function SidebarProjectThreadList(
                 commitRename={commitRename}
                 cancelRename={cancelRename}
                 attemptArchiveThread={attemptArchiveThread}
+                attemptSettleThread={attemptSettleThread}
+                attemptSnoozeThread={attemptSnoozeThread}
+                attemptPinThread={attemptPinThread}
                 openPrLink={openPrLink}
               />
             );
@@ -1114,7 +1231,17 @@ const SidebarProjectThreadList = memo(function SidebarProjectThreadList(
 });
 
 interface SidebarProjectItemProps {
-  projectPinActions: Pick<ReturnType<typeof useThreadActions>, "pinThread" | "unpinThread">;
+  projectThreadActions: Pick<
+    ReturnType<typeof useThreadActions>,
+    | "pinThread"
+    | "unpinThread"
+    | "settleThread"
+    | "unsettleThread"
+    | "unsnoozeThread"
+    | "snoozeThread"
+    | "confirmAndUnpinThread"
+    | "setThreadAutoSettle"
+  >;
   project: SidebarProjectSnapshot;
   isThreadListExpanded: boolean;
   activeRouteThreadKey: string | null;
@@ -1150,12 +1277,17 @@ function resolveProjectThreadStatus(
   });
 }
 
+function useProjectSectionThreads(threads: readonly SidebarThreadSummary[]) {
+  return useProjectThreadSections(threads).active;
+}
+
 // Separate hooks keep array caches independent of the route-dependent panel.
 function useProjectThreads(project: SidebarProjectSnapshot) {
   const threadSortOrder = useClientSettings<SidebarThreadSortOrder>(
     (settings) => settings.sidebarThreadSortOrder,
   );
   const sidebarThreads = useThreadShellsForProjectRefs(project.memberProjectRefs);
+  const sectionThreads = useProjectSectionThreads(sidebarThreads);
   const threadLastVisitedAts = useUiStateStore(
     useShallow((state) =>
       sidebarThreads.map(
@@ -1199,10 +1331,7 @@ function useProjectThreads(project: SidebarProjectSnapshot) {
       resolveThreadLastVisitedAt(thread.lastVisitedAt, threadLastVisitedAts[index] ?? undefined),
     ]),
   );
-  const visibleProjectThreads = sortThreads(
-    filterSidebarV2VisibleThreads(sidebarThreads, null),
-    threadSortOrder,
-  );
+  const visibleProjectThreads = sortThreads(sectionThreads, threadSortOrder);
   const projectStatus = resolveProjectStatusIndicator(
     visibleProjectThreads.map((thread) =>
       resolveProjectThreadStatus(thread, lastVisitedAtByThreadKey),
@@ -1287,7 +1416,7 @@ function useProjectThreadPanel(input: {
 const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjectItemProps) {
   const {
     project,
-    projectPinActions,
+    projectThreadActions,
     isThreadListExpanded,
     activeRouteThreadKey,
     openPullRequestsInRightPanel,
@@ -1318,6 +1447,8 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
     (settings) => settings.confirmThreadArchive,
   );
   const projectGroupingSettings = useClientSettings(selectProjectGroupingSettings);
+  const serverConfigs = useServerConfigs();
+  const timestampFormat = usePrimarySettings((settings) => settings.timestampFormat);
   const confirmThreadUnpin = useClientSettings((settings) => settings.confirmThreadUnpin);
   const [projectPinPending, setProjectPinPending] = useState(false);
   const projectPinPendingRef = useRef(false);
@@ -1407,9 +1538,11 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
     projectStatus?.label === "Guest Request";
   const pinTargets = projectThreadPinTargets(sidebarThreads, "pin");
   const unpinTargets = projectThreadPinTargets(sidebarThreads, "unpin");
-  const projectPinAction = pinTargets.length > 0 ? "pin" : "unpin";
+  const pinnedProjectKeys = useClientSettings((settings) => settings.sidebarPinnedProjectKeys);
+  const projectPinKeys = projectPinPreferenceKeys(project);
+  const projectPinned = projectPinKeys.some((key) => pinnedProjectKeys.includes(key));
+  const projectPinAction = projectPinned ? "unpin" : "pin";
   const canChangeProjectPins = (targets: readonly SidebarThreadSummary[]) =>
-    targets.length > 0 &&
     targets.every(
       (thread) =>
         readEnvironmentSupportsPinning(thread.environmentId) &&
@@ -1425,7 +1558,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
         action,
       );
       if (!canChangeProjectPins(targets)) return;
-      if (action === "unpin" && confirmThreadUnpin) {
+      if (action === "unpin" && targets.length > 0 && confirmThreadUnpin) {
         const api = readLocalApi();
         if (
           !api ||
@@ -1446,8 +1579,8 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
           continue;
         if (!canChangeProjectPins([current])) return;
         const result = await (action === "pin"
-          ? projectPinActions.pinThread(threadRef)
-          : projectPinActions.unpinThread(threadRef));
+          ? projectThreadActions.pinThread(threadRef)
+          : projectThreadActions.unpinThread(threadRef));
         if (result._tag !== "Failure") continue;
         if (!isAtomCommandInterrupted(result)) {
           const error = squashAtomCommandFailure(result);
@@ -1461,6 +1594,12 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
         }
         return;
       }
+      const pinned = new Set(getClientSettings().sidebarPinnedProjectKeys);
+      for (const key of projectPinKeys) {
+        if (action === "pin") pinned.add(key);
+        else pinned.delete(key);
+      }
+      await updateClientSettings({ sidebarPinnedProjectKeys: [...pinned] });
     } finally {
       projectPinPendingRef.current = false;
       setProjectPinPending(false);
@@ -1814,22 +1953,18 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
           params: { projectKey: project.projectKey },
         });
       });
-      actionHandlers.set("pin-threads", () => changeProjectPins("pin"));
-      actionHandlers.set("unpin-threads", () => changeProjectPins("unpin"));
+      actionHandlers.set("pin-project", () => changeProjectPins(projectPinAction));
       actionHandlers.set("close-inactive-tabs", () => closeInactiveTabs());
 
       const inactiveTabCount = getInactiveTabCount();
       const clicked = await api.contextMenu.show(
         [
           {
-            id: "pin-threads",
-            label: `Pin unsettled threads (${pinTargets.length})`,
-            disabled: projectPinPending || !canChangeProjectPins(pinTargets),
-          },
-          {
-            id: "unpin-threads",
-            label: `Unpin unsettled threads (${unpinTargets.length})`,
-            disabled: projectPinPending || !canChangeProjectPins(unpinTargets),
+            id: "pin-project",
+            label: projectPinned ? "Unpin project" : "Pin project",
+            disabled:
+              projectPinPending ||
+              !canChangeProjectPins(projectPinAction === "pin" ? pinTargets : unpinTargets),
           },
           buildTargetedItem("rename", "Rename", {
             isDisabled: (member) =>
@@ -1953,14 +2088,109 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
       readEnvironmentScope(threadRef.environmentId, AuthOrchestrationOperateScope),
     );
 
+    const snoozePresets = resolveSnoozePresets(new Date(), timestampFormat);
+    const supportsAll = (
+      key: "threadSettlement" | "threadPinning" | "threadSnooze" | "threadTitleRegeneration",
+    ) =>
+      selectedThreadEntries.every(
+        ({ thread }) =>
+          serverConfigs.get(thread.environmentId)?.environment.capabilities[key] === true,
+      );
     const clicked = await api.contextMenu.show(
-      buildMultiSelectThreadContextMenuItems({ count, hasRunningThread }).map((item) =>
-        item.id === "archive" || item.id === "delete"
-          ? { ...item, disabled: item.disabled || !canOperateSelection }
-          : item,
-      ),
+      [
+        ...(supportsAll("threadPinning")
+          ? [
+              { id: "pin", label: `Pin (${count})`, disabled: !canOperateSelection },
+              {
+                id: "unpin",
+                label: `Unpin (${count})`,
+                disabled:
+                  !canOperateSelection ||
+                  !selectedThreadEntries.some(({ thread }) => thread.pinnedAt != null),
+              },
+            ]
+          : []),
+        ...(supportsAll("threadSettlement")
+          ? [{ id: "settle", label: `Settle (${count})`, disabled: !canOperateSelection }]
+          : []),
+        ...(supportsAll("threadSnooze") &&
+        selectedThreadEntries.every(({ thread }) =>
+          canSnooze(thread, { now: new Date().toISOString() }),
+        )
+          ? [
+              {
+                id: "snooze",
+                label: `Snooze (${count})`,
+                disabled: !canOperateSelection,
+                children: [
+                  ...snoozePresets.map((preset) => ({
+                    id: `snooze:${preset.id}`,
+                    label: `${preset.label} (${preset.whenLabel})`,
+                  })),
+                  { id: "snooze:custom", label: "Custom…" },
+                ],
+              },
+            ]
+          : []),
+        ...(supportsAll("threadTitleRegeneration")
+          ? [
+              {
+                id: "regenerate-title",
+                label: `Regenerate titles (${count})`,
+                disabled:
+                  !canOperateSelection ||
+                  selectedThreadEntries.every(({ thread }) => thread.titleRegeneration != null),
+              },
+            ]
+          : []),
+        ...buildMultiSelectThreadContextMenuItems({ count, hasRunningThread }).map((item) =>
+          item.id === "archive" || item.id === "delete"
+            ? { ...item, disabled: item.disabled || !canOperateSelection }
+            : item,
+        ),
+      ],
       position,
     );
+    if (
+      (clicked && ["settle", "pin", "unpin", "regenerate-title"].includes(clicked)) ||
+      clicked?.startsWith("snooze:")
+    ) {
+      const preset =
+        clicked === "snooze:custom"
+          ? await requestCustomSnooze()
+          : snoozePresets.find((item) => `snooze:${item.id}` === clicked);
+      for (const { threadRef } of selectedThreadEntries) {
+        if (!checkTaskPermission(threadRef.environmentId)) return;
+        const current = readThreadShell(threadRef);
+        if (!current || current.archivedAt !== null || current.settledOverride === "settled")
+          continue;
+        if (clicked === "settle") await attemptSettleThread(threadRef);
+        else if (clicked === "pin" && current.pinnedAt == null)
+          await attemptPinThread(threadRef, false);
+        else if (clicked === "unpin" && current.pinnedAt != null)
+          await attemptPinThread(threadRef, true);
+        else if (preset) await attemptSnoozeThread(threadRef, preset.snoozedUntil);
+        else if (clicked === "regenerate-title" && current.titleRegeneration == null) {
+          const result = await updateThreadMetadata({
+            environmentId: threadRef.environmentId,
+            input: { threadId: threadRef.threadId, regenerateTitle: true },
+          });
+          if (result._tag === "Failure") {
+            if (!isAtomCommandInterrupted(result))
+              toastManager.add(
+                stackedThreadToast({
+                  type: "error",
+                  title: "Failed to regenerate titles",
+                  description: String(squashAtomCommandFailure(result)),
+                }),
+              );
+            return;
+          }
+        }
+      }
+      clearSelection();
+      return;
+    }
 
     if (clicked === "mark-unread") {
       for (const { threadRef } of selectedThreadEntries) {
@@ -2137,6 +2367,65 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
     })();
   };
 
+  const settlingKeys = useRef(new Set<string>());
+  const attemptSettleThread = async (threadRef: ScopedThreadRef) => {
+    const key = scopedThreadKey(threadRef);
+    if (
+      !checkTaskPermission(threadRef.environmentId) ||
+      !readEnvironmentSupportsSettlement(threadRef.environmentId) ||
+      settlingKeys.current.has(key)
+    )
+      return;
+    settlingKeys.current.add(key);
+    try {
+      const result = await projectThreadActions.settleThread(threadRef);
+      if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+        const error = squashAtomCommandFailure(result);
+        toastManager.add(
+          stackedThreadToast({
+            type: "error",
+            title: "Failed to settle thread",
+            description: error instanceof Error ? error.message : "An error occurred.",
+          }),
+        );
+      }
+    } finally {
+      settlingKeys.current.delete(key);
+    }
+  };
+
+  const attemptPinThread = async (threadRef: ScopedThreadRef, pinned: boolean) => {
+    if (!checkTaskPermission(threadRef.environmentId)) return;
+    const result = await (pinned
+      ? projectThreadActions.confirmAndUnpinThread(threadRef)
+      : projectThreadActions.pinThread(threadRef));
+    if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+      const error = squashAtomCommandFailure(result);
+      toastManager.add(
+        stackedThreadToast({
+          type: "error",
+          title: "Failed to update thread pin",
+          description: error instanceof Error ? error.message : "An error occurred.",
+        }),
+      );
+    }
+  };
+
+  const attemptSnoozeThread = async (threadRef: ScopedThreadRef, until: string) => {
+    if (!checkTaskPermission(threadRef.environmentId)) return;
+    const result = await projectThreadActions.snoozeThread(threadRef, until);
+    if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+      const error = squashAtomCommandFailure(result);
+      toastManager.add(
+        stackedThreadToast({
+          type: "error",
+          title: "Failed to snooze thread",
+          description: error instanceof Error ? error.message : "An error occurred.",
+        }),
+      );
+    }
+  };
+
   const attemptArchiveThread = async (threadRef: ScopedThreadRef) => {
     if (!checkTaskPermission(threadRef.environmentId)) return;
     const result = await archiveThread(threadRef);
@@ -2298,29 +2587,87 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
         thread.environmentId,
         AuthOrchestrationOperateScope,
       );
+      const capabilities = serverConfigs.get(thread.environmentId)?.environment.capabilities;
+      const snoozePresets = resolveSnoozePresets(new Date(), timestampFormat);
       const clicked = await api.contextMenu.show(
-        [
-          ...(thread.branch
-            ? [{ id: "new-thread-on-branch", label: `New thread on ${thread.branch}` }]
-            : []),
-          { id: "rename", label: "Rename thread", disabled: !canOperateThread },
-          ...(appAtomRegistry.get(canShareWithGuestAtom(thread.environmentId))
-            ? [{ id: "share-guest", label: "Share with guest" }]
-            : []),
-          { id: "mark-unread", label: "Mark unread" },
-          { id: "copy-path", label: "Copy Path" },
-          { id: "copy-thread-id", label: "Copy Thread ID" },
-          { id: "project-settings", label: "Project settings" },
-          {
-            id: "delete",
-            label: "Delete",
-            destructive: true,
-            icon: "trash",
-            disabled: !canOperateThread,
+        buildThreadActionMenuItems({
+          canOperate: canOperateThread,
+          branch: thread.branch,
+          projectFilter: null,
+          isPinned: thread.pinnedAt != null,
+          isSettled: thread.settledOverride === "settled",
+          autoSettleEnabled: thread.autoSettleDisabledAt == null,
+          isSnoozed: false,
+          canSnoozeNow: canSnooze(thread, { now: new Date().toISOString() }),
+          isRegeneratingTitle: thread.titleRegeneration != null,
+          isRunning: !threadRuntimeCanArchive(thread.runtime),
+          canShareWithGuest: appAtomRegistry.get(canShareWithGuestAtom(thread.environmentId)),
+          supports: {
+            settlement: capabilities?.threadSettlement === true,
+            snooze: capabilities?.threadSnooze === true,
+            pinning: capabilities?.threadPinning === true,
+            autoSettleOptOut: capabilities?.threadAutoSettleOptOut === true,
+            titleRegeneration: capabilities?.threadTitleRegeneration === true,
           },
-        ],
+          snoozePresets,
+          inactiveTabCount: getInactiveTabCount(threadRef),
+          closingInactiveTabs,
+        }),
         position,
       );
+      if (!clicked) return;
+      if (clicked === "close-inactive-tabs") {
+        await closeInactiveTabs(threadRef);
+        return;
+      }
+      if (threadActionRequiresOperate(clicked) && !checkTaskPermission(threadRef.environmentId))
+        return;
+      if (clicked.startsWith("snooze:")) {
+        const preset =
+          clicked === "snooze:custom"
+            ? await requestCustomSnooze()
+            : snoozePresets.find((item) => `snooze:${item.id}` === clicked);
+        if (preset) await attemptSnoozeThread(threadRef, preset.snoozedUntil);
+        return;
+      }
+      if (clicked === "pin" || clicked === "unpin") {
+        await attemptPinThread(threadRef, clicked === "unpin");
+        return;
+      }
+      if (clicked === "auto-settle:enabled" || clicked === "auto-settle:disabled") {
+        const result = await projectThreadActions.setThreadAutoSettle(
+          threadRef,
+          clicked === "auto-settle:enabled",
+        );
+        if (result._tag === "Failure" && !isAtomCommandInterrupted(result))
+          toastManager.add(
+            stackedThreadToast({
+              type: "error",
+              title: "Failed to update auto-settle",
+              description: String(squashAtomCommandFailure(result)),
+            }),
+          );
+        return;
+      }
+      if (clicked === "regenerate-title") {
+        const result = await updateThreadMetadata({
+          environmentId: threadRef.environmentId,
+          input: { threadId: threadRef.threadId, regenerateTitle: true },
+        });
+        if (result._tag === "Failure" && !isAtomCommandInterrupted(result))
+          toastManager.add(
+            stackedThreadToast({
+              type: "error",
+              title: "Failed to regenerate title",
+              description: String(squashAtomCommandFailure(result)),
+            }),
+          );
+        return;
+      }
+      if (clicked === "copy-branch") {
+        if (thread.branch) copyPathToClipboard(thread.branch, { path: thread.branch });
+        return;
+      }
 
       if (clicked === "project-settings") {
         if (isMobile) setOpenMobile(false);
@@ -2353,6 +2700,19 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
         return;
       }
 
+      if (clicked === "settle") {
+        await attemptSettleThread(threadRef);
+        return;
+      }
+      if (clicked === "archive") {
+        if (
+          appSettingsConfirmThreadArchive &&
+          !(await api.dialogs.confirm(`Archive thread "${thread.title}"?`))
+        )
+          return;
+        await attemptArchiveThread(threadRef);
+        return;
+      }
       if (clicked === "rename") {
         startThreadRename(threadKey, thread.title);
         return;
@@ -2443,7 +2803,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
           <span className="flex min-w-0 flex-1 items-center gap-2">
             <span
               className={cn(
-                "truncate text-sm font-medium",
+                "truncate text-sm font-medium transition-colors duration-300",
                 projectEngaged ? "text-sidebar-foreground/90" : "text-sidebar-muted-foreground",
               )}
             >
@@ -2489,7 +2849,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
             >
               <span
                 className={cn(
-                  "size-[7px] rounded-full",
+                  "size-[7px] rounded-full transition-colors duration-300",
                   projectEngaged ? projectStatus?.dotClass : "bg-sidebar-muted-foreground/45",
                   (projectStatus?.pulse || projectAttention) && "motion-safe:animate-status-pulse",
                 )}
@@ -2505,7 +2865,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
             render={
               <button
                 type="button"
-                aria-label={`${projectPinAction === "pin" ? "Pin" : "Unpin"} unsettled threads in ${project.displayName}`}
+                aria-label={`${projectPinAction === "pin" ? "Pin" : "Unpin"} project ${project.displayName}`}
                 disabled={
                   projectPinPending ||
                   !canChangeProjectPins(projectPinAction === "pin" ? pinTargets : unpinTargets)
@@ -2513,19 +2873,18 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
                 className={cn(
                   SIDEBAR_ICON_ACTION_BUTTON_CLASS,
                   "absolute top-1/2 right-7 -translate-y-1/2 opacity-0 group-hover/project-header:opacity-100 group-focus-within/project-header:opacity-100 max-sm:opacity-100",
-                  unpinTargets.length > 0 && "text-sidebar-foreground",
+                  projectPinned && "text-sidebar-foreground",
                 )}
                 onClick={() => void changeProjectPins(projectPinAction)}
               />
             }
           >
-            <PinIcon
-              className="size-3.5"
-              fill={unpinTargets.length > 0 ? "currentColor" : "none"}
-            />
+            <PinIcon className="size-3.5" fill={projectPinned ? "currentColor" : "none"} />
           </TooltipTrigger>
           <TooltipPopup side="top">
-            {projectPinAction === "pin" ? "Pin unsettled threads" : "Unpin unsettled threads"}
+            {projectPinAction === "pin"
+              ? "Pin project and unsettled tasks"
+              : "Unpin project and unsettled tasks"}
           </TooltipPopup>
         </Tooltip>
 
@@ -2587,6 +2946,9 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
         commitRename={commitRename}
         cancelRename={cancelRename}
         attemptArchiveThread={attemptArchiveThread}
+        attemptSettleThread={attemptSettleThread}
+        attemptSnoozeThread={attemptSnoozeThread}
+        attemptPinThread={attemptPinThread}
         openPrLink={openPrLink}
         expandThreadListForProject={expandThreadListForProject}
         collapseThreadListForProject={collapseThreadListForProject}
@@ -2955,7 +3317,7 @@ function SortableProjectItem({
 }
 
 interface SidebarProjectsContentProps {
-  projectPinActions: SidebarProjectItemProps["projectPinActions"];
+  projectThreadActions: SidebarProjectItemProps["projectThreadActions"];
   showArm64IntelBuildWarning: boolean;
   arm64IntelBuildWarningDescription: string | null;
   desktopUpdateButtonAction: "download" | "install" | "none";
@@ -2999,7 +3361,7 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
   props: SidebarProjectsContentProps,
 ) {
   const {
-    projectPinActions,
+    projectThreadActions,
     showArm64IntelBuildWarning,
     arm64IntelBuildWarningDescription,
     desktopUpdateButtonAction,
@@ -3051,6 +3413,7 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
 
   return (
     <SidebarContent
+      className="min-h-full"
       fixedHeader={
         <SidebarGroup className="z-[1]">
           <SidebarMenu>
@@ -3103,6 +3466,7 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
               onThreadSortOrderChange={handleThreadSortOrderChange}
               onThreadPreviewCountChange={handleThreadPreviewCountChange}
             />
+            <ActiveSubagentsToggle />
             <Tooltip>
               <TooltipTrigger
                 render={
@@ -3138,7 +3502,7 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
                     {(dragHandleProps) => (
                       <SidebarProjectItem
                         project={project}
-                        projectPinActions={projectPinActions}
+                        projectThreadActions={projectThreadActions}
                         isThreadListExpanded={expandedThreadListsByProject.has(project.projectKey)}
                         activeRouteThreadKey={
                           activeRouteProjectKey === project.projectKey ? routeThreadKey : null
@@ -3173,7 +3537,7 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
               <SidebarProjectListRow
                 key={project.projectKey}
                 project={project}
-                projectPinActions={projectPinActions}
+                projectThreadActions={projectThreadActions}
                 isThreadListExpanded={expandedThreadListsByProject.has(project.projectKey)}
                 activeRouteThreadKey={
                   activeRouteProjectKey === project.projectKey ? routeThreadKey : null
@@ -3201,7 +3565,13 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
         {projectsLength === 0 && (
           <div className="px-2 pt-4 text-center text-secondary-label text-xs">No projects yet</div>
         )}
+        {projectsLength > 0 && sortedProjects.length === 0 && (
+          <div className="px-2 pt-4 text-center text-secondary-label text-xs">
+            No unsettled tasks
+          </div>
+        )}
       </SidebarGroup>
+      <ProjectThreadShelves actions={projectThreadActions} />
     </SidebarContent>
   );
 });
@@ -3292,15 +3662,32 @@ function useSortedLegacySidebarProjects(input: {
     projectPhysicalKeyByScopedRef,
     sidebarProjectSortOrder,
   } = input;
-  const sidebarThreads = useThreadShells();
+  const sidebarThreads = useQuietThreadShells();
+  const sectionThreads = useProjectSectionThreads(sidebarThreads);
+  const pinnedProjectKeys = useClientSettings((settings) => settings.sidebarPinnedProjectKeys);
+  const populatedProjectKeys = new Set(
+    sectionThreads.map((thread) => {
+      const physicalKey =
+        projectPhysicalKeyByScopedRef.get(
+          scopedProjectKey(scopeProjectRef(thread.environmentId, thread.projectId)),
+        ) ?? scopedProjectKey(scopeProjectRef(thread.environmentId, thread.projectId));
+      return physicalToLogicalKey.get(physicalKey) ?? physicalKey;
+    }),
+  );
   const sidebarProjectByKey = new Map(
     sidebarProjects.map((project) => [project.projectKey, project] as const),
   );
-  const sortableProjects = sidebarProjects.map((project) => ({
-    ...project,
-    id: project.projectKey,
-  }));
-  const sortableThreads = filterSidebarV2VisibleThreads(sidebarThreads, null).map((thread) => {
+  const sortableProjects = sidebarProjects
+    .filter(
+      (project) =>
+        populatedProjectKeys.has(project.projectKey) ||
+        projectPinPreferenceKeys(project).some((key) => pinnedProjectKeys.includes(key)),
+    )
+    .map((project) => ({
+      ...project,
+      id: project.projectKey,
+    }));
+  const sortableThreads = sectionThreads.map((thread) => {
     const physicalKey =
       projectPhysicalKeyByScopedRef.get(
         scopedProjectKey(scopeProjectRef(thread.environmentId, thread.projectId)),
@@ -3342,7 +3729,8 @@ function useLegacySidebarThreads(input: {
     sidebarThreadPreviewCount,
     expandedThreadListsByProject,
   } = input;
-  const sidebarThreads = useThreadShells();
+  const sidebarThreads = useQuietThreadShells();
+  const sectionThreads = useProjectSectionThreads(sidebarThreads);
   const projectExpandedById = useUiStateStore((store) => store.projectExpandedById);
   const sidebarThreadByKey = new Map(
     sidebarThreads.map(
@@ -3362,7 +3750,7 @@ function useLegacySidebarThreads(input: {
     ? logicalProjectKeyForThread(activeRouteThread)
     : null;
   const threadsByProjectKey = new Map<string, SidebarThreadSummary[]>();
-  for (const thread of sidebarThreads) {
+  for (const thread of sectionThreads) {
     const logicalKey = logicalProjectKeyForThread(thread);
     const existing = threadsByProjectKey.get(logicalKey);
     if (existing) {
@@ -3373,7 +3761,7 @@ function useLegacySidebarThreads(input: {
   }
   const visibleSidebarThreadKeys = sortedProjects.flatMap((project) => {
     const projectThreads = sortThreads(
-      filterSidebarV2VisibleThreads(threadsByProjectKey.get(project.projectKey) ?? [], null),
+      threadsByProjectKey.get(project.projectKey) ?? [],
       sidebarThreadSortOrder,
     );
     const projectExpanded = resolveProjectExpanded(
@@ -3451,8 +3839,8 @@ export default function LegacySidebar({ routeReveal }: { routeReveal: SidebarRou
   const sidebarProjectSortOrder = useClientSettings((s) => s.sidebarProjectSortOrder);
   const sidebarThreadPreviewCount = useClientSettings((s) => s.sidebarThreadPreviewCount);
   const handleNewThread = useNewThreadHandler();
-  const { archiveThread, deleteThread, markThreadUnread, pinThread, unpinThread } =
-    useThreadActions();
+  const threadActions = useThreadActions();
+  const { archiveThread, deleteThread, markThreadUnread } = threadActions;
   const { isMobile, setOpenMobile } = useSidebar();
   const routeTarget = useThreadRouteTarget();
   const routeDraftThread = useComposerDraftStore((store) =>
@@ -3508,6 +3896,50 @@ export default function LegacySidebar({ routeReveal }: { routeReveal: SidebarRou
     sidebarThreadPreviewCount,
     expandedThreadListsByProject,
   });
+  const settleAndAdvanceThread = useStableCallback(async (threadRef: ScopedThreadRef) => {
+    const result = await threadActions.settleThread(threadRef);
+    if (
+      result._tag === "Success" &&
+      isThreadRoutePathname(window.location.pathname, threadRef) &&
+      readThreadShell(threadRef)?.settledOverride === "settled"
+    ) {
+      const key = scopedThreadKey(threadRef);
+      const next = visibleSidebarThreadKeys.find((candidate) => {
+        const ref = parseScopedThreadKey(candidate);
+        const thread = ref ? readThreadShell(ref) : null;
+        return (
+          candidate !== key &&
+          thread &&
+          thread.archivedAt === null &&
+          thread.settledOverride !== "settled"
+        );
+      });
+      try {
+        const ref = next ? parseScopedThreadKey(next) : null;
+        if (ref)
+          await navigate({ to: "/$environmentId/$threadId", params: buildThreadRouteParams(ref) });
+        else {
+          const current = readThreadShell(threadRef);
+          if (current)
+            await handleNewThread(scopeProjectRef(current.environmentId, current.projectId));
+        }
+      } catch (error) {
+        toastManager.add(
+          stackedThreadToast({
+            type: "error",
+            title: "Thread settled, but navigation failed",
+            description: error instanceof Error ? error.message : "An error occurred.",
+          }),
+        );
+      }
+    }
+    return result;
+  });
+  const settleFromShortcut = useStableCallback((threadRef: ScopedThreadRef) => {
+    void settleAndAdvanceThread(threadRef);
+  });
+  useEffect(() => registerSettleAndAdvance(settleFromShortcut), [settleFromShortcut]);
+
   const revealActiveRow = useActiveRowReveal(routeReveal, routeThreadKey);
   const newThreadShortcutLabelOptions = {
     platform,
@@ -3809,7 +4241,7 @@ export default function LegacySidebar({ routeReveal }: { routeReveal: SidebarRou
       <SidebarChromeHeader isElectron={isElectron} />
 
       <SidebarProjectsContent
-        projectPinActions={{ pinThread, unpinThread }}
+        projectThreadActions={{ ...threadActions, settleThread: settleAndAdvanceThread }}
         showArm64IntelBuildWarning={showArm64IntelBuildWarning}
         arm64IntelBuildWarningDescription={arm64IntelBuildWarningDescription}
         desktopUpdateButtonAction={desktopUpdateButtonAction}

@@ -1,6 +1,6 @@
 import { expect, it, vi } from "vite-plus/test";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
-import { ProjectId, ThreadId } from "@t3tools/contracts";
+import { EnvironmentId, ProjectId, ThreadId, type ScopedThreadRef } from "@t3tools/contracts";
 import type { SidebarThreadSummary } from "~/types";
 import { makeThreadFixture } from "~/test-fixtures";
 import { selectThreadRightPanelState, useRightPanelStore } from "~/rightPanelStore";
@@ -19,12 +19,14 @@ vi.mock("~/state/entities", () => ({
 function Harness({
   threads,
   selectedThreadKey,
+  target,
 }: {
   readonly threads: readonly SidebarThreadSummary[];
   readonly selectedThreadKey: string | null;
+  readonly target?: ScopedThreadRef;
 }) {
   const { closeInactiveTabs } = useCloseInactiveProjectTabs({ threads, selectedThreadKey });
-  return <button onClick={() => void closeInactiveTabs()}>Close inactive views</button>;
+  return <button onClick={() => void closeInactiveTabs(target)}>Close inactive views</button>;
 }
 
 it("closes only the selected project's idle views through the hook and panel store", async () => {
@@ -48,5 +50,47 @@ it("closes only the selected project's idle views through the hook and panel sto
   expect(
     selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, otherRef).surfaces,
   ).toHaveLength(1);
+  useRightPanelStore.setState({ byThreadKey: {} });
+});
+
+it("limits task cleanup to its environment and leaves its parent, sibling and another environment untouched", async () => {
+  const parent = makeThreadFixture({ id: ThreadId.make("parent") });
+  const child = makeThreadFixture({
+    id: ThreadId.make("child"),
+    lineage: {
+      rootThreadId: parent.id,
+      parentThreadId: parent.id,
+      relationshipToParent: "subagent",
+    },
+  });
+  const sibling = { ...child, id: ThreadId.make("sibling") };
+  const remote = { ...child, environmentId: EnvironmentId.make("remote") };
+  state.threads = [parent, child, sibling, remote];
+  useRightPanelStore.setState({ byThreadKey: {} });
+  for (const thread of state.threads)
+    useRightPanelStore
+      .getState()
+      .openFile(scopeThreadRef(thread.environmentId, thread.id), "keep-or-close.txt");
+  await using screen = await render(
+    <Harness
+      threads={state.threads}
+      selectedThreadKey={null}
+      target={scopeThreadRef(child.environmentId, child.id)}
+    />,
+  );
+  await screen.getByRole("button", { name: "Close inactive views" }).click();
+  expect(
+    selectThreadRightPanelState(
+      useRightPanelStore.getState().byThreadKey,
+      scopeThreadRef(child.environmentId, child.id),
+    ).surfaces,
+  ).toHaveLength(0);
+  for (const thread of [parent, sibling, remote])
+    expect(
+      selectThreadRightPanelState(
+        useRightPanelStore.getState().byThreadKey,
+        scopeThreadRef(thread.environmentId, thread.id),
+      ).surfaces,
+    ).toHaveLength(1);
   useRightPanelStore.setState({ byThreadKey: {} });
 });

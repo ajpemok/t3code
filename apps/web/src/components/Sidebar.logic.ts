@@ -595,6 +595,71 @@ export function filterSidebarV2VisibleThreads<
   );
 }
 
+export function filterProjectSectionThreads<T extends SidebarThreadSummary>(
+  threads: readonly T[],
+  options: {
+    readonly now: string;
+    readonly capabilities: ReadonlyMap<
+      string,
+      { readonly threadSettlement?: boolean; readonly threadSnooze?: boolean }
+    >;
+  },
+): T[] {
+  return partitionProjectSectionThreads(threads, options).active;
+}
+
+export function partitionProjectSectionThreads<T extends SidebarThreadSummary>(
+  threads: readonly T[],
+  options: Parameters<typeof filterProjectSectionThreads>[1],
+) {
+  const active: T[] = [];
+  const snoozed: T[] = [];
+  const settled: T[] = [];
+  for (const thread of filterSidebarV2VisibleThreads(threads, null)) {
+    const capabilities = options.capabilities.get(thread.environmentId);
+    const target =
+      capabilities?.threadSnooze && effectiveSnoozed(thread, { now: options.now })
+        ? snoozed
+        : capabilities?.threadSettlement && thread.settledOverride === "settled"
+          ? settled
+          : active;
+    target.push(thread);
+  }
+  return { active, snoozed, settled };
+}
+
+export function activeSubagentsByParent<T extends SidebarThreadSummary>(threads: readonly T[]) {
+  const byParent = new Map<string, T[]>();
+  for (const thread of threads) {
+    const parentId = thread.lineage.parentThreadId;
+    if (
+      parentId === null ||
+      parentId === thread.id ||
+      thread.lineage.relationshipToParent !== "subagent" ||
+      thread.archivedAt !== null ||
+      thread.settledOverride === "settled"
+    )
+      continue;
+    const needsInput =
+      thread.hasPendingApprovals ||
+      thread.hasPendingUserInput ||
+      thread.pendingSubagentRequest != null;
+    const runActive =
+      thread.latestRun !== null &&
+      ["preparing", "queued", "starting", "running", "waiting"].includes(thread.latestRun.status);
+    const runtimeActive =
+      thread.runtime?.status === "starting" ||
+      thread.runtime?.status === "running" ||
+      ((thread.runtime === null || thread.runtime.status === "idle") && runActive);
+    if (!needsInput && !runtimeActive) continue;
+    const parentKey = `${thread.environmentId}:${parentId}`;
+    const siblings = byParent.get(parentKey);
+    if (siblings) siblings.push(thread);
+    else byParent.set(parentKey, [thread]);
+  }
+  return byParent;
+}
+
 export function buildBulkTitleRegenerationContextMenuItem(input: {
   supportedCount: number;
   actionableCount: number;

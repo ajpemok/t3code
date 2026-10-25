@@ -4,7 +4,7 @@ import {
   scopeThreadRef,
   scopeProjectRef,
 } from "@t3tools/client-runtime/environment";
-import { AuthPreviewOperateScope } from "@t3tools/contracts";
+import { AuthPreviewOperateScope, type ScopedThreadRef } from "@t3tools/contracts";
 import { useBrowserSurfaceStore } from "~/browser/browserSurfaceStore";
 import { previewRuntimeTabId } from "~/browser/previewRuntimeTabId";
 import { getUnsavedProjectFileQueryData } from "~/components/files/projectFilesQueryState";
@@ -27,6 +27,7 @@ import { readEnvironmentScope } from "~/state/session";
 import { useAtomCommand } from "~/state/use-atom-command";
 import type { SidebarThreadSummary } from "~/types";
 import { setActivePreviewTab } from "~/previewStateStore";
+import { readLocalApi } from "~/localApi";
 import { useStableCallback } from "./useStableCallback";
 
 export function useCloseInactiveProjectTabs(input: {
@@ -69,8 +70,13 @@ export function useCloseInactiveProjectTabs(input: {
       canClosePreview: readEnvironmentScope(thread.environmentId, AuthPreviewOperateScope),
     }).map((surface) => ({ threadRef, projectId: thread.projectId, surface }));
   };
-  const entries = useStableCallback(() =>
+  const entries = useStableCallback((target?: ScopedThreadRef) =>
     input.threads.flatMap((thread) => {
+      if (
+        target &&
+        (thread.environmentId !== target.environmentId || thread.id !== target.threadId)
+      )
+        return [];
       const current = readThreadShell(scopeThreadRef(thread.environmentId, thread.id));
       return current && current.projectId === thread.projectId ? targetsFor(current) : [];
     }),
@@ -83,13 +89,13 @@ export function useCloseInactiveProjectTabs(input: {
       targetsFor(current).some((candidate) => candidate.surface === entry.surface)
     );
   });
-  const closeInactiveTabs = useStableCallback(async () => {
+  const closeInactiveTabs = useStableCallback(async (target?: ScopedThreadRef) => {
     if (pendingRef.current) return;
     pendingRef.current = true;
     setPending(true);
     try {
       const result = await closeInactivePanelTabs({
-        entries: entries(),
+        entries: entries(target),
         canClose,
         releaseBrowser: async ({ threadRef, surface }) => {
           if (surface.kind !== "preview" || surface.resourceId === null) return true;
@@ -128,5 +134,26 @@ export function useCloseInactiveProjectTabs(input: {
       setPending(false);
     }
   });
-  return { closeInactiveTabs, getInactiveTabCount: () => entries().length, pending };
+  const showTaskContextMenu = useStableCallback(
+    async (target: ScopedThreadRef, position: { x: number; y: number }) => {
+      const count = entries(target).length;
+      const action = await readLocalApi()?.contextMenu.show(
+        [
+          {
+            id: "close-inactive-tabs",
+            label: `Close all inactive tabs (${count})`,
+            disabled: pendingRef.current || count === 0,
+          },
+        ],
+        position,
+      );
+      if (action === "close-inactive-tabs") await closeInactiveTabs(target);
+    },
+  );
+  return {
+    closeInactiveTabs,
+    showTaskContextMenu,
+    getInactiveTabCount: (target?: ScopedThreadRef) => entries(target).length,
+    pending,
+  };
 }

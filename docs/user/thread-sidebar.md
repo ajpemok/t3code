@@ -1,4 +1,4 @@
-# Working with threads
+# Working With Threads
 
 Use a new thread for a separate task. Choose **New worktree** when its code changes
 need a separate branch and working directory.
@@ -6,21 +6,36 @@ need a separate branch and working directory.
 ## Project Sections and Header
 
 Turn on **Project Sections** in **Settings → Appearance** to group tasks into
-collapsible project trees. Each project shows its activity even when collapsed.
-Turn it off to return to the flat list. Collapse choices are saved on this client.
-Use a project's pin button to pin all its unsettled threads. When all are pinned,
-the same button unpins them. The project menu also offers both actions for a
-partly pinned project. Settled and archived threads keep their existing state.
+collapsible project trees. Turn it off to return to the flat list. Collapse choices
+are saved on this client. Both views show active and idle tasks; settled and snoozed
+tasks stay in the bottom-aligned **Settled** and **Snoozed** sections. Expand either
+section to reopen a task or bring it back to the project list.
 
-Choose **Close all inactive tabs** from a project's menu to close its idle right-panel
-views and release unclaimed browser sessions. The selected tab, active tasks,
-controlled or recording browsers, unsaved files and terminal sessions stay open.
+Hover or focus a task to snooze, settle or pin it. Its context menu offers the
+usual task actions, including auto-settle, title regeneration, archive and delete
+when the connected environment supports them. Settling, snoozing and unpinning
+retain T3's **Undo** action. Grouping does not change these server permissions.
+
+Pin a project to keep its header available when it has no active or idle tasks.
+The same action pins its eligible tasks. Unpinning the project removes that saved
+header preference and unpins its eligible tasks. Settled and snoozed tasks stay hidden.
+
+Turn on **Active Subagents** beside the sidebar sort/add controls or in
+**Settings → Appearance** to show running subagents and those awaiting input under
+their parent task. Idle and completed children stay hidden. The choice applies to
+both views and is saved on this client.
+
+Choose **Close all inactive tabs (N)** from a project, task or subagent menu to
+close its eligible idle right-panel views and release unclaimed browser sessions.
+A task action affects that task only. The selected tab, active tasks, controlled
+or recording browsers, unsaved files and terminal sessions stay open. A zero count
+means every remaining view is protected or there are no tabs to close.
 This closes views; it does not delete files or stop development servers or emulators.
 
-While a tool call runs, a small icon beside the task identifies computer use,
-browser use or T3 browser use. The normal Working status remains. This depends on
-the provider reporting the tool activity; opaque shell or script wrappers may not
-expose it.
+Working, Waiting, Computer, Browser and T3 Browser have distinct activity symbols.
+Browser use carries the Brave logo. The grouped view puts status above the timestamp
+on the right. Effects pause offscreen, in hidden windows and with reduced motion.
+Tool activity depends on provider reports; shell and script wrappers may not expose it.
 
 The composer shows context usage and a token count when the provider supplies
 them. Hover or open the indicator for the reported input, cached input, output
@@ -29,12 +44,20 @@ otherwise the compact count is the current context's token count. Search setting
 for **Context and Token Usage** to change its visibility.
 The fork defaults this indicator on; saved choices from an existing installation
 are preserved.
+**Compact Unavailable** keeps the reason in a tooltip.
+
+The weekly fuel gauge immediately to its right shows the selected provider account's
+**remaining** quota. Open it for reset and snapshot times. It shows **N/A** for missing,
+failed, expired or older-than-five-minute readings. It uses reported weekly windows
+and matching account/workspace identities. It does not infer a weekly allowance from
+session or monthly limits. Model-specific weekly limits apply only to a recognised
+model family. The gauge reads existing snapshots without starting another quota probe.
 
 Choose **Header Scene** in the same settings to select a Sydney backdrop.
 **Header Effects** controls brief hover and idle light sweeps. Effects pause while
 the window is hidden or unfocused and respect your reduced-motion preference.
 
-## Start a thread
+## Start a Thread
 
 On web and desktop, a new thread keeps the current project and carries your model
 and mode selections, unless the destination project has its own model default.
@@ -49,7 +72,7 @@ choose a project every time.
 When you change a new thread's project, T3 Code stays in the current environment
 if that project exists there. Otherwise it selects an environment that has it.
 
-### Start without a project
+### Start Without a Project
 
 A thread does not need a project. To start one without a project, click **or
 start without a project** under a new thread's heading, pick **No project** from
@@ -67,7 +90,7 @@ folder, so the files the agent wrote stay until you delete them. Branch, worktre
 these folders are not Git repositories. This is unavailable when the data
 directory itself sits inside a Git checkout.
 
-### Start in the background
+### Start in the Background
 
 In a desktop browser or the desktop app, press `Cmd+Enter` on macOS or `Ctrl+Enter`
 on Windows and Linux to start a new thread and immediately open another draft. The
@@ -79,7 +102,7 @@ in a new thread's model picker to add or remove them. A regular click returns to
 single model. Choose a base branch and send. Each selection starts a separate thread
 and worktree while you stay in the new thread composer. This requires a Git project.
 
-## Pin and reorder threads
+## Pin and Reorder Threads
 
 Pin a thread from its menu to keep it above your active work.
 
@@ -152,7 +175,7 @@ rename a thread, regenerate its title, or link and unlink a pull request. These 
 appear on web, desktop, and mobile without requiring the originating browser to remain
 open.
 
-### Fold working threads (beta)
+### Fold Working Threads (Beta)
 
 Threads that are working or waiting on work they will resume from move into a collapsed
 **Working** section below the active list.
@@ -169,7 +192,7 @@ choice.
 While this is on, the active list is ordered by when each thread last came back to you, so you
 cannot drag or move threads within it. Your saved order returns when you turn it off.
 
-## Settle finished work
+## Settle Finished Work
 
 Choose **Settle thread** from its menu to move finished work out of the active list
 without deleting the conversation. **Un-settle thread** restores it to active work
@@ -186,7 +209,7 @@ worktree settles, manually or automatically, even if a terminal there still runs
 command such as a dev server. Threads in the project's main checkout skip it. Its terminal
 closes when the command succeeds and stays open when it fails.
 
-On web and desktop, press a thread's **Settle** button and drag up or down to
+With Project Sections off on web and desktop, press a thread's **Settle** button and drag up or down to
 settle every thread in that section between it and the one you release on.
 The **Un-settle** and **Wake** buttons work the same way in their sections.
 Press `Escape` while dragging to cancel.
@@ -214,7 +237,7 @@ rules to connected environments that support shared settings. Offline environmen
 and older servers keep their previous values. Changing a rule does not reopen
 already settled threads.
 
-## Link a pull request
+## Link a Pull Request
 
 The server finds the PR for each unsettled thread's saved branch, even when your
 apps are closed. Settled threads keep their saved links. Update the server if
@@ -225,7 +248,7 @@ On web and desktop, right-click a pull request link in a thread and choose
 same link to return to the branch PR, if one exists.
 The linked pull request participates in automatic settlement.
 
-## Find and reference work
+## Find and Reference Work
 
 On web and desktop, open the command palette with `Cmd/Ctrl+K` to search threads
 across connected environments by title, branch, pull request, or project.
@@ -243,7 +266,7 @@ and copying a thread reference. A copied reference uses the thread's pull reques
 link when available, otherwise its thread ID. See [keybindings](./keybindings.md)
 for custom configuration.
 
-## Inspect agent work
+## Inspect Agent Work
 
 **Limited** means the provider stopped on a usage or rate limit. The conversation
 keeps the provider's explanation. Retry after the limit resets, or switch to
@@ -281,7 +304,7 @@ Expand a tool call in the conversation to see its full command and output.
 Summaries shorten shell wrappers and can still describe the latest call after it
 finishes; the call's own result shows its status.
 
-## Snooze until later
+## Snooze Until Later
 
 Choose **Snooze → Custom…** from a thread's menu to pick a date and time in your
 local time zone, or a duration in minutes, hours, or days. Durations start when
