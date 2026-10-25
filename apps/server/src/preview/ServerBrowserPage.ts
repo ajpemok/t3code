@@ -504,6 +504,7 @@ export const captureViewport = async (
 };
 
 type SnapshotInput = {
+  readonly signal?: AbortSignal;
   readonly page: Page;
   readonly cdp: CDPSession;
   /** Headless pages render at the scale the server set; a desktop page at its display's. */
@@ -536,6 +537,7 @@ const capture = async (
   deadline: number,
 ): Promise<PreviewAutomationSnapshot> => {
   const { renderScale, viewport, offset } = await renderingOf(input);
+  input.signal?.throwIfAborted();
   // A late metrics reply must not begin a capture after viewers have resumed.
   if (Date.now() >= deadline) throw tooBusy();
   const scale = Math.min(1, MAX_SCREENSHOT_WIDTH / (viewport.width * renderScale));
@@ -544,6 +546,7 @@ const capture = async (
   const generation = state.generation;
   const { readers, read } = await openReaders(input.page, input.cdp);
   const before = await read();
+  input.signal?.throwIfAborted();
   // Bracket the tree with value reads to detect changes; await tree completion before retrying failed captures.
   const pageAndScreenshot = Promise.all([
     input.page.evaluate(SNAPSHOT_SCRIPT) as Promise<
@@ -577,6 +580,7 @@ const capture = async (
     if (frame && unread.includes(frame)) throw tooBusy();
   }
   const [page, data] = await pageAndScreenshot;
+  input.signal?.throwIfAborted();
   if (state.generation !== generation) throw pageChanged();
   const mask = (text: string) => (dotted ? text.replace(dotted, MASKED_VALUE) : text);
   // Redacted before the cut, so a payload crossing it can't leave its start showing, and before
@@ -619,6 +623,7 @@ export const snapshot = async (input: SnapshotInput): Promise<PreviewAutomationS
   // Retry only before the deadline and the next snapshot, whose refs a later retry would revoke.
   const captured = capture(input, deadline).catch((cause: unknown) =>
     Date.now() < deadline &&
+    !input.signal?.aborted &&
     snapshotTurns.get(input.page) === turn &&
     !(cause instanceof Error && cause.message === VALUE_TOO_LONG)
       ? capture(input, deadline)
