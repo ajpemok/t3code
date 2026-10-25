@@ -32,7 +32,7 @@ export function ContextWindowMeter(props: {
   const circumference = 2 * Math.PI * radius;
   const dashOffset = circumference * (1 - normalizedPercentage / 100);
   const totalProcessedTokens = usage.totalProcessedTokens ?? null;
-  const showTotalProcessed = totalProcessedTokens !== null && totalProcessedTokens > 0;
+  const showTotalProcessed = totalProcessedTokens !== null;
   const isOverloaded = normalizedPercentage > 90;
   const usageColor = isOverloaded
     ? "var(--color-error)"
@@ -46,9 +46,8 @@ export function ContextWindowMeter(props: {
         closeDelay={onCompact ? 150 : 0}
         render={
           <Button
-            size="icon-sm"
+            size="xs"
             variant="ghost-muted"
-            className="size-7"
             aria-label={
               usage.maxTokens !== null && usedPercentage
                 ? `Context window ${usedPercentage} used`
@@ -83,6 +82,14 @@ export function ContextWindowMeter(props: {
                 />
               </svg>
             </span>
+            <span className="text-xs tabular-nums">
+              {usedPercentage ?? `${formatContextWindowTokens(usage.usedTokens)} tokens`}
+            </span>
+            {usedPercentage ? (
+              <span className="hidden text-xs tabular-nums sm:inline">
+                · {formatContextWindowTokens(totalProcessedTokens ?? usage.usedTokens)} tokens
+              </span>
+            ) : null}
           </Button>
         }
       />
@@ -136,6 +143,24 @@ export function ContextWindowMeter(props: {
               </span>
             </div>
           ) : null}
+          {[
+            ["Input tokens", usage.inputTokens],
+            ["Cached input tokens", usage.cachedInputTokens],
+            ["Output tokens", usage.outputTokens],
+            ["Reasoning tokens", usage.reasoningOutputTokens],
+          ].map(([label, value]) =>
+            typeof value === "number" ? (
+              <div
+                key={label}
+                className="flex items-center justify-between gap-3 text-2xs leading-4"
+              >
+                <span className="text-secondary-label">{label}</span>
+                <span className="font-medium tabular-nums text-secondary-label">
+                  {formatContextWindowTokens(value)}
+                </span>
+              </div>
+            ) : null,
+          )}
           {usage.cost != null ? (
             <div className="flex items-center justify-between gap-3 text-2xs leading-4">
               <span className="text-secondary-label">Cost</span>
