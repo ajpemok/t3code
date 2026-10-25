@@ -668,11 +668,16 @@ function SidebarContent({
   );
 }
 
-function SidebarGroup({ className, ...props }: React.ComponentProps<"div">) {
+function SidebarGroup({
+  className,
+  inset = "default",
+  ...props
+}: React.ComponentProps<"div"> & { inset?: "default" | "none" }) {
   return (
     <div
       className={cn(
-        "relative flex w-full min-w-0 flex-col p-[var(--sidebar-content-inset)]",
+        "relative flex w-full min-w-0 flex-col",
+        inset === "none" ? "p-0" : "p-[var(--sidebar-content-inset)]",
         className,
       )}
       data-sidebar="group"

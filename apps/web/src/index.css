@@ -73,6 +73,13 @@
 
 .project-tint-row {
   isolation: isolate;
+  border-radius: 0;
+  border-width: 0;
+  --contrast-sidebar-muted-foreground: color-mix(
+    in srgb,
+    var(--contrast-sidebar-foreground) 84%,
+    var(--sidebar)
+  );
   background-color: color-mix(
     in srgb,
     var(--project-accent) var(--project-row-tint, 5%),
@@ -105,9 +112,22 @@
   --project-panel-tint: 4%;
 }
 .dark .project-tint-row {
-  --project-row-tint: 4%;
-  --project-row-hover-tint: 6%;
-  --project-row-selected-tint: 8%;
+  --project-row-tint: 10%;
+  --project-row-hover-tint: 13%;
+  --project-row-selected-tint: 17%;
+}
+.project-tint-section {
+  --project-row-tint: 10%;
+  --project-row-hover-tint: 14%;
+}
+
+.dark .project-tint-section {
+  --project-row-tint: 18%;
+  --project-row-hover-tint: 22%;
+}
+
+.project-thread-guide > [data-sidebar="menu-sub"] {
+  border-inline-start-color: color-mix(in srgb, var(--project-accent) 55%, var(--sidebar));
 }
 .dark [data-project-working="true"] .project-tint-row::before {
   --project-work-opacity-low: 0.025;
