@@ -223,6 +223,7 @@ import { SidebarChromeFooter, SidebarChromeHeader } from "./sidebar/SidebarChrom
 import { SidebarHeaderIconButton, SidebarThreadHeader } from "./sidebar/SidebarThreadHeader";
 import { TooltipProvider } from "./ui/tooltip";
 import { composerDraftHasUserContent, DraftId, useComposerDraftStore } from "../composerDraftStore";
+import { useCloseInactiveProjectTabs } from "../hooks/useCloseInactiveProjectTabs";
 import { useThreadRouteTarget } from "../hooks/useThreadRouteTarget";
 import {
   SidebarSearchResultRow,
@@ -1139,6 +1140,11 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     optimisticDrop,
     threads,
     routeRowThreadKey,
+  });
+
+  const inactiveTabs = useCloseInactiveProjectTabs({
+    threads,
+    selectedThreadKey: routeThreadRef ? scopedThreadKey(routeThreadRef) : null,
   });
 
   // Ranked across environments as the palette ranks them, so one
@@ -2378,6 +2384,8 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
         const clicked = await settlePromise(() =>
           api.contextMenu.show(
             buildThreadActionMenuItems({
+              inactiveTabCount: inactiveTabs.getInactiveTabCount(threadRef),
+              closingInactiveTabs: inactiveTabs.pending,
               canOperate: readEnvironmentScope(
                 threadRef.environmentId,
                 AuthOrchestrationOperateScope,
@@ -2422,6 +2430,9 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
           return;
         }
         switch (clicked.value) {
+          case "close-inactive-tabs":
+            await inactiveTabs.closeInactiveTabs(threadRef);
+            return;
           case "filter-by-project":
             if (threadProjectGroup) {
               setProjectScopeKey(

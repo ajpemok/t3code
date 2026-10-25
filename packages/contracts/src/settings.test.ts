@@ -27,6 +27,22 @@ const decodeServerSettingsPatch = Schema.decodeUnknownSync(ServerSettingsPatch);
 const encodeServerSettings = Schema.encodeSync(ServerSettings);
 const decodeClaudeSettings = Schema.decodeUnknownSync(ClaudeSettings);
 
+describe("sidebar task visibility settings", () => {
+  it("keeps subagents opt-in and preserves explicit project pins", () => {
+    const defaults = decodeClientSettings({});
+    expect(defaults.sidebarActiveSubagentsEnabled).toBe(false);
+    expect(defaults.sidebarPinnedProjectKeys).toEqual([]);
+    const patch = {
+      sidebarActiveSubagentsEnabled: true,
+      sidebarPinnedProjectKeys: ["physical-project"],
+    };
+    expect(decodeClientSettingsPatch(patch)).toEqual(patch);
+    const stored = decodeClientSettings({ ...defaults, ...patch });
+    expect(decodeClientSettings(encodeClientSettings(stored))).toMatchObject(patch);
+    expect(decodeClientSettingsPatch({})).not.toHaveProperty("sidebarPinnedProjectKeys");
+  });
+});
+
 describe("storage cleanup settings", () => {
   it("keeps cleanup disabled for existing installations", () => {
     expect(decodeServerSettings({}).worktreeCleanup).toBeNull();

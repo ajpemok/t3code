@@ -436,6 +436,12 @@ export const ClientSettingsSchema = Schema.Struct({
   proactivePanelsEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   showSkillsInSlashMenu: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   legacySidebarEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  sidebarActiveSubagentsEnabled: Schema.Boolean.pipe(
+    Schema.withDecodingDefault(Effect.succeed(false)),
+  ),
+  sidebarPinnedProjectKeys: Schema.Array(Schema.String).pipe(
+    Schema.withDecodingDefault(Effect.succeed([])),
+  ),
   ajpemokHeaderScene: Schema.String.pipe(
     Schema.withDecodingDefault(Effect.succeed("copper-skyline")),
   ),
@@ -1664,6 +1670,8 @@ export const ClientSettingsPatch = Schema.Struct({
   proactivePanelsEnabled: Schema.optionalKey(Schema.Boolean),
   showSkillsInSlashMenu: Schema.optionalKey(Schema.Boolean),
   legacySidebarEnabled: Schema.optionalKey(Schema.Boolean),
+  sidebarActiveSubagentsEnabled: Schema.optionalKey(Schema.Boolean),
+  sidebarPinnedProjectKeys: Schema.optionalKey(Schema.Array(Schema.String)),
   ajpemokHeaderScene: Schema.optionalKey(Schema.String),
   ajpemokHeaderMotion: Schema.optionalKey(Schema.Boolean),
   sidebarWorkingShelfEnabled: Schema.optionalKey(Schema.Boolean),

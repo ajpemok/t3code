@@ -704,6 +704,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["Sydney harbour copper skyline background image sidebar"],
   },
   {
+    id: "sidebar-active-subagents",
+    title: "Active Subagents",
+    to: "/settings/appearance",
+    searchTerms: ["sidebar children delegated running tasks agents"],
+  },
+  {
     id: "ajpemok-header-motion",
     title: "Header Effects",
     to: "/settings/appearance",
