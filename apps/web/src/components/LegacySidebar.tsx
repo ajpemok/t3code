@@ -924,6 +924,8 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
 });
 
 interface SidebarProjectThreadListProps {
+  projectDisplayName: string;
+  onCreateThread: React.MouseEventHandler<HTMLElement>;
   projectColor: ReturnType<typeof projectTintColor>;
   projectKey: string;
   projectExpanded: boolean;
@@ -1028,12 +1030,16 @@ const SidebarProjectThreadList = memo(function SidebarProjectThreadList(
       >
         {shouldShowThreadPanel && showEmptyThreadState ? (
           <SidebarMenuSubItem className="w-full" data-thread-selection-safe>
-            <div
+            <SidebarMenuSubButton
+              render={<button type="button" />}
               data-thread-selection-safe
-              className="flex h-8 w-full translate-x-0 items-center px-2 text-left text-xs text-sidebar-muted-foreground/75"
+              size="sm"
+              aria-label={`Create new thread in ${props.projectDisplayName}`}
+              onClick={props.onCreateThread}
             >
-              <span>No threads yet</span>
-            </div>
+              <SquarePenIcon className="size-3.5" />
+              <span>New thread</span>
+            </SidebarMenuSubButton>
           </SidebarMenuSubItem>
         ) : null}
         {shouldShowThreadPanel &&
@@ -2080,7 +2086,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
     })();
   };
 
-  const handleCreateThreadClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+  const handleCreateThreadClick = (event: React.MouseEvent<HTMLElement>) => {
     event.preventDefault();
     event.stopPropagation();
 
@@ -2448,13 +2454,36 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
                 {project.groupedProjectCount} projects
               </span>
             ) : null}
+            {project.environmentPresence === "remote-only" && (
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <span
+                      aria-label={
+                        project.allRemoteMembersAreDesktopLocal
+                          ? "Local sandbox project"
+                          : "Remote project"
+                      }
+                      className="inline-flex size-4 shrink-0 items-center justify-center text-icon-muted"
+                    />
+                  }
+                >
+                  <EnvironmentMachineIcon kind={environmentMachine} className="size-3" />
+                </TooltipTrigger>
+                <TooltipPopup side="top">
+                  {project.allRemoteMembersAreDesktopLocal
+                    ? `Local sandbox: ${project.remoteEnvironmentLabels.join(", ")}`
+                    : `Remote environment: ${project.remoteEnvironmentLabels.join(", ")}`}
+                </TooltipPopup>
+              </Tooltip>
+            )}
           </span>
           <Tooltip>
             <TooltipTrigger
               render={
                 <span
                   aria-label={projectEngaged ? projectStatus?.label : "Idle"}
-                  className="inline-flex size-3.5 shrink-0 items-center justify-center"
+                  className="pointer-events-none absolute inset-y-0 right-0.5 inline-flex w-6 items-center justify-center transition-opacity duration-150 group-hover/project-header:opacity-0 group-focus-within/project-header:opacity-0 max-sm:hidden"
                 />
               }
             >
@@ -2468,7 +2497,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
             </TooltipTrigger>
             <TooltipPopup side="top">{projectEngaged ? projectStatus?.label : "Idle"}</TooltipPopup>
           </Tooltip>
-          <span aria-hidden className="w-10 shrink-0 max-sm:w-14" />
+          <span aria-hidden className="w-12 shrink-0 max-sm:w-14" />
         </SidebarMenuButton>
 
         <Tooltip>
@@ -2500,29 +2529,6 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
           </TooltipPopup>
         </Tooltip>
 
-        {project.environmentPresence === "remote-only" && (
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <span
-                  aria-label={
-                    project.allRemoteMembersAreDesktopLocal
-                      ? "Local sandbox project"
-                      : "Remote project"
-                  }
-                  className="pointer-events-none absolute top-1/2 right-1.5 inline-flex size-5 -translate-y-1/2 items-center justify-center rounded-md text-icon-muted transition-opacity duration-150 max-sm:right-7 group-hover/project-header:opacity-0 group-focus-within/project-header:opacity-0 max-sm:group-hover/project-header:opacity-100 max-sm:group-focus-within/project-header:opacity-100"
-                />
-              }
-            >
-              <EnvironmentMachineIcon kind={environmentMachine} className="size-3" />
-            </TooltipTrigger>
-            <TooltipPopup side="top">
-              {project.allRemoteMembersAreDesktopLocal
-                ? `Local sandbox: ${project.remoteEnvironmentLabels.join(", ")}`
-                : `Remote environment: ${project.remoteEnvironmentLabels.join(", ")}`}
-            </TooltipPopup>
-          </Tooltip>
-        )}
         <Tooltip>
           <TooltipTrigger
             render={
@@ -2546,6 +2552,8 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
       </div>
 
       <SidebarProjectThreadList
+        projectDisplayName={project.displayName}
+        onCreateThread={handleCreateThreadClick}
         projectColor={projectTintColor(project)}
         projectKey={project.projectKey}
         projectExpanded={projectExpanded}
