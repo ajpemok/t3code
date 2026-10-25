@@ -25,6 +25,19 @@ export function AjpemokAppearanceSettings() {
         }
       />
       <SettingsRow
+        {...searchableSetting("sidebar-active-subagents")}
+        description="Show running subagents and those awaiting input beneath their parent task. Completed subagents stay hidden."
+        control={
+          <Switch
+            aria-label="Active Subagents"
+            checked={settings.sidebarActiveSubagentsEnabled}
+            onCheckedChange={(checked) =>
+              updateSettings({ sidebarActiveSubagentsEnabled: Boolean(checked) })
+            }
+          />
+        }
+      />
+      <SettingsRow
         {...searchableSetting("ajpemok-header-scene")}
         description="Choose a Sydney scene for the sidebar header."
         control={
