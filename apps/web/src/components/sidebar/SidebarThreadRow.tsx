@@ -1,6 +1,7 @@
 import { projectTintColor } from "~/projectIdentity";
 import { ThreadHoverCard, ThreadHoverCardPopup } from "../ThreadHoverCard";
 import { ThreadTerminalStatusButton } from "../ThreadStatusIndicators";
+import { ThreadSurfaceUseIndicator } from "./ThreadSurfaceUseIndicator";
 import { discardComposerDraft } from "../../lib/discardComposerDraft";
 import { requestCustomSnooze } from "../CustomSnoozeDialog";
 import { useSupportsMultiplePullRequests } from "~/hooks/useSupportsMultiplePullRequests";
@@ -1103,6 +1104,12 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
         data-thread-item={threadKey}
         data-project-color={projectTintColor(props.project)}
         data-project-working={status === "working" ? "true" : undefined}
+        data-project-inactive={
+          status !== "working" &&
+          !thread.hasPendingApprovals &&
+          !thread.hasPendingUserInput &&
+          !thread.pendingSubagentRequest
+        }
         {...sortableRootProps}
         {...(fileDropHandlers ?? {})}
         className={cn(
@@ -1144,6 +1151,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
             {title}
             {pinIndicator}
             {terminalStatusIcon}
+            <ThreadSurfaceUseIndicator threadRef={threadRef} enabled={leaseLiveStatus} />
             {isRegeneratingTitle ? (
               <span role="status" className="sr-only">
                 Regenerating title
@@ -1276,6 +1284,12 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
       data-thread-item={threadKey}
       data-project-color={projectTintColor(props.project)}
       data-project-working={status === "working" ? "true" : undefined}
+      data-project-inactive={
+        status !== "working" &&
+        !thread.hasPendingApprovals &&
+        !thread.hasPendingUserInput &&
+        !thread.pendingSubagentRequest
+      }
       {...sortableRootProps}
       {...(fileDropHandlers ?? {})}
       className={cn(
@@ -1318,6 +1332,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
               {/* Left of the status slot, the pin would slide when hover swaps the
                 label for the wider row controls. */}
               {pinIndicator}
+              <ThreadSurfaceUseIndicator threadRef={threadRef} enabled={leaseLiveStatus} />
               {props.projectDisplayName ? (
                 <span
                   className={cn(
@@ -1700,6 +1715,7 @@ export const SidebarSearchResultRow = memo(function SidebarSearchResultRow(props
               >
                 {thread.title}
               </span>
+              <ThreadSurfaceUseIndicator threadRef={threadRef} enabled={leaseLiveStatus} />
               <span id={`${props.resultId}-pr`} className="contents">
                 <ThreadSearchPullRequestNumber
                   thread={thread}
