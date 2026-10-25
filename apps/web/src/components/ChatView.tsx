@@ -2442,7 +2442,9 @@ export default function ChatView(props: ChatViewProps) {
         ? "Choose a project before compacting"
         : !manualCompactionProviderAvailable
           ? "Compaction is unavailable for this provider"
-          : "Compacting is unavailable right now"
+          : isWorking
+            ? "Wait for the current turn to finish"
+            : "Compacting is unavailable right now"
     : null;
   const resumeCompactionTokens =
     activeContextWindow &&
@@ -3562,6 +3564,9 @@ export default function ChatView(props: ChatViewProps) {
                               interactionMode={interactionMode}
                               lockedProvider={modelPickerLockedProvider}
                               providerStatuses={providerStatuses as ServerProvider[]}
+                              usageLimitSources={
+                                serverConfig?.usageLimitSources ?? EMPTY_USAGE_LIMIT_SOURCES
+                              }
                               providerCatalogKnown={serverConfig !== null}
                               activeProjectDefaultModelSelection={
                                 activeProjectDefaultModelSelection

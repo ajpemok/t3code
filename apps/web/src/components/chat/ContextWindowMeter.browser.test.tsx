@@ -55,3 +55,23 @@ it("does not invent a processed total or unsupported token breakdown", async () 
   await expect.element(page.getByText("Total processed", { exact: true })).not.toBeInTheDocument();
   await expect.element(page.getByText("Input tokens", { exact: true })).not.toBeInTheDocument();
 });
+
+it("keeps compaction availability in the button without explanatory paragraphs", async () => {
+  await using screen = await render(
+    <ContextWindowMeter
+      usage={{ ...usage(), compactsAutomatically: true }}
+      modelDisplayName="Example Model"
+      onCompact={() => {}}
+      compactDisabled
+      compactDisabledReason="Wait for the current turn to finish"
+    />,
+  );
+  await screen.getByRole("button", { name: "Context window 40% used" }).click();
+  await expect.element(page.getByRole("button", { name: "Compact Unavailable" })).toBeDisabled();
+  await expect
+    .element(page.getByText("Context for Example Model", { exact: false }))
+    .not.toBeInTheDocument();
+  await expect
+    .element(page.getByText("Wait for the current turn to finish", { exact: true }))
+    .not.toBeInTheDocument();
+});

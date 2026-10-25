@@ -38,6 +38,8 @@ An accepted resize request or cached viewport value does not prove that the gues
 `apps/server/src/preview/ServerBrowser.ts` and `apps/server/src/preview/ServerBrowser.test.ts` also contain the repair that bounds stalled requests without closing a shared browser host.
 Keep upstream initial-navigation timeout reporting alongside local timeout containment.
 They address different failure modes, even when their names sound similar.
+Propagate request cancellation through snapshot and recording-start waits so a stalled capture releases the server queue. Dispose of late encoder/session allocations and prevent a late seed frame from starting a recording. Keep the desktop host's physical screenshot serialisation: overlapping native captures can crash Chromium.
+`apps/server/src/preview/ServerBrowserPage.ts` also prevents cancelled snapshots from starting a late capture, retrying or publishing refs.
 When upstream changes Effect cancellation or page ownership, verify that timing out one operation leaves unrelated tabs and the shared host usable.
 
 ## Antigravity Quota Request Identity
@@ -55,7 +57,7 @@ Synthetic parsing/header checks do not establish live quota accuracy.
 
 - Tint the main conversation header, right panel and project/task rows with the project's colour.
 - Keep scratch and draft threads neutral when there is no project.
-- Use stronger dark-mode contrast, muted/desaturated idle rows, subtle working motion and a clearer frame during reported browser/computer use.
+- Use stronger dark-mode contrast, smooth active/idle colour transitions and distinct bounded Working, Waiting, Computer, Browser and T3 Browser effects. Pause them offscreen, when hidden and with reduced motion.
 - Use flat task bands with gaps; preserve the existing Working label and elapsed time.
 
 | Files                                                   | Fork Responsibility                                             |
@@ -80,7 +82,7 @@ Scope component variants to their callers so upstream menus and uncoloured rows 
 - Reuse T3's existing legacy sidebar grouping and saved collapse state, exposed through the Project Sections setting.
 - Show active/waiting/idle state with a coloured indicator; preserve the original thread status text.
 - Put the indicator at the far right and replace it with pin/new controls on hover or keyboard focus.
-- Pin or unpin eligible project threads together, excluding settled, archived and subagent threads.
+- Pin or unpin eligible project threads together. Explicit project pins retain empty headers; settled, effectively snoozed and archived tasks stay outside the project trees.
 - Keep the tree guide stable during expansion and use the project colour.
 - Offer New thread in empty project sections through the existing project/environment handler.
 
@@ -98,8 +100,29 @@ Scope component variants to their callers so upstream menus and uncoloured rows 
 | `docs/user/thread-sidebar.md`                                    | Sections, activity, cleanup and usage guidance.                          |
 
 Preserve upstream project/environment permissions, native thread commands, settled-state rules and saved settings.
-Avoid a second grouping or pinning store.
-Keep the status and action controls in the same right-aligned slot; remote-environment metadata belongs beside the project name.
+Keep project-header pin intent in client settings and task pins in the native thread commands.
+Keep status above the timestamp on the right, idle rows on one line and hover actions in that same area.
+Preserve the shared native task menu, bulk actions and Settle shortcut.
+Bottom-align Snoozed and Settled shelves using their existing saved expansion keys.
+Remote-environment metadata belongs beside the project name.
+
+| Files                                                                    | Fork Responsibility                                                                                      |
+| ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
+| `apps/web/src/components/sidebar/ProjectThreadShelves.tsx`               | Bottom-aligned Snoozed/Settled shelves, native restore commands and second-precise snooze wakes.         |
+| `apps/web/src/components/sidebar/ProjectThreadShelves.browser.test.tsx`  | Restore, permissions, interruption and snooze-boundary behaviour.                                        |
+| `apps/web/src/components/sidebar/ActiveSubagentThreads.tsx`              | Saved toolbar toggle and active children from quiet shell state, with no child transcript subscriptions. |
+| `apps/web/src/components/sidebar/ActiveSubagentThreads.browser.test.tsx` | Toggle, completion/removal, input requests and environment separation.                                   |
+| `apps/web/src/components/sidebar/SidebarThreadHeader.tsx`                | Flat-view subagent toggle.                                                                               |
+| `apps/web/src/components/RelativeTime.tsx`                               | Optional now label for grouped metadata.                                                                 |
+| `apps/web/src/components/threadActionMenu.logic.ts`                      | Shared counted task cleanup item.                                                                        |
+| `apps/web/src/components/threadActionMenu.logic.test.ts`                 | Task cleanup count and read-only behaviour.                                                              |
+| `packages/contracts/src/settings.test.ts`                                | New client preference round trips.                                                                       |
+
+| Files                                                    | Fork Responsibility                                                               |
+| -------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `apps/web/src/hooks/useCanSnoozeThread.ts`               | Share the native queued-turn snooze gate across both task layouts.                |
+| `apps/web/src/hooks/useCanSnoozeThread.browser.test.tsx` | Reopen the gate without another shell update and block pending input.             |
+| `apps/web/src/lib/visibleAnimation.browser.test.tsx`     | Verify offscreen, hidden-document and reduced-motion pauses and observer cleanup. |
 
 ## Sydney Header and Wordmark
 
@@ -158,14 +181,15 @@ Opaque wrappers can remain unclassified; avoid fabricating activity from missing
 | `apps/web/src/hooks/useCloseInactiveProjectTabs.ts`               | Recheck candidates and close resources before removing their UI.             |
 | `apps/web/src/hooks/useCloseInactiveProjectTabs.browser.test.tsx` | Cleanup through the real hook/store while preserving another project's view. |
 
-The project menu reads Close all inactive tabs (N), matching the sentence case of adjacent actions.
+Project, task and active-subagent menus offer Close all inactive tabs (N), matching the sentence case of adjacent actions.
+Task cleanup is scoped by environment and thread ID; it leaves parent and sibling views alone.
 Preserve the selected tab, active tasks, pending input/approval/background work, controlled or recording browsers, unsaved files and terminals.
 Recheck immediately before each close.
 Await the existing browser close RPC before removing its tab; a failed close retains the tab.
 This action does not delete files or stop development servers, emulators or terminal processes.
 Memory reclamation depends on the existing resource lifecycle and has not been measured.
 
-## Context and Token Usage
+## Context, Token and Weekly Quota Usage
 
 | Files                                                              | Fork Responsibility                                                    |
 | ------------------------------------------------------------------ | ---------------------------------------------------------------------- |
@@ -177,6 +201,23 @@ Display the reported processed-token count, falling back to context tokens when 
 Keep input, cached input, output and reasoning counts separate where the provider reports them.
 Do not sum overlapping categories or invent totals, capacity or telemetry for an unsupported provider.
 Settings, search and documentation changes are listed with the project-section files above.
+
+The disabled compaction action remains visible as Compact Unavailable, with its reason in a tooltip.
+Remove the old explanatory paragraphs without removing reported usage figures.
+
+| Files                                                            | Fork Responsibility                                                                                            |
+| ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `apps/web/src/components/chat/ChatComposer.tsx`                  | Follow the selected provider instance and model.                                                               |
+| `apps/web/src/components/chat/ComposerFooterControls.tsx`        | Put the weekly remaining gauge immediately after context usage.                                                |
+| `apps/web/src/components/chat/WeeklyQuotaGauge.tsx`              | Remaining fuel gauge with reset/check details and an unavailable state.                                        |
+| `apps/web/src/components/chat/WeeklyQuotaGauge.browser.test.tsx` | Account switching, reported zero and failed-probe rendering.                                                   |
+| `apps/web/src/lib/weeklyQuota.ts`                                | Exact account/workspace matching, weekly model buckets and five-minute freshness limit.                        |
+| `apps/web/src/lib/weeklyQuota.test.ts`                           | Numeric, identity, model, missing-data and freshness boundaries.                                               |
+| `apps/web/src/assets/brave.svg`                                  | Browser glyph from [Brave's official assets](https://brave.com/static-assets/images/brave-logo-sans-text.svg). |
+
+Do not replace unavailable quota with a full gauge, use another account or infer a weekly window.
+The gauge reads existing native/source snapshots without probing credentials.
+Source failures and elapsed reset clocks invalidate the reading.
 
 ## Fork Maintenance Files
 
