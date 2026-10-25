@@ -127,7 +127,7 @@ import {
   useQuietThreadShells,
 } from "../state/entities";
 import { environmentPresentations } from "../state/presentation";
-import { primaryServerKeybindingsAtom, serverEnvironment } from "../state/server";
+import { primaryServerKeybindingsAtom } from "../state/server";
 import { environmentProjects } from "../state/projects";
 import { threadEnvironment } from "../state/threads";
 import { useThreadSearch } from "../state/queries";
@@ -212,6 +212,7 @@ import { SidebarChromeFooter, SidebarChromeHeader } from "./sidebar/SidebarChrom
 import { SidebarHeaderIconButton, SidebarThreadHeader } from "./sidebar/SidebarThreadHeader";
 import { TooltipProvider } from "./ui/tooltip";
 import { composerDraftHasUserContent, DraftId, useComposerDraftStore } from "../composerDraftStore";
+import { useCloseInactiveProjectTabs } from "../hooks/useCloseInactiveProjectTabs";
 import { useThreadRouteTarget } from "../hooks/useThreadRouteTarget";
 import {
   SidebarSearchResultRow,
@@ -1054,6 +1055,10 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     routeThreadRef,
   });
 
+  const inactiveTabs = useCloseInactiveProjectTabs({
+    threads,
+    selectedThreadKey: routeThreadRef ? scopedThreadKey(routeThreadRef) : null,
+  });
   const isSearchingThreads = threadSearchQuery.trim().length > 0;
 
   // History, the command palette, and links can open a thread the project
@@ -2332,6 +2337,8 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
         const clicked = await settlePromise(() =>
           api.contextMenu.show(
             buildThreadActionMenuItems({
+              inactiveTabCount: inactiveTabs.getInactiveTabCount(threadRef),
+              closingInactiveTabs: inactiveTabs.pending,
               canOperate: readEnvironmentScope(
                 threadRef.environmentId,
                 AuthOrchestrationOperateScope,
@@ -2376,6 +2383,9 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
           return;
         }
         switch (clicked.value) {
+          case "close-inactive-tabs":
+            await inactiveTabs.closeInactiveTabs(threadRef);
+            return;
           case "filter-by-project":
             if (threadProjectGroup) {
               setProjectScopeKey(
