@@ -122,7 +122,8 @@ function timelineListStateFor(identity: string): {
   readonly rememberedPosition: RememberedTimelinePosition | undefined;
   readonly workGroupViewState: WorkGroupViewState;
 } {
-  const rememberedPosition = readTimelinePosition(identity);
+  const saved = readTimelinePosition(identity);
+  const rememberedPosition = saved ? { ...saved, atEnd: true } : undefined;
   return {
     identity,
     rememberedPosition,
@@ -377,9 +378,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
   const [expandedAttemptIds, setExpandedAttemptIds] = useState<ReadonlySet<RunAttemptId>>(
     () => listState.rememberedPosition?.disclosures?.attempts ?? new Set(),
   );
-  const [positionedThreadKey, setPositionedThreadKey] = useState<string | null>(() =>
-    listState.rememberedPosition?.atEnd === false ? null : listIdentityKey,
-  );
+  const [positionedThreadKey, setPositionedThreadKey] = useState<string | null>(null);
   const restoringThreadPosition = positionedThreadKey !== listIdentityKey;
   const prefersReducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
   const [settlingListIdentity, setSettlingListIdentity] = useState<string | null>(listIdentityKey);
@@ -672,6 +671,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
     rememberedPosition,
     rows,
     citationRequest,
+    findActive,
     cancelPositionRestoreRef,
     onManualNavigation,
     onPositioned: setPositionedThreadKey,

@@ -14,6 +14,7 @@ export interface HostedBrowserWebviewWrapperStyle {
   readonly pointerEvents: "auto" | "none";
   readonly borderRadius?: number;
   readonly visibility?: "hidden" | "visible";
+  readonly opacity?: number;
 }
 
 const HIDDEN_BROWSER_WEBVIEW_OFFSET = -100_000;
@@ -49,13 +50,14 @@ export function resolveHostedBrowserWebviewWrapperStyle(input: {
   }
 
   if (renderingActive) {
-    // Electron stops compositing offscreen guests; keep capture-active guests inside the viewport behind the app.
+    // Chromium culls occluded guests, including negative stacking layers, even when unthrottled.
     return {
       left: 0,
       top: 0,
       width: hiddenSize.width,
       height: hiddenSize.height,
-      zIndex: -1,
+      zIndex: 2_147_483_647,
+      opacity: 0.001,
       pointerEvents: "none",
       visibility: "visible",
     };

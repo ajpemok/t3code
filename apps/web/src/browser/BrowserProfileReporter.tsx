@@ -25,6 +25,10 @@ export function BrowserProfileReporter() {
   const profiles = useClientSettings(selectProfiles);
   const defaultProfileId = useClientSettings(selectDefaultProfileId);
   const recordingFrameRate = useClientSettings(selectRecordingFrameRate);
+  const recordingPointer = useClientSettings((settings) => settings.browserRecordingPointer);
+  const recordingShowMousePresses = useClientSettings(
+    (settings) => settings.browserRecordingShowMousePresses,
+  );
   const { environments } = useEnvironments();
   const serverConfigs = useServerConfigs();
   const operable = useEnvironmentsWithScope(environments, AuthPreviewOperateScope);
@@ -34,9 +38,28 @@ export function BrowserProfileReporter() {
     if (!hydrated) return;
     for (const [environmentId, config] of serverConfigs) {
       if (!config.environment.capabilities.serverBrowser || !operable.has(environmentId)) continue;
-      void report({ environmentId, input: { profiles, defaultProfileId, recordingFrameRate } });
+      void report({
+        environmentId,
+        input: {
+          profiles,
+          defaultProfileId,
+          recordingFrameRate,
+          recordingPointer,
+          recordingShowMousePresses,
+        },
+      });
     }
-  }, [defaultProfileId, hydrated, operable, profiles, recordingFrameRate, report, serverConfigs]);
+  }, [
+    defaultProfileId,
+    hydrated,
+    operable,
+    profiles,
+    recordingFrameRate,
+    recordingPointer,
+    recordingShowMousePresses,
+    report,
+    serverConfigs,
+  ]);
 
   return null;
 }

@@ -165,7 +165,9 @@ through the pages you have visited, like a browser's back and forward buttons.
 ## Reserved shortcuts
 
 In the desktop app, `mod+w` closes the focused terminal or the active right-panel
-tab. When nothing remains to close, it closes the window. In a browser, `mod+w`
+tab. When nothing remains to close, it asks before closing the window, with **Cancel**
+selected by default. On Windows and Linux, closing the main window stops its local
+sessions. On macOS, sessions continue in the background. In a browser, `mod+w`
 closes the browser tab; rebind `rightPanel.close` and `terminal.close` to an available
 shortcut such as `alt+w`.
 

@@ -45,6 +45,8 @@ import { toastManager } from "./ui/toast";
 
 const PREVIEW_FORWARDED_LAYOUT_COMMANDS = [
   "sidebar.toggle",
+  "sidebar.toggleInactive",
+  "sidebar.toggleSubagents",
   "rightPanel.toggle",
   "rightPanel.toggleMaximized",
 ] as const;

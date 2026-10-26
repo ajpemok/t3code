@@ -1,4 +1,8 @@
-import type { DesktopPreviewRecordingInput } from "@t3tools/contracts";
+import {
+  DEFAULT_BROWSER_RECORDING_POINTER,
+  type BrowserRecordingPointer,
+  type DesktopPreviewRecordingInput,
+} from "@t3tools/contracts";
 
 import { readPreviewAnnotationTheme } from "./annotationTheme";
 
@@ -6,6 +10,7 @@ interface RecordingDecorationOptions {
   readonly showKeyPresses: boolean;
   readonly showMousePresses: boolean;
   readonly frameRate: number;
+  readonly pointer?: BrowserRecordingPointer | undefined;
 }
 
 export async function createRecordingCompositor(
@@ -74,6 +79,7 @@ export async function createRecordingCompositor(
 }
 
 class RecordingDecorations {
+  private readonly pointer;
   private ring: {
     x: number;
     y: number;
@@ -87,7 +93,9 @@ class RecordingDecorations {
   constructor(
     private readonly options: RecordingDecorationOptions,
     private readonly primaryColor: string,
-  ) {}
+  ) {
+    this.pointer = options.pointer ?? DEFAULT_BROWSER_RECORDING_POINTER;
+  }
 
   apply(input: DesktopPreviewRecordingInput, now: number) {
     if (input.type === "clear") {
@@ -125,7 +133,7 @@ class RecordingDecorations {
     if (
       this.ring?.releasedAt !== null &&
       this.ring?.releasedAt !== undefined &&
-      now < this.ring.releasedAt + 600
+      now < this.ring.releasedAt + this.pointer.haloDurationMs
     ) {
       return 1000 / this.options.frameRate;
     }
@@ -140,19 +148,26 @@ class RecordingDecorations {
     // Guest coordinates are CSS pixels; native frames include zoom and display scale.
     const scale = width / (this.key?.width ?? this.ring?.width ?? 1280);
     const ring = this.ring;
-    if (ring && (ring.held || (ring.releasedAt !== null && now < ring.releasedAt + 600))) {
-      const progress = ring.releasedAt === null ? 0 : Math.min(1, (now - ring.releasedAt) / 600);
+    if (
+      ring &&
+      (ring.held ||
+        (ring.releasedAt !== null && now < ring.releasedAt + this.pointer.haloDurationMs))
+    ) {
+      const progress =
+        ring.releasedAt === null
+          ? 0
+          : Math.min(1, (now - ring.releasedAt) / this.pointer.haloDurationMs);
       context.save();
       const opacity = 0.9 * (1 - progress);
-      context.strokeStyle = this.primaryColor;
-      context.fillStyle = this.primaryColor;
+      context.strokeStyle = this.options.pointer?.haloColor ?? this.primaryColor;
+      context.fillStyle = this.options.pointer?.haloColor ?? this.primaryColor;
       context.lineWidth = 2 * scale;
       context.beginPath();
       context.ellipse(
         (ring.x * width) / ring.width,
         (ring.y * height) / ring.height,
-        ((20 * width) / ring.width) * (1 + progress * 0.5),
-        ((20 * height) / ring.height) * (1 + progress * 0.5),
+        ((this.pointer.haloRadius * width) / ring.width) * (1 + progress * 0.5),
+        ((this.pointer.haloRadius * height) / ring.height) * (1 + progress * 0.5),
         0,
         0,
         Math.PI * 2,

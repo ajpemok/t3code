@@ -14,6 +14,7 @@ import {
   resolveIdleCompaction,
   resolveProjectProviderInstanceEnabled,
   resolveProviderInstanceEnabled,
+  resolveSidebarSubagentVisibility,
   ServerSettings,
   ServerSettingsPatch,
   withIdleCompaction,
@@ -27,7 +28,7 @@ const decodeServerSettingsPatch = Schema.decodeUnknownSync(ServerSettingsPatch);
 const encodeServerSettings = Schema.encodeSync(ServerSettings);
 const decodeClaudeSettings = Schema.decodeUnknownSync(ClaudeSettings);
 
-describe("sidebar task visibility settings", () => {
+describe("sidebar thread visibility settings", () => {
   it("keeps subagents opt-in and preserves explicit project pins", () => {
     const defaults = decodeClientSettings({});
     expect(defaults.sidebarActiveSubagentsEnabled).toBe(false);
@@ -40,6 +41,53 @@ describe("sidebar task visibility settings", () => {
     const stored = decodeClientSettings({ ...defaults, ...patch });
     expect(decodeClientSettings(encodeClientSettings(stored))).toMatchObject(patch);
     expect(decodeClientSettingsPatch({})).not.toHaveProperty("sidebarPinnedProjectKeys");
+  });
+
+  it("migrates the legacy subagent preference and preserves explicit modes and limits", () => {
+    expect(resolveSidebarSubagentVisibility(decodeClientSettings({}))).toBe("hide");
+    expect(
+      resolveSidebarSubagentVisibility(
+        decodeClientSettings({ sidebarActiveSubagentsEnabled: true }),
+      ),
+    ).toBe("active");
+    const patch = {
+      sidebarSubagentVisibility: "show",
+      sidebarSubagentPreviewCount: 5,
+      sidebarHideInactiveEnabled: true,
+    };
+    expect(decodeClientSettingsPatch(patch)).toEqual(patch);
+    const settings = decodeClientSettings(patch);
+    expect(resolveSidebarSubagentVisibility(settings)).toBe("show");
+    expect(decodeClientSettings(encodeClientSettings(settings))).toMatchObject(patch);
+    expect(() => decodeClientSettingsPatch({ sidebarSubagentPreviewCount: 0 })).toThrow();
+    expect(() => decodeClientSettingsPatch({ sidebarSubagentVisibility: "invalid" })).toThrow();
+  });
+});
+
+describe("recording pointer settings", () => {
+  it("retains a custom image and hotspot while refusing remote images and out-of-range values", () => {
+    const pointer = {
+      ...decodeClientSettings({}).browserRecordingPointer,
+      imageDataUrl: "data:image/png;base64,aGVsbG8=",
+      size: 32,
+      hotspotX: 0.5,
+      haloDurationMs: 900,
+    };
+    const stored = decodeClientSettings({ browserRecordingPointer: pointer });
+    expect(decodeClientSettings(encodeClientSettings(stored)).browserRecordingPointer).toEqual(
+      pointer,
+    );
+    expect(() =>
+      decodeClientSettingsPatch({
+        browserRecordingPointer: { ...pointer, imageDataUrl: "https://example.com/pointer.png" },
+      }),
+    ).toThrow();
+    expect(() =>
+      decodeClientSettingsPatch({ browserRecordingPointer: { ...pointer, hotspotX: 2 } }),
+    ).toThrow();
+    expect(() =>
+      decodeClientSettingsPatch({ browserRecordingPointer: { ...pointer, haloDurationMs: 0 } }),
+    ).toThrow();
   });
 });
 

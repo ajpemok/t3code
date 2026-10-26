@@ -135,6 +135,78 @@ const watchPainting = (host: DesktopBrowserHost.DesktopBrowserHost["Service"]) =
   });
 
 describe("DesktopBrowserHost", () => {
+  it.effect.each(["Page.captureScreenshot", "Page.getLayoutMetrics"])(
+    "keeps %s paintable until Chromium finishes and restores it before replying",
+    (method) =>
+      Effect.gen(function* () {
+        const host = yield* DesktopBrowserHost.make;
+        const debuggee = makeDebuggee();
+        const ready = Promise.withResolvers<void>();
+        const preparing = Promise.withResolvers<void>();
+        let released = false;
+        host.attach(key, {
+          ...debuggee.tab,
+          acquireRendering: async () => {
+            preparing.resolve();
+            await ready.promise;
+            return async () => {
+              released = true;
+            };
+          },
+        });
+        const replies = yield* watchReplies(host);
+        yield* command(host, 1, method);
+        expect(debuggee.sent).toEqual([]);
+        yield* Effect.promise(() => preparing.promise);
+        const sent = debuggee.nextSend();
+        ready.resolve();
+        yield* Effect.promise(() => sent);
+        expect(released).toBe(false);
+        debuggee.releaseFirst();
+        expect(yield* Queue.take(replies)).toBe(1);
+        expect(released).toBe(true);
+      }).pipe(Effect.scoped),
+  );
+
+  it.effect("adds CSS width to screencast metadata without changing native DIP dimensions", () =>
+    Effect.gen(function* () {
+      const host = yield* DesktopBrowserHost.make;
+      const debuggee = makeDebuggee();
+      host.attach(key, { ...debuggee.tab, screencastCssWidth: (width) => width / 1.25 });
+      const frames = yield* Queue.unbounded<unknown>();
+      yield* host.events.pipe(
+        Stream.runForEach((line) => {
+          const event = decodeEvent(new TextDecoder().decode(line));
+          if (event.type !== "cdp") return Effect.void;
+          const message = JSON.parse(event.message);
+          return message.method === "Page.screencastFrame"
+            ? Queue.offer(frames, message.params)
+            : Effect.void;
+        }),
+        Effect.forkScoped,
+      );
+      yield* Effect.yieldNow;
+      const replies = yield* watchReplies(host);
+      yield* host.handleCommandLine(
+        encodeJson({
+          type: "cdp",
+          ...key,
+          message: encodeJson({ id: 1, method: "Target.setAutoAttach", params: {} }),
+        }),
+      );
+      expect(yield* Queue.take(replies)).toBe(1);
+      debuggee.emit("Page.screencastFrame", {
+        data: "frame",
+        metadata: { deviceWidth: 840, deviceHeight: 1300 },
+        sessionId: 1,
+      });
+      expect(yield* Queue.take(frames)).toMatchObject({
+        metadata: { deviceWidth: 840, deviceHeight: 1300, t3CssViewportWidth: 672 },
+      });
+      debuggee.release();
+    }).pipe(Effect.scoped),
+  );
+
   it.effect.each(["set", "clear"] as const)(
     "waits for the native viewport acknowledgement on %s",
     (operation) =>

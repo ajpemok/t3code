@@ -1,4 +1,5 @@
 import { useAtomValue } from "@effect/atom-react";
+import { resolveSidebarSubagentVisibility } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 import {
   useEffect,
@@ -31,6 +32,7 @@ import { selectThreadTerminalUiState, useTerminalUiStateStore } from "../termina
 import { cn, isMacPlatform } from "../lib/utils";
 import { primaryServerKeybindingsAtom } from "../state/server";
 import { useEnvironmentIdentificationMode, useLegacySidebarEnabled } from "../hooks/useSettings";
+import { getClientSettings, updateClientSettings } from "../hooks/useSettings";
 import {
   PanelAnimationSuppressionProvider,
   usePanelAnimationSettings,
@@ -298,6 +300,25 @@ function SidebarControl() {
   });
 
   useEffect(() => {
+    const toggleVisibility = (action: string) => {
+      const settings = getClientSettings();
+      if (action === "sidebar.toggleInactive") {
+        void updateClientSettings({
+          sidebarHideInactiveEnabled: !settings.sidebarHideInactiveEnabled,
+        });
+        return true;
+      }
+      if (action === "sidebar.toggleSubagents") {
+        const mode = resolveSidebarSubagentVisibility(settings);
+        const next = mode === "hide" ? "show" : mode === "show" ? "active" : "hide";
+        void updateClientSettings({
+          sidebarSubagentVisibility: next,
+          sidebarActiveSubagentsEnabled: next !== "hide",
+        });
+        return true;
+      }
+      return false;
+    };
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented) return;
       if (
@@ -315,20 +336,24 @@ function SidebarControl() {
         // the toggle stays available everywhere else.
         return;
       }
+      const command = resolveShortcutCommand(event, keybindings, { context: { usagePageOpen } });
       if (
-        resolveShortcutCommand(event, keybindings, { context: { usagePageOpen } }) !==
-        "sidebar.toggle"
+        command !== "sidebar.toggle" &&
+        command !== "sidebar.toggleInactive" &&
+        command !== "sidebar.toggleSubagents"
       )
         return;
 
       event.preventDefault();
       event.stopPropagation();
-      toggleSidebar();
+      if (command === "sidebar.toggle") toggleSidebar();
+      else if (!event.repeat) toggleVisibility(command);
     };
 
     window.addEventListener("keydown", onKeyDown, true);
     const unsubscribe = window.desktopBridge?.onMenuAction((action) => {
       if (action === "sidebar.toggle") toggleSidebar();
+      else toggleVisibility(action);
     });
     return () => {
       window.removeEventListener("keydown", onKeyDown, true);

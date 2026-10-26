@@ -1,3 +1,5 @@
+import { DESKTOP_PREVIEW_CAPTURE_ACTIVITY_TRIGGER } from "@t3tools/contracts";
+import { flushSync } from "react-dom";
 import { create } from "zustand";
 
 export interface BrowserSurfaceRect {
@@ -206,6 +208,29 @@ export const useBrowserSurfaceStore = create<BrowserSurfaceStoreState>()((set) =
 
 export const acquireBrowserSurfaceActivity = (tabId: string): (() => void) =>
   useBrowserSurfaceStore.getState().acquireActivity(tabId);
+
+const captureActivities = new Map<string, () => void>();
+Object.defineProperty(globalThis, DESKTOP_PREVIEW_CAPTURE_ACTIVITY_TRIGGER, {
+  configurable: true,
+  value: async (tabId: string, leaseId: string, active: boolean) => {
+    flushSync(() => {
+      if (active) {
+        if (!captureActivities.has(leaseId)) {
+          captureActivities.set(leaseId, acquireBrowserSurfaceActivity(tabId));
+        }
+      } else {
+        captureActivities.get(leaseId)?.();
+        captureActivities.delete(leaseId);
+      }
+    });
+    if (active) {
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+      });
+    }
+    return true;
+  },
+});
 
 export function acquireBrowserSurface(
   tabId: string,

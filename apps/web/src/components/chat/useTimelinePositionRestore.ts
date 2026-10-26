@@ -44,7 +44,7 @@ export function settleListScroll(
 }
 
 export const measuredEndOffset = (element: HTMLElement) =>
-  element.scrollHeight - element.clientHeight;
+  Math.max(0, element.scrollHeight - element.clientHeight);
 
 /**
  * Scrolls a newly shown thread back to where the user left it, or to its end,
@@ -57,6 +57,7 @@ export function useTimelinePositionRestore({
   rememberedPosition,
   rows,
   citationRequest,
+  findActive,
   cancelPositionRestoreRef,
   onManualNavigation,
   onPositioned,
@@ -67,6 +68,7 @@ export function useTimelinePositionRestore({
   readonly rememberedPosition: RememberedTimelinePosition | undefined;
   readonly rows: MessagesTimelineRow[];
   readonly citationRequest: AssistantCitationRequest | null;
+  readonly findActive: boolean;
   readonly cancelPositionRestoreRef: React.RefObject<(() => void) | null> | undefined;
   readonly onManualNavigation: () => void;
   readonly onPositioned: (identity: string) => void;
@@ -91,8 +93,8 @@ export function useTimelinePositionRestore({
     if (!restoringThreadPosition || rows.length === 0) return;
     const list = listRef.current;
     if (!list) return;
-    if (citationRequest !== null) {
-      // The citation scroll owns positioning once the list has mounted.
+    if (citationRequest !== null || findActive) {
+      // Explicit navigation owns positioning once the list has mounted.
       onPositioned(listIdentityKey);
       return;
     }
@@ -139,7 +141,7 @@ export function useTimelinePositionRestore({
         : listOpenedOnRef.current?.identity === listIdentityKey
           ? undefined
           : list.scrollToEnd({ animated: false });
-    const settlesAtEnd = position?.atEnd !== false && scrolling !== undefined;
+    const settlesAtEnd = position?.atEnd !== false;
     void Promise.resolve(scrolling).then(async () => {
       if (cancelled) return;
       if (settlesAtEnd) {
@@ -181,6 +183,7 @@ export function useTimelinePositionRestore({
     };
   }, [
     citationRequest,
+    findActive,
     cancelPositionRestoreRef,
     listIdentityKey,
     listRef,
