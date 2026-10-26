@@ -136,7 +136,7 @@ function WeeklyQuotaControl({
                 )}
                 <path d="M3 20h2m20 0h2" stroke="currentColor" opacity="0.5" />
               </svg>
-              <span className="text-xs tabular-nums">
+              <span data-composer-usage-figure className="text-xs tabular-nums">
                 {remaining === null ? "N/A" : `${remaining}%`}
               </span>
               {credits > 0 ? (

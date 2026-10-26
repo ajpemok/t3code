@@ -649,9 +649,9 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "sidebar-active-subagents",
-    title: "Active Subagents",
+    title: "Subagents",
     to: "/settings/appearance",
-    searchTerms: ["sidebar children delegated running tasks agents"],
+    searchTerms: ["sidebar children delegated running threads agents show active hide visible"],
   },
   {
     id: "ajpemok-header-motion",
@@ -813,10 +813,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["browser preview keyboard shortcuts keystrokes overlay capture"],
   },
   {
-    id: "browser-recording-mouse-presses",
-    title: "Show mouse presses in recordings",
+    id: "browser-recording-pointer",
+    title: "Recording Pointer",
     to: "/settings/integrations",
-    searchTerms: ["browser preview clicks buttons drag overlay capture"],
+    searchTerms: [
+      "custom cursor pointer image PNG SVG WebP hotspot click halo colour size tutorial video capture show mouse presses held buttons drag",
+    ],
   },
   {
     id: "browser-link-target",
@@ -1232,8 +1234,12 @@ export function searchSettings(
       if (!queryTokens.every((token) => fields.some((field) => field.includes(token)))) return [];
 
       const exactPhraseField = fields.findIndex((field) => field.includes(normalizedQuery));
-      const rank =
-        title === normalizedQuery
+      const exactCommand =
+        item.id.startsWith("keybinding-") &&
+        normalizeSearchText(item.searchTerms?.[0] ?? "") === normalizedQuery;
+      const rank = exactCommand
+        ? 6
+        : title === normalizedQuery
           ? 5
           : title.startsWith(normalizedQuery)
             ? 4

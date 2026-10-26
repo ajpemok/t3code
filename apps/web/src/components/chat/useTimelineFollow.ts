@@ -13,7 +13,6 @@ import { type LegendListRef } from "@legendapp/list/react";
 import {
   CHAT_TIMELINE_ANCHOR_OFFSET,
   timelineContentOverflowsViewport,
-  readTimelinePosition,
   observeTimelineRun,
   type TimelineRunObservation,
 } from "./timelineScrollAnchoring";
@@ -173,7 +172,6 @@ export function useTimelineFollow(input: TimelineFollowInput) {
     legendListRef,
     composerRef,
     composerTimelineInset,
-    routeThreadKey,
     activeThreadKey,
     isServerThread,
     serverProjection,
@@ -192,7 +190,7 @@ export function useTimelineFollow(input: TimelineFollowInput) {
   if (visit.threadKey !== activeThreadKey) {
     visit = {
       threadKey: activeThreadKey,
-      followEnd: readTimelinePosition(routeThreadKey)?.atEnd !== false,
+      followEnd: true,
     };
     setVisit(visit);
   }

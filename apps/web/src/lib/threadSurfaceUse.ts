@@ -28,8 +28,9 @@ export function resolveThreadSurfaceUse(
       activity |= SURFACE_USE.t3Browser;
       continue;
     }
+    const inferred = dynamicToolSurface(item.toolName, item.input);
     const surface =
-      item.toolSurface ?? dynamicToolSurface(item.toolName, item.input) ?? item.toolSource?.kind;
+      inferred === "browser" ? inferred : (item.toolSurface ?? inferred ?? item.toolSource?.kind);
     if (surface === "computer") activity |= SURFACE_USE.computer;
     if (surface === "browser") activity |= SURFACE_USE.browser;
   }

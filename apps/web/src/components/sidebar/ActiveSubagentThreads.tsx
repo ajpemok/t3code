@@ -1,29 +1,55 @@
 import { useAtomValue } from "@effect/atom-react";
 import { Link } from "@tanstack/react-router";
 import { scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environment";
-import type { ScopedThreadRef } from "@t3tools/contracts";
+import { effectiveSnoozed } from "@t3tools/client-runtime/state/thread-settled";
+import { resolveSidebarSubagentVisibility, type ScopedThreadRef } from "@t3tools/contracts";
 import { Atom } from "effect/reactivity";
-import { GitForkIcon } from "lucide-react";
+import { EyeOffIcon, GitForkIcon } from "lucide-react";
+import { useState } from "react";
+import { useNowMinute } from "~/hooks/useNowMinute";
+import { cn } from "~/lib/utils";
 import { useClientSettings, updateClientSettings } from "~/hooks/useSettings";
 import { environmentThreadShells } from "~/state/threads";
 import { useCloseInactiveProjectTabs } from "~/hooks/useCloseInactiveProjectTabs";
 import { useThreadRouteRef } from "~/hooks/useThreadRouteTarget";
 import { buildThreadRouteParams } from "~/threadRoutes";
 import type { SidebarThreadSummary } from "~/types";
-import { activeSubagentsByParent, resolveThreadStatusPill } from "../Sidebar.logic";
+import { subagentsByParent, resolveThreadStatusPill } from "../Sidebar.logic";
 import { ThreadActivityStatus } from "./ThreadSurfaceUseIndicator";
 import { RelativeTime } from "../RelativeTime";
 import { Button } from "../ui/button";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import {
+  Menu,
+  MenuGroup,
+  MenuGroupLabel,
+  MenuPopup,
+  MenuRadioGroup,
+  MenuRadioItem,
+  MenuTrigger,
+} from "../ui/menu";
+import {
+  NumberField,
+  NumberFieldGroup,
+  NumberFieldDecrement,
+  NumberFieldIncrement,
+  NumberFieldInput,
+} from "../ui/number-field";
 
-const activeSubagentsAtom = Atom.make((get) =>
-  activeSubagentsByParent(get(environmentThreadShells.quietThreadShellsAtom)),
-).pipe(Atom.setIdleTTL(0));
+const subagentsAtom = Atom.family((mode: "show" | "active") =>
+  Atom.make((get) =>
+    subagentsByParent(get(environmentThreadShells.quietThreadShellsAtom), mode, {
+      includeSnoozed: true,
+    }),
+  ).pipe(Atom.setIdleTTL(0)),
+);
 
 const activeChildrenAtom = Atom.family((key: string | null) => {
   let previous: readonly SidebarThreadSummary[] = [];
   return Atom.make((get) => {
-    const next = key === null ? [] : (get(activeSubagentsAtom).get(key) ?? []);
+    const mode = key?.startsWith("show:") ? "show" : "active";
+    const next =
+      key === null ? [] : (get(subagentsAtom(mode)).get(key.slice(mode.length + 1)) ?? []);
     if (
       previous.length === next.length &&
       previous.every((thread, index) => thread === next[index])
@@ -36,8 +62,85 @@ const activeChildrenAtom = Atom.family((key: string | null) => {
 });
 
 export function ActiveSubagentsToggle() {
-  const enabled = useClientSettings((settings) => settings.sidebarActiveSubagentsEnabled);
-  const label = enabled ? "Hide active subagents" : "Show active subagents";
+  const mode = useClientSettings(resolveSidebarSubagentVisibility);
+  const label = mode === "show" ? "Show" : mode === "active" ? "Show active" : "Hide";
+  return (
+    <Menu>
+      <MenuTrigger
+        render={
+          <Button
+            size="icon-xs"
+            variant={mode !== "hide" ? "secondary" : "ghost-muted"}
+            aria-label={`Subagents: ${label}`}
+          />
+        }
+      >
+        <GitForkIcon className="size-3.5" />
+      </MenuTrigger>
+      <MenuPopup align="end">
+        <MenuGroup>
+          <MenuGroupLabel>Subagents</MenuGroupLabel>
+          <MenuRadioGroup
+            value={mode}
+            onValueChange={(value) => {
+              if (value === "show" || value === "active" || value === "hide")
+                void updateClientSettings({
+                  sidebarSubagentVisibility: value,
+                  sidebarActiveSubagentsEnabled: value !== "hide",
+                });
+            }}
+          >
+            <MenuRadioItem value="show">Show</MenuRadioItem>
+            <MenuRadioItem value="active">Show active</MenuRadioItem>
+            <MenuRadioItem value="hide">Hide</MenuRadioItem>
+          </MenuRadioGroup>
+        </MenuGroup>
+        <VisibleSubagentsMenuGroup />
+      </MenuPopup>
+    </Menu>
+  );
+}
+
+export function VisibleSubagentsMenuGroup() {
+  const count = useClientSettings((settings) => settings.sidebarSubagentPreviewCount);
+  return (
+    <MenuGroup>
+      <MenuGroupLabel>Visible subagents</MenuGroupLabel>
+      <div className="px-2 py-1">
+        <NumberField
+          aria-label="Visible subagent count"
+          min={1}
+          max={15}
+          step={1}
+          size="sm"
+          value={count ?? 3}
+          onValueChange={(value) => {
+            if (value !== null)
+              void updateClientSettings({
+                sidebarSubagentPreviewCount: Math.max(1, Math.min(15, Math.round(value))),
+              });
+          }}
+        >
+          <NumberFieldGroup>
+            <NumberFieldDecrement aria-label="Decrease visible subagent count" />
+            <NumberFieldInput
+              aria-label="Visible subagent count"
+              inputMode="numeric"
+              onKeyDownCapture={(event) => event.stopPropagation()}
+            />
+            <NumberFieldIncrement aria-label="Increase visible subagent count" />
+          </NumberFieldGroup>
+        </NumberField>
+      </div>
+    </MenuGroup>
+  );
+}
+
+export function InactiveThreadsToggle() {
+  const enabled = useClientSettings((settings) => settings.sidebarHideInactiveEnabled);
+  const label = enabled
+    ? "Show Inactive Threads and Projects"
+    : "Hide Inactive Threads and Projects";
   return (
     <Tooltip>
       <TooltipTrigger
@@ -47,11 +150,11 @@ export function ActiveSubagentsToggle() {
             variant={enabled ? "secondary" : "ghost-muted"}
             aria-label={label}
             aria-pressed={enabled}
-            onClick={() => void updateClientSettings({ sidebarActiveSubagentsEnabled: !enabled })}
+            onClick={() => void updateClientSettings({ sidebarHideInactiveEnabled: !enabled })}
           />
         }
       >
-        <GitForkIcon className="size-3.5" />
+        <EyeOffIcon className="size-3.5" />
       </TooltipTrigger>
       <TooltipPopup side="top">{label}</TooltipPopup>
     </Tooltip>
@@ -65,9 +168,19 @@ export function ActiveSubagentThreads({
   readonly threadRef: ScopedThreadRef;
   readonly enabled: boolean;
 }) {
-  const show = useClientSettings((settings) => settings.sidebarActiveSubagentsEnabled);
-  const key = show && enabled ? scopedThreadKey(threadRef) : null;
-  const children = useAtomValue(activeChildrenAtom(key));
+  const requestedMode = useClientSettings(resolveSidebarSubagentVisibility);
+  const hideInactive = useClientSettings((settings) => settings.sidebarHideInactiveEnabled);
+  const mode = requestedMode === "show" && hideInactive ? "active" : requestedMode;
+  const count = useClientSettings((settings) => settings.sidebarSubagentPreviewCount) ?? 3;
+  const key = mode !== "hide" && enabled ? `${mode}:${scopedThreadKey(threadRef)}` : null;
+  const minute = useNowMinute();
+  const children = useAtomValue(activeChildrenAtom(key)).filter(
+    (child) => !effectiveSnoozed(child, { now: `${minute}:00.000Z` }),
+  );
+  const [expandedKey, setExpandedKey] = useState<string | null>(null);
+  const expansionKey = key === null ? null : `${count}:${key}`;
+  const expanded = expansionKey !== null && expandedKey === expansionKey;
+  const visibleChildren = expanded ? children : children.slice(0, count);
   const selected = useThreadRouteRef();
   const inactiveTabs = useCloseInactiveProjectTabs({
     threads: children,
@@ -75,8 +188,11 @@ export function ActiveSubagentThreads({
   });
   if (children.length === 0) return null;
   return (
-    <ul className="project-subagent-list" aria-label="Active subagents">
-      {children.map((child) => {
+    <ul
+      className="project-subagent-list"
+      aria-label={mode === "active" ? "Active subagents" : "Subagents"}
+    >
+      {visibleChildren.map((child) => {
         const ref = scopeThreadRef(child.environmentId, child.id);
         const childKey = scopedThreadKey(ref);
         const status = resolveThreadStatusPill({ thread: child });
@@ -85,8 +201,13 @@ export function ActiveSubagentThreads({
             <Link
               to="/$environmentId/$threadId"
               params={buildThreadRouteParams(ref)}
-              className="flex min-h-7 min-w-0 items-center gap-1.5 px-2 text-xs text-sidebar-foreground/85 hover:bg-sidebar-row-hover focus-visible:outline-1 focus-visible:outline-ring"
-              aria-label={`Open active subagent: ${child.title}`}
+              className={cn(
+                "project-tint-row project-tint-subagent relative flex min-h-7 min-w-0 items-center gap-1.5 px-2 text-xs text-sidebar-foreground/85 focus-visible:outline-1 focus-visible:outline-ring",
+                selected?.environmentId === ref.environmentId &&
+                  selected.threadId === ref.threadId &&
+                  "project-tint-selected",
+              )}
+              aria-label={`Open ${mode === "active" ? "active " : ""}subagent: ${child.title}`}
               title={child.title}
               onContextMenu={(event) => {
                 event.preventDefault();
@@ -112,6 +233,20 @@ export function ActiveSubagentThreads({
           </li>
         );
       })}
+      {children.length > count ? (
+        <li>
+          <Button
+            size="xs"
+            variant="ghost-muted"
+            className="w-full"
+            onClick={() => setExpandedKey(expanded ? null : expansionKey)}
+          >
+            {expanded
+              ? "Show fewer subagents"
+              : `Show ${children.length - count} more ${children.length - count === 1 ? "subagent" : "subagents"}`}
+          </Button>
+        </li>
+      ) : null}
     </ul>
   );
 }

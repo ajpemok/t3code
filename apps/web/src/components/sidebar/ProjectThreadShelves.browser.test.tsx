@@ -41,6 +41,10 @@ vi.mock("~/state/session", () => ({
   readEnvironmentScope: () => state.canOperate,
   useEnvironmentScope: () => state.canOperate,
 }));
+vi.mock("~/hooks/useSettings", () => ({
+  useClientSettings: (select: (settings: { sidebarHideInactiveEnabled: boolean }) => unknown) =>
+    select({ sidebarHideInactiveEnabled: false }),
+}));
 
 function setup() {
   localStorage.removeItem("t3code:sidebar:snoozed-expanded");

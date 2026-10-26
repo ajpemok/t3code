@@ -699,9 +699,13 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
   const topStatus =
     status === "working"
       ? {
-          label: thread.goal?.status === "active" ? "Goal" : "Working",
-          icon: "working" as const,
-          className: "text-info-foreground",
+          label: thread.isCompacting
+            ? "Compacting"
+            : thread.goal?.status === "active"
+              ? "Goal"
+              : "Working",
+          icon: thread.isCompacting ? ("compacting" as const) : ("working" as const),
+          className: thread.isCompacting ? "text-error-foreground" : "text-info-foreground",
         }
       : status === "waiting"
         ? {
@@ -1362,8 +1366,8 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                             topStatus.className,
                           )}
                         >
-                          {topStatus.icon === "working" ? (
-                            <TaskActivitySymbol kind="working" />
+                          {topStatus.icon === "working" || topStatus.icon === "compacting" ? (
+                            <TaskActivitySymbol kind={topStatus.icon} />
                           ) : topStatus.icon === "waiting" ? (
                             <TaskActivitySymbol kind="waiting" />
                           ) : topStatus.icon === "input" ? (

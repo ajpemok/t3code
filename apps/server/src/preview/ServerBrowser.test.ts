@@ -241,6 +241,9 @@ function makeEncoderPage() {
   const sandbox: Record<string, unknown> = {
     document: { createElement: () => canvas },
     Path2D: function Path2D() {},
+    Image: class {
+      decode = async () => {};
+    },
     MediaRecorder: FakeMediaRecorder,
     createImageBitmap: async () => ({ width: 1280, height: 800, close() {} }),
     atob,
