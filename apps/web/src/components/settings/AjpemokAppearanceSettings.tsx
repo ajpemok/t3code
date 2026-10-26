@@ -32,7 +32,7 @@ export function AjpemokAppearanceSettings() {
           <Select
             value={resolveSidebarSubagentVisibility(settings)}
             onValueChange={(value) => {
-              if (value === "show" || value === "active" || value === "hide") {
+              if (value === "show" || value === "hide") {
                 updateSettings({
                   sidebarSubagentVisibility: value,
                   sidebarActiveSubagentsEnabled: value !== "hide",
@@ -45,7 +45,6 @@ export function AjpemokAppearanceSettings() {
             </SelectTrigger>
             <SelectPopup>
               <SelectItem value="show">Show</SelectItem>
-              <SelectItem value="active">Show active</SelectItem>
               <SelectItem value="hide">Hide</SelectItem>
             </SelectPopup>
           </Select>

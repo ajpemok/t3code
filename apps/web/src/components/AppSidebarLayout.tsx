@@ -310,7 +310,7 @@ function SidebarControl() {
       }
       if (action === "sidebar.toggleSubagents") {
         const mode = resolveSidebarSubagentVisibility(settings);
-        const next = mode === "hide" ? "show" : mode === "show" ? "active" : "hide";
+        const next = mode === "hide" ? "show" : "hide";
         void updateClientSettings({
           sidebarSubagentVisibility: next,
           sidebarActiveSubagentsEnabled: next !== "hide",

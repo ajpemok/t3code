@@ -63,7 +63,7 @@ const activeChildrenAtom = Atom.family((key: string | null) => {
 
 export function ActiveSubagentsToggle() {
   const mode = useClientSettings(resolveSidebarSubagentVisibility);
-  const label = mode === "show" ? "Show" : mode === "active" ? "Show active" : "Hide";
+  const label = mode === "show" ? "Show" : "Hide";
   return (
     <Menu>
       <MenuTrigger
@@ -83,7 +83,7 @@ export function ActiveSubagentsToggle() {
           <MenuRadioGroup
             value={mode}
             onValueChange={(value) => {
-              if (value === "show" || value === "active" || value === "hide")
+              if (value === "show" || value === "hide")
                 void updateClientSettings({
                   sidebarSubagentVisibility: value,
                   sidebarActiveSubagentsEnabled: value !== "hide",
@@ -91,7 +91,6 @@ export function ActiveSubagentsToggle() {
             }}
           >
             <MenuRadioItem value="show">Show</MenuRadioItem>
-            <MenuRadioItem value="active">Show active</MenuRadioItem>
             <MenuRadioItem value="hide">Hide</MenuRadioItem>
           </MenuRadioGroup>
         </MenuGroup>

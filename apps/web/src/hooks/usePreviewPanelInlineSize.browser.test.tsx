@@ -1,18 +1,16 @@
-import { useRef } from "react";
 import { expect, it, vi } from "vite-plus/test";
 import { act, render, stubGlobal } from "../../test/render";
 import { usePreviewPanelInlineSize } from "./usePreviewPanelInlineSize";
 
 function Layout({ width, enabled = true }: { width: number; enabled?: boolean }) {
-  const panel = useRef<HTMLElement>(null);
-  const size = usePreviewPanelInlineSize(panel, {
+  const { width: panelWidth, observeRow } = usePreviewPanelInlineSize({
     enabled,
     widthStorageKey: "test:window-edge-panel",
   });
   return (
     <div style={{ display: "flex", width, height: 300 }}>
       <main data-testid="conversation" style={{ flex: 1 }} />
-      <aside ref={panel} data-testid="panel" style={{ width: size.width, flexShrink: 0 }} />
+      <aside ref={observeRow} data-testid="panel" style={{ width: panelWidth, flexShrink: 0 }} />
     </div>
   );
 }

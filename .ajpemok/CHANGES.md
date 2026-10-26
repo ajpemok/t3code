@@ -65,7 +65,8 @@ and a precision ring; preserve custom PNG import, size, hotspot and halo setting
 | ---------------------------------------------------------------------------- | -------------------------------------------------------------------- |
 | `apps/web/src/browser/browserSurfaceStore.ts`                                | Owned capture activity leases and renderer paint acknowledgement.    |
 | `apps/web/src/browser/hostedBrowserWebviewStyle.ts`                          | Paintable placement during capture, with normal parking afterwards.  |
-| `apps/web/src/browser/BrowserProfileReporter.tsx`                            | Report recording preferences to connected environments.              |
+| `apps/web/src/browser/BrowserProfileReporter.ts`                             | Report recording preferences through the client lifecycle.           |
+| `apps/web/src/browser/BrowserProfileReporter.test.ts`                        | Re-report pointer and click preferences without profile changes.     |
 | `apps/web/src/browser/browserRecording.ts`                                   | Apply pointer and halo configuration to desktop recordings.          |
 | `apps/web/src/browser/recordingCompositor.ts`                                | Configured click halo colour, radius and duration.                   |
 | `apps/desktop/src/preview/RecordingInput.ts`                                 | Recording pointer input options.                                     |
@@ -145,11 +146,12 @@ tab or mentioning one in prose does not count as activity.
 Compacting uses the theme's error accent. Derive it from a running compaction in
 the active run, in both shell readers, so completed or older work cannot keep it lit.
 
-| Files                                                      | Fork Responsibility                                        |
-| ---------------------------------------------------------- | ---------------------------------------------------------- |
-| `packages/client-runtime/src/state/models.ts`              | Preserve compaction activity for all shell consumers.      |
-| `packages/contracts/src/orchestrationV2.ts`                | Optional compaction activity in the shared shell contract. |
-| `apps/server/src/orchestration-v2/ProjectionStore.test.ts` | Memory and SQL compaction lifecycle and run isolation.     |
+| Files                                                      | Fork Responsibility                                                  |
+| ---------------------------------------------------------- | -------------------------------------------------------------------- |
+| `packages/client-runtime/src/state/models.ts`              | Preserve compaction and runless native activity for shell consumers. |
+| `packages/client-runtime/src/state/entities.test.ts`       | Runless native activity presentation and completion.                 |
+| `packages/contracts/src/orchestrationV2.ts`                | Optional compaction activity in the shared shell contract.           |
+| `apps/server/src/orchestration-v2/ProjectionStore.test.ts` | Memory and SQL compaction lifecycle and run isolation.               |
 
 ## Thread Opening Position
 
@@ -195,24 +197,31 @@ Preserve the shared native task menu, bulk actions and Settle shortcut.
 Bottom-align Snoozed and Settled shelves using their existing saved expansion keys.
 Remote-environment metadata belongs beside the project name.
 
-| Files                                                                    | Fork Responsibility                                                                                      |
-| ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
-| `apps/web/src/components/sidebar/ProjectThreadShelves.tsx`               | Bottom-aligned Snoozed/Settled shelves, native restore commands and second-precise snooze wakes.         |
-| `apps/web/src/components/sidebar/ProjectThreadShelves.browser.test.tsx`  | Restore, permissions, interruption and snooze-boundary behaviour.                                        |
-| `apps/web/src/components/sidebar/ActiveSubagentThreads.tsx`              | Saved toolbar toggle and active children from quiet shell state, with no child transcript subscriptions. |
-| `apps/web/src/components/sidebar/ActiveSubagentThreads.browser.test.tsx` | Toggle, completion/removal, input requests and environment separation.                                   |
-| `apps/web/src/components/sidebar/SidebarThreadHeader.tsx`                | Flat-view subagent toggle.                                                                               |
-| `apps/web/src/components/sidebar/SidebarActivityCounts.tsx`              | Active/inactive thread and subagent summaries with compact project-header layout.                        |
-| `apps/web/src/components/RelativeTime.tsx`                               | Optional now label for grouped metadata.                                                                 |
-| `apps/web/src/components/threadActionMenu.logic.ts`                      | Shared counted task cleanup item.                                                                        |
-| `apps/web/src/components/threadActionMenu.logic.test.ts`                 | Task cleanup count and read-only behaviour.                                                              |
-| `packages/contracts/src/settings.test.ts`                                | New client preference round trips.                                                                       |
-| `packages/contracts/src/keybindings.ts`                                  | Assignable inactive-thread and subagent visibility commands.                                             |
-| `packages/contracts/src/keybindings.test.ts`                             | Preserve both visibility commands when decoding keybindings.                                             |
-| `apps/web/src/components/AppSidebarLayout.tsx`                           | Dispatch toolbar, menu and keyboard visibility changes.                                                  |
-| `apps/web/src/components/ReopenClosedViewShortcut.tsx`                   | Forward visibility shortcuts from native guest browsers.                                                 |
-| `apps/web/src/components/files/BrowserDocumentFrame.tsx`                 | Forward visibility shortcuts from document frames.                                                       |
-| `apps/web/src/components/settings/KeybindingsSettings.logic.ts`          | Discoverable visibility command names.                                                                   |
+Native provider subagents can work without an app run. Both shell readers derive
+their status and activity start from the latest runless root node, so the shared
+inactive filter and activity counts see that work. Preserve terminal transitions
+and app-owned child behaviour without inventing run IDs or subscribing to transcripts.
+Show/Hide accepts legacy saved `active` values as Show; Hide Inactive supplies the
+shared active-only filter.
+
+| Files                                                                    | Fork Responsibility                                                                                                                   |
+| ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/web/src/components/sidebar/ProjectThreadShelves.tsx`               | Bottom-aligned Snoozed/Settled shelves, native restore commands and second-precise snooze wakes.                                      |
+| `apps/web/src/components/sidebar/ProjectThreadShelves.browser.test.tsx`  | Restore, permissions, interruption and snooze-boundary behaviour.                                                                     |
+| `apps/web/src/components/sidebar/ActiveSubagentThreads.tsx`              | Saved Show/Hide toggle, shared inactive filter and limited child rows from quiet shell state, without child transcript subscriptions. |
+| `apps/web/src/components/sidebar/ActiveSubagentThreads.browser.test.tsx` | Toggle, completion/removal, input requests and environment separation.                                                                |
+| `apps/web/src/components/sidebar/SidebarThreadHeader.tsx`                | Flat-view subagent toggle.                                                                                                            |
+| `apps/web/src/components/sidebar/SidebarActivityCounts.tsx`              | Active/inactive thread and subagent summaries with compact project-header layout.                                                     |
+| `apps/web/src/components/RelativeTime.tsx`                               | Optional now label for grouped metadata.                                                                                              |
+| `apps/web/src/components/threadActionMenu.logic.ts`                      | Shared counted task cleanup item.                                                                                                     |
+| `apps/web/src/components/threadActionMenu.logic.test.ts`                 | Task cleanup count and read-only behaviour.                                                                                           |
+| `packages/contracts/src/settings.test.ts`                                | New client preference round trips.                                                                                                    |
+| `packages/contracts/src/keybindings.ts`                                  | Assignable inactive-thread and subagent visibility commands.                                                                          |
+| `packages/contracts/src/keybindings.test.ts`                             | Preserve both visibility commands when decoding keybindings.                                                                          |
+| `apps/web/src/components/AppSidebarLayout.tsx`                           | Dispatch toolbar, menu and keyboard visibility changes.                                                                               |
+| `apps/web/src/components/ReopenClosedViewShortcut.tsx`                   | Forward visibility shortcuts from native guest browsers.                                                                              |
+| `apps/web/src/components/files/BrowserDocumentFrame.tsx`                 | Forward visibility shortcuts from document frames.                                                                                    |
+| `apps/web/src/components/settings/KeybindingsSettings.logic.ts`          | Discoverable visibility command names.                                                                                                |
 
 | Files                                                    | Fork Responsibility                                                               |
 | -------------------------------------------------------- | --------------------------------------------------------------------------------- |
@@ -332,16 +341,16 @@ continues in another provider turn within the same run. Keep the maintenance gua
 for unfinished compaction and sign-out. Read only the compaction items needed by
 the command policy alongside the existing bounded command projection.
 
-| Files                                                                     | Fork Responsibility                                                               |
-| ------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| `apps/server/src/orchestration-v2/CommandPolicy.ts`                       | Current provider-turn maintenance guard.                                          |
-| `apps/server/src/orchestration-v2/CommandPolicy.test.ts`                  | Continued goals, unfinished compaction and attempt isolation.                     |
-| `apps/server/src/orchestration-v2/Orchestrator.ts`                        | Normal dispatch, queued promotion and completion delivery use the same guard.     |
-| `apps/server/src/orchestration-v2/SteeringCompletion.integration.test.ts` | Direct and queued steering continue without restarting provider work.             |
-| `packages/shared/src/orchestrationV2PendingBackgroundWork.ts`             | Later completed work on a child supersedes legacy stale activity for that child.  |
-| `packages/shared/src/orchestrationV2PendingBackgroundWork.test.ts`        | Same-child, terminal-status and rollback boundaries.                              |
-| `apps/server/src/orchestration-v2/ProjectionStore.ts`                     | Matching SQL shell and settlement reads, using the existing thread/ordinal index. |
-| `apps/server/src/orchestration-v2/ProjectionSettlement.test.ts`           | Memory and SQL parity for superseded activity.                                    |
+| Files                                                                     | Fork Responsibility                                                              |
+| ------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `apps/server/src/orchestration-v2/CommandPolicy.ts`                       | Current provider-turn maintenance guard.                                         |
+| `apps/server/src/orchestration-v2/CommandPolicy.test.ts`                  | Continued goals, unfinished compaction and attempt isolation.                    |
+| `apps/server/src/orchestration-v2/Orchestrator.ts`                        | Normal dispatch, queued promotion and completion delivery use the same guard.    |
+| `apps/server/src/orchestration-v2/SteeringCompletion.integration.test.ts` | Direct and queued steering continue without restarting provider work.            |
+| `packages/shared/src/orchestrationV2PendingBackgroundWork.ts`             | Later completed work on a child supersedes legacy stale activity for that child. |
+| `packages/shared/src/orchestrationV2PendingBackgroundWork.test.ts`        | Same-child, terminal-status and rollback boundaries.                             |
+| `apps/server/src/orchestration-v2/ProjectionStore.ts`                     | Matching shell/settlement reads, including runless native subagent activity.     |
+| `apps/server/src/orchestration-v2/ProjectionSettlement.test.ts`           | Memory and SQL parity for superseded activity.                                   |
 
 These changes derive current activity without rewriting old task results or live history.
 
