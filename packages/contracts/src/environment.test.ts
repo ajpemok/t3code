@@ -14,6 +14,15 @@ const descriptor = {
 } as const;
 
 describe("ExecutionEnvironmentDescriptor", () => {
+  it("advertises provider recovery only when the environment reports support", () => {
+    expect(decodeDescriptor(descriptor).capabilities.providerErrorRecovery).toBeUndefined();
+    expect(
+      decodeDescriptor({
+        ...descriptor,
+        capabilities: { ...descriptor.capabilities, providerErrorRecovery: true },
+      }).capabilities.providerErrorRecovery,
+    ).toBe(true);
+  });
   it("decodes old, recognized and future manual installation descriptors", () => {
     expect(decodeDescriptor(descriptor).capabilities.serverInstallation).toBeUndefined();
     for (const installation of [{ kind: "npx" }, { kind: "npm-global", prefix: "/opt/node" }]) {

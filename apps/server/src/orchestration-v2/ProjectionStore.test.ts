@@ -37,6 +37,7 @@ import { projectThreadAwarenessV2 } from "@t3tools/shared/agentAwareness";
 import * as SqlitePersistence from "../persistence/Sqlite.ts";
 import { CodexProviderCapabilitiesV2 } from "./Adapters/CodexAdapterV2.ts";
 import * as ProjectionStore from "./ProjectionStore.ts";
+import { providerErrorRecoveryCommand } from "./ProviderErrorRecoveryWorker.ts";
 import {
   buildBoundedThreadProjection,
   decodeThreadHistoryCursor,
@@ -185,6 +186,139 @@ const addRolledBackRecoveryCandidate = Effect.fn("addRolledBackRecoveryCandidate
 
   return threadId;
 });
+
+it.effect.each([
+  ["memory", ProjectionStore.layerMemory],
+  ["SQL", layerTest],
+] as const)(
+  "%s reads only recent provider retry candidates and honours cancellation and Stop",
+  ([, layer]) =>
+    Effect.gen(function* () {
+      const store = yield* ProjectionStore.ProjectionStoreV2;
+      const threadId = yield* addRolledBackRecoveryCandidate("provider-retry");
+      const initial = yield* store.getThreadProjection(threadId);
+      const now = yield* DateTime.now;
+      const run = { ...initial.runs[0]!, status: "failed" as const, completedAt: now };
+      yield* store.apply({
+        id: EventId.make("retry:failed"),
+        type: "run.updated",
+        threadId,
+        occurredAt: now,
+        payload: run,
+      });
+      const error = {
+        id: TurnItemId.make("retry:error"),
+        threadId,
+        nodeId: run.rootNodeId,
+        runId: run.id,
+        providerThreadId: null,
+        providerTurnId: null,
+        nativeItemRef: null,
+        parentItemId: null,
+        ordinal: 2,
+        title: "Overloaded",
+        startedAt: now,
+        updatedAt: now,
+        type: "error" as const,
+        status: "failed" as const,
+        completedAt: now,
+        failure: {
+          class: "provider_error" as const,
+          code: "api_error_529",
+          message: "Overloaded",
+          retryable: true,
+        },
+      };
+      yield* store.apply({
+        id: EventId.make("retry:error"),
+        type: "turn-item.updated",
+        threadId,
+        occurredAt: now,
+        payload: error,
+      });
+      const candidates = yield* store.getProviderErrorRecoveryCandidates(now);
+      assert.lengthOf(candidates, 1);
+      const candidate = candidates[0]!;
+      assert.equal(candidate.run.id, run.id);
+      assert.equal(candidate.failure.code, "api_error_529");
+      assert.isFalse(candidate.blocked);
+      assert.isNull(providerErrorRecoveryCommand(candidate, 3, DateTime.toEpochMillis(now)));
+      assert.isNotNull(
+        providerErrorRecoveryCommand(candidate, 3, DateTime.toEpochMillis(now) + 10_000),
+      );
+      assert.lengthOf(
+        yield* store.getProviderErrorRecoveryCandidates(DateTime.add(now, { minutes: 11 })),
+        0,
+      );
+      yield* store.apply({
+        id: EventId.make("retry:cancel"),
+        type: "thread.metadata-updated",
+        threadId,
+        occurredAt: now,
+        payload: { ...initial.thread, providerErrorRetryCancelledRunId: run.id },
+      });
+      const cancelled = (yield* store.getProviderErrorRecoveryCandidates(now))[0]!;
+      assert.isNull(
+        providerErrorRecoveryCommand(cancelled, 3, DateTime.toEpochMillis(now) + 10_000),
+      );
+      const nativeTurn = {
+        id: ProviderTurnId.make("retry:native"),
+        providerThreadId: ProviderThreadId.make("retry:provider"),
+        nodeId: run.rootNodeId!,
+        runAttemptId: null,
+        nativeTurnRef: null,
+        ordinal: 1,
+        status: "running" as const,
+        startedAt: now,
+        completedAt: null,
+      };
+      yield* store.apply({
+        id: EventId.make("retry:native-running"),
+        type: "provider-turn.updated",
+        threadId,
+        occurredAt: now,
+        payload: nativeTurn,
+      });
+      assert.isTrue((yield* store.getProviderErrorRecoveryCandidates(now))[0]?.blocked);
+      yield* store.apply({
+        id: EventId.make("retry:native-ended"),
+        type: "provider-turn.updated",
+        threadId,
+        occurredAt: now,
+        payload: { ...nativeTurn, status: "completed", completedAt: now },
+      });
+      assert.isFalse((yield* store.getProviderErrorRecoveryCandidates(now))[0]?.blocked);
+      yield* store.apply({
+        id: EventId.make("retry:stop"),
+        type: "turn-item.updated",
+        threadId,
+        occurredAt: now,
+        payload: {
+          ...error,
+          id: TurnItemId.make("retry:stop"),
+          type: "run_interrupt_request",
+          providerThreadId: ProviderThreadId.make("retry:provider"),
+          status: "completed",
+          message: "Stopped",
+        },
+      });
+      assert.isTrue((yield* store.getProviderErrorRecoveryCandidates(now))[0]?.blocked);
+      yield* store.apply({
+        id: EventId.make("retry:replacement"),
+        type: "run.created",
+        threadId,
+        occurredAt: now,
+        payload: {
+          ...run,
+          id: RunId.make("retry:replacement"),
+          ordinal: 2,
+          status: "running",
+          completedAt: null,
+        },
+      });
+      assert.lengthOf(yield* store.getProviderErrorRecoveryCandidates(now), 0);
+    }).pipe(Effect.provide(layer)),
+);
 
 it.effect.each([
   ["memory", ProjectionStore.layerMemory],
