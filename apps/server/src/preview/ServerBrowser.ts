@@ -1527,10 +1527,9 @@ const make = Effect.gen(function* () {
             : (tab.page.viewportSize()?.width ?? UNATTACHED_FILL_VIEWPORT.width);
           const firstFrame = await awaitCapture(
             signal,
-            ServerBrowserPage.captureViewport(tab.page, tab.cdp, {
+            ServerBrowserPage.captureViewport(tab.cdp, {
               format: "jpeg",
               quality: RECORDING_SCREENCAST.quality,
-              scale: 1,
             }),
           );
           await awaitCapture(
