@@ -447,7 +447,10 @@ export const readPageMetrics = async (cdp: CDPSession) => {
   );
 };
 
-export const setDesktopViewport = async (cdp: CDPSession, size: Viewport | null) => {
+export const setDesktopViewport = async (
+  cdp: CDPSession,
+  size: { readonly width: number; readonly height: number } | null,
+) => {
   if (size === null) {
     await cdp.send("Emulation.clearDeviceMetricsOverride");
     return;
