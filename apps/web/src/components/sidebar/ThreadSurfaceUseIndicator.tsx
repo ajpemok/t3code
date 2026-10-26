@@ -2,7 +2,7 @@ import { useAtomValue } from "@effect/atom-react";
 import { parseScopedThreadKey, scopedThreadKey } from "@t3tools/client-runtime/environment";
 import type { ScopedThreadRef } from "@t3tools/contracts";
 import { Atom } from "effect/reactivity";
-import { AppWindowIcon, MonitorIcon, MousePointer2Icon } from "lucide-react";
+import { AlarmClockIcon, AppWindowIcon, MonitorIcon, MousePointer2Icon } from "lucide-react";
 import braveLogo from "~/assets/brave.svg";
 import { resolveThreadSurfaceUse, SURFACE_USE } from "~/lib/threadSurfaceUse";
 import { observeVisibleAnimation } from "~/lib/visibleAnimation";
@@ -13,6 +13,7 @@ import type { ThreadStatusPill } from "../Sidebar.logic";
 type TaskActivityKind =
   | "working"
   | "compacting"
+  | "woke"
   | "waiting"
   | "computer"
   | "browser"
@@ -27,7 +28,9 @@ export function TaskActivitySymbol({ kind }: { readonly kind: TaskActivityKind }
       data-task-activity={kind}
       aria-hidden
     >
-      {kind === "computer" ? (
+      {kind === "woke" ? (
+        <AlarmClockIcon />
+      ) : kind === "computer" ? (
         <>
           <MonitorIcon />
           <MousePointer2Icon className="task-activity-cursor" />
@@ -46,11 +49,13 @@ export function ThreadActivityStatus({
   enabled,
   status,
   trackSurfaceUse = true,
+  onAcknowledgeWoke,
 }: {
   readonly threadRef: ScopedThreadRef;
   readonly enabled: boolean;
   readonly status: ThreadStatusPill | null;
   readonly trackSurfaceUse?: boolean;
+  readonly onAcknowledgeWoke?: (() => void) | undefined;
 }) {
   const activity = useAtomValue(
     surfaceUseAtom(enabled && trackSurfaceUse ? scopedThreadKey(threadRef) : null),
@@ -61,8 +66,9 @@ export function ThreadActivityStatus({
       status.label,
     );
   const compacting = status?.label === "Compacting";
+  const woke = status?.label === "Woke";
   const tool =
-    attention || compacting
+    attention || compacting || woke
       ? null
       : activity & SURFACE_USE.computer
         ? { kind: "computer" as const, label: "Using Computer" }
@@ -74,14 +80,16 @@ export function ThreadActivityStatus({
   if (!tool && (!status || status.label === "Completed")) return null;
   const kind =
     tool?.kind ??
-    (compacting
-      ? "compacting"
-      : status?.label === "Waiting"
-        ? "waiting"
-        : attention
-          ? "attention"
-          : "working");
-  return (
+    (woke
+      ? "woke"
+      : compacting
+        ? "compacting"
+        : status?.label === "Waiting"
+          ? "waiting"
+          : attention
+            ? "attention"
+            : "working");
+  const presentation = (
     <span
       data-thread-activity={kind}
       data-thread-surface-use={tool ? activity : undefined}
@@ -90,6 +98,22 @@ export function ThreadActivityStatus({
       <TaskActivitySymbol kind={kind} />
       <span>{tool?.label ?? status?.label}</span>
     </span>
+  );
+  return woke && onAcknowledgeWoke ? (
+    <button
+      type="button"
+      aria-label="Dismiss Woke notification"
+      className="inline-flex cursor-pointer rounded-sm outline-none hover:underline focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+      onClick={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        onAcknowledgeWoke();
+      }}
+    >
+      {presentation}
+    </button>
+  ) : (
+    presentation
   );
 }
 
