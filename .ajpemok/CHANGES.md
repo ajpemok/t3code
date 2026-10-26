@@ -110,7 +110,7 @@ Synthetic parsing/header checks do not establish live quota accuracy.
 - Keep scratch and draft threads neutral when there is no project.
 - Use stronger dark-mode contrast, smooth active/idle colour transitions and distinct bounded Working, Waiting, Computer, Browser and T3 Browser effects. Pause them offscreen, when hidden and with reduced motion.
 - Use flat task bands with gaps; preserve the existing Working label and elapsed time.
-- Use the project accent for Working in both sidebars, with a softer shade for subagents.
+- Use the project accent for Working, Goals and snooze times in both sidebars, with a softer shade for subagents and the theme accent when there is no project colour.
 
 | Files                                                   | Fork Responsibility                                                 |
 | ------------------------------------------------------- | ------------------------------------------------------------------- |

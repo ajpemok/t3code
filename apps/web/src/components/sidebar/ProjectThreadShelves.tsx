@@ -1,5 +1,9 @@
 import { Link } from "@tanstack/react-router";
-import { scopeThreadRef, scopedThreadKey } from "@t3tools/client-runtime/environment";
+import {
+  scopeProjectRef,
+  scopeThreadRef,
+  scopedThreadKey,
+} from "@t3tools/client-runtime/environment";
 import { sortSettledThreads } from "@t3tools/client-runtime/state/thread-sort";
 import {
   isAtomCommandInterrupted,
@@ -15,7 +19,8 @@ import { useClientSettings } from "~/hooks/useSettings";
 import { useCloseInactiveProjectTabs } from "~/hooks/useCloseInactiveProjectTabs";
 import { useThreadRouteRef } from "~/hooks/useThreadRouteTarget";
 import type { useThreadActions } from "~/hooks/useThreadActions";
-import { useServerConfigs, useQuietThreadShells } from "~/state/entities";
+import { useProject, useServerConfigs, useQuietThreadShells } from "~/state/entities";
+import { projectTintColor } from "~/projectIdentity";
 import { useEnvironmentScope } from "~/state/session";
 import { buildThreadRouteParams } from "~/threadRoutes";
 import type { SidebarThreadSummary } from "~/types";
@@ -73,6 +78,7 @@ function ShelfRow({
   ) => Promise<void>;
 }) {
   const ref = scopeThreadRef(thread.environmentId, thread.id);
+  const project = useProject(scopeProjectRef(thread.environmentId, thread.projectId));
   const canOperate = useEnvironmentScope(thread.environmentId, AuthOrchestrationOperateScope);
   const [pending, setPending] = useState(false);
   const label = kind === "snoozed" ? "Unsnooze" : "Unsettle";
@@ -98,7 +104,10 @@ function ShelfRow({
     }
   };
   return (
-    <li className="group/project-shelf flex min-h-8 min-w-0 items-center gap-1 px-2 text-xs">
+    <li
+      data-project-color={projectTintColor(project)}
+      className="group/project-shelf flex min-h-8 min-w-0 items-center gap-1 px-2 text-xs"
+    >
       <Link
         to="/$environmentId/$threadId"
         params={buildThreadRouteParams(ref)}
@@ -112,7 +121,10 @@ function ShelfRow({
       >
         {thread.title}
       </Link>
-      <span className="text-3xs text-secondary-label">
+      <span
+        data-thread-activity={kind === "snoozed" ? "snoozed" : undefined}
+        className="text-3xs text-secondary-label"
+      >
         <RelativeTime
           timestamp={
             kind === "snoozed"

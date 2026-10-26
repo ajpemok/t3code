@@ -193,12 +193,18 @@
   --project-row-selected-tint: 11%;
 }
 
-[data-project-color] [data-thread-activity="working"] {
-  color: var(--project-accent);
+[data-thread-activity="working"],
+[data-thread-activity="snoozed"] {
+  color: var(--project-accent, var(--app-theme-accent, var(--primary)));
 }
 
-.project-tint-subagent [data-thread-activity="working"] {
-  color: color-mix(in oklab, var(--project-accent) 40%, var(--sidebar-foreground));
+.project-tint-subagent [data-thread-activity="working"],
+.project-tint-subagent [data-thread-activity="snoozed"] {
+  color: color-mix(
+    in oklab,
+    var(--project-accent, var(--app-theme-accent, var(--primary))) 40%,
+    var(--sidebar-foreground)
+  );
 }
 
 .project-thread-guide::before {
