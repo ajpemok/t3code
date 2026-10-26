@@ -27,15 +27,27 @@ export function usePreviewPanelInlineSize(
 ): PreviewPanelInlineSize {
   const enabled = options.enabled ?? true;
   const container = options.container;
-  const [maxWidth, setMaxWidth] = useState(() =>
-    getPreviewPanelMaxWidth(typeof window === "undefined" ? 1280 : window.innerWidth),
-  );
+  const [bounds, setBounds] = useState(() => {
+    const viewportWidth = typeof window === "undefined" ? 1280 : window.innerWidth;
+    return { maxWidth: getPreviewPanelMaxWidth(viewportWidth), viewportWidth, enabled };
+  });
+  let currentBounds = bounds;
+  if (bounds.enabled !== enabled) {
+    const viewportWidth = typeof window === "undefined" ? 1280 : window.innerWidth;
+    currentBounds = {
+      maxWidth: getPreviewPanelMaxWidth(viewportWidth, container?.clientWidth),
+      viewportWidth,
+      enabled,
+    };
+    setBounds(currentBounds);
+  }
   const { width, handlers } = useResizableWidth({
     storageKey: options.widthStorageKey ?? PREVIEW_PANEL_WIDTH_STORAGE_KEY,
     defaultWidth: options.defaultWidth ?? PREVIEW_PANEL_DEFAULT_WIDTH,
     minWidth: PREVIEW_PANEL_MIN_WIDTH,
-    maxWidth,
+    maxWidth: currentBounds.maxWidth,
     edge: "left",
+    ...(enabled ? { viewportWidth: currentBounds.viewportWidth } : {}),
   });
   const observeRow = (host: HTMLElement) => {
     const row = container ?? (enabled ? host.parentElement : null) ?? null;
@@ -43,7 +55,15 @@ export function usePreviewPanelInlineSize(
     // flash on mount. Only the derived cap is stored: the row resizes every frame
     // of a sidebar drag, but an unchanged cap skips re-rendering the owner.
     const measure = () => {
-      setMaxWidth(getPreviewPanelMaxWidth(window.innerWidth, row?.clientWidth));
+      const viewportWidth = window.innerWidth;
+      const maxWidth = getPreviewPanelMaxWidth(viewportWidth, row?.clientWidth);
+      setBounds((current) =>
+        current.maxWidth === maxWidth &&
+        current.viewportWidth === viewportWidth &&
+        current.enabled === enabled
+          ? current
+          : { maxWidth, viewportWidth, enabled },
+      );
     };
     measure();
     let frame = 0;
