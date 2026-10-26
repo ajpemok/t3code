@@ -1,4 +1,5 @@
 import { DeviceHostUpdates } from "../device/DeviceHostUpdates";
+import { RecordingPointerSettings } from "./RecordingPointerSettings";
 import { DeviceToolVersions } from "../device/DeviceToolVersions";
 import { useScopedSettings, useUpdateScopedSettings } from "./useScopedSettings";
 import { ScopedSwitch } from "./ScopedSwitch";
@@ -545,7 +546,6 @@ function BrowserAppearanceSetting({ disabled }: { readonly disabled: boolean }) 
 
 function BrowserRecordingInputSettings({ disabled }: { readonly disabled: boolean }) {
   const showKeys = useClientSettings((settings) => settings.browserRecordingShowKeyPresses);
-  const showMouse = useClientSettings((settings) => settings.browserRecordingShowMousePresses);
   const updateSettings = useUpdatePrimarySettings();
   return (
     <>
@@ -559,20 +559,6 @@ function BrowserRecordingInputSettings({ disabled }: { readonly disabled: boolea
             aria-label="Show key presses in recordings"
             onCheckedChange={(checked) =>
               updateSettings({ browserRecordingShowKeyPresses: Boolean(checked) })
-            }
-          />
-        }
-      />
-      <SettingsRow
-        {...searchableSetting("browser-recording-mouse-presses")}
-        description="Highlight mouse presses and held buttons in new recordings."
-        control={
-          <Switch
-            disabled={disabled}
-            checked={showMouse}
-            aria-label="Show mouse presses in recordings"
-            onCheckedChange={(checked) =>
-              updateSettings({ browserRecordingShowMousePresses: Boolean(checked) })
             }
           />
         }
@@ -1634,6 +1620,7 @@ export function BrowserSettingsPanel() {
         <SettingsUnavailableGroup message={desktopOnlyMessage}>
           <BrowserRecordingFrameRateSetting disabled={desktopOnly} />
           <BrowserRecordingInputSettings disabled={desktopOnly} />
+          <RecordingPointerSettings disabled={desktopOnly} />
         </SettingsUnavailableGroup>
       </SettingsSection>
     </SettingsPageContainer>

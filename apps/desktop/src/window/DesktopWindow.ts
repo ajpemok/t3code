@@ -32,6 +32,7 @@ import * as PreviewPasskeys from "../preview/Passkeys.ts";
 import * as DesktopAppSettings from "../settings/DesktopAppSettings.ts";
 import * as DesktopClientSettings from "../settings/DesktopClientSettings.ts";
 import * as ElectronApp from "../electron/ElectronApp.ts";
+import * as ElectronDialog from "../electron/ElectronDialog.ts";
 import * as DesktopRendererHistory from "../telemetry/DesktopRendererHistory.ts";
 import { makeQuitShortcutHandler } from "./QuitHold.ts";
 import { copyContextMenuImage } from "./ContextMenuImage.ts";
@@ -74,6 +75,7 @@ type DesktopWindowRuntimeServices =
   | DesktopAppSettings.DesktopAppSettings
   | DesktopClientSettings.DesktopClientSettings
   | ElectronApp.ElectronApp
+  | ElectronDialog.ElectronDialog
   | ElectronMenu.ElectronMenu
   | ElectronShell.ElectronShell
   | ElectronTheme.ElectronTheme
@@ -296,6 +298,7 @@ export const make = Effect.gen(function* () {
   const desktopSettings = yield* DesktopAppSettings.DesktopAppSettings;
   const clientSettings = yield* DesktopClientSettings.DesktopClientSettings;
   const electronApp = yield* ElectronApp.ElectronApp;
+  const electronDialog = yield* ElectronDialog.ElectronDialog;
   const rendererHistory = yield* DesktopRendererHistory.DesktopRendererHistory;
   const backendReadyRef = yield* Ref.make(false);
   const splashWindowRef = yield* Ref.make<Option.Option<Electron.BrowserWindow>>(Option.none());
@@ -668,8 +671,54 @@ export const make = Effect.gen(function* () {
     window.on("move", scheduleBoundsPersist);
     window.on("maximize", scheduleBoundsPersist);
     window.on("unmaximize", scheduleBoundsPersist);
-    window.on("close", () => {
+    let closeConfirmationPending = false;
+    let closingConfirmed = false;
+    window.on("close", (event) => {
       runFork(flushBoundsPersist);
+      if (closingConfirmed) return;
+      event.preventDefault();
+      if (closeConfirmationPending) return;
+      closeConfirmationPending = true;
+      runFork(
+        electronDialog
+          .showMessageBox(
+            {
+              type: "question",
+              title: environment.displayName,
+              message: "Close This Window?",
+              detail:
+                environment.platform === "darwin"
+                  ? "Running sessions will continue in the background. You can reopen the window from the Dock."
+                  : "Closing T3 Code stops running sessions on this computer.",
+              buttons: ["Cancel", "Close Window"],
+              defaultId: 0,
+              cancelId: 0,
+              noLink: true,
+            },
+            window,
+          )
+          .pipe(
+            Effect.tap(({ response }) =>
+              Effect.sync(() => {
+                if (response !== 1 || window.isDestroyed()) return;
+                closingConfirmed = true;
+                try {
+                  window.close();
+                } finally {
+                  closingConfirmed = false;
+                }
+              }),
+            ),
+            Effect.catchCause((cause) =>
+              Effect.logWarning("Failed to confirm window close.", cause),
+            ),
+            Effect.ensuring(
+              Effect.sync(() => {
+                closeConfirmationPending = false;
+              }),
+            ),
+          ),
+      );
     });
 
     if (environment.platform === "darwin") {

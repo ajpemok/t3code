@@ -228,6 +228,7 @@ export const startRecording = DesktopIpc.makeIpcMethod({
     const options = Option.map(settings, (value) => ({
       showKeyPresses: value.browserRecordingShowKeyPresses,
       showMousePresses: value.browserRecordingShowMousePresses,
+      pointer: value.browserRecordingPointer,
     }));
     return yield* manager
       .startRecording(tabId, Option.getOrUndefined(options))

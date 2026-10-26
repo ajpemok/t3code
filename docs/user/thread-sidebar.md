@@ -3,38 +3,51 @@
 Use a new thread for a separate task. Choose **New worktree** when its code changes
 need a separate branch and working directory.
 
+Opening a thread takes you to its latest message. Scroll up to read its history;
+new replies then leave your reading position alone. Search and citation links
+still take you to the requested passage.
+
 ## Project Sections and Header
 
-Turn on **Project Sections** in **Settings → Appearance** to group tasks into
+Turn on **Project Sections** in **Settings → Appearance** to group threads into
 collapsible project trees. Turn it off to return to the flat list. Collapse choices
-are saved on this client. Both views show active and idle tasks; settled and snoozed
-tasks stay in the bottom-aligned **Settled** and **Snoozed** sections. Expand either
-section to reopen a task or bring it back to the project list.
+are saved on this client. Both views show active and idle threads; settled and snoozed
+threads stay in the bottom-aligned **Settled** and **Snoozed** sections. Expand either
+section to reopen a thread or bring it back to the project list.
 
-Hover or focus a task to snooze, settle or pin it. Its context menu offers the
-usual task actions, including auto-settle, title regeneration, archive and delete
+Hover or focus a thread to snooze, settle or pin it. Its context menu offers the
+usual thread actions, including auto-settle, title regeneration, archive and delete
 when the connected environment supports them. Settling, snoozing and unpinning
 retain T3's **Undo** action. Grouping does not change these server permissions.
 
-Pin a project to keep its header available when it has no active or idle tasks.
-The same action pins its eligible tasks. Unpinning the project removes that saved
-header preference and unpins its eligible tasks. Settled and snoozed tasks stay hidden.
+Pin a project to keep its header available when it has no active or idle threads.
+The same action pins its eligible threads. Unpinning the project removes that saved
+header preference and unpins its eligible threads. Settled and snoozed threads stay hidden.
 
-Turn on **Active Subagents** beside the sidebar sort/add controls or in
-**Settings → Appearance** to show running subagents and those awaiting input under
-their parent task. Idle and completed children stay hidden. The choice applies to
-both views and is saved on this client.
+Use **Hide Inactive Threads and Projects** to focus both views on current work and
+input requests. An idle parent stays available while one of its subagents works.
+This filter also hides empty pinned project headers; turning it off restores them.
 
-Choose **Close all inactive tabs (N)** from a project, task or subagent menu to
+Choose **Show**, **Show active** or **Hide** from the **Subagents** menu beside the
+sidebar controls or in **Settings → Appearance**. **Show** includes idle children
+and respects Hide Inactive. **Visible Subagents** sets the initial count per parent;
+expand the remaining children when needed. Project summaries count active and inactive
+threads and subagents separately. These choices apply to both views.
+Assign shortcuts to **Sidebar: Hide/Show Inactive Threads and Projects** and
+**Sidebar: Cycle Subagent Visibility** in **Settings → Keybindings**.
+
+Choose **Close all inactive tabs (N)** from a project, thread or subagent menu to
 close its eligible idle right-panel views and release unclaimed browser sessions.
-A task action affects that task only. The selected tab, active tasks, controlled
+A thread action affects that thread only. The selected tab, active threads, controlled
 or recording browsers, unsaved files and terminal sessions stay open. A zero count
 means every remaining view is protected or there are no tabs to close.
 This closes views; it does not delete files or stop development servers or emulators.
 
 Working, Waiting, Computer, Browser and T3 Browser have distinct activity symbols.
+Compacting uses a separate loading indicator in the theme's error accent.
 Browser use carries the Brave logo. The grouped view puts status above the timestamp
-on the right. Effects pause offscreen, in hidden windows and with reduced motion.
+on the right. Working uses the project colour, with a softer shade for subagents.
+Effects pause offscreen, in hidden windows and with reduced motion.
 Tool activity depends on provider reports; shell and script wrappers may not expose it.
 
 The composer shows context usage and a token count when the provider supplies
@@ -45,6 +58,8 @@ for **Context and Token Usage** to change its visibility.
 The fork defaults this indicator on; saved choices from an existing installation
 are preserved.
 **Compact Unavailable** keeps the reason in a tooltip.
+In a narrow composer, the chart and fuel gauge keep their details in the popovers
+and leave more room for the send controls.
 
 The weekly fuel gauge immediately to its right shows the selected provider account's
 **remaining** quota. Open it for the account's usage details and banked manual resets.

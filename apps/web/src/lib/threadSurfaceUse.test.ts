@@ -76,4 +76,20 @@ describe("resolveThreadSurfaceUse", () => {
       ),
     ).toBe(0);
   });
+
+  it("refines generic computer metadata when CUA is explicitly driving the browser", () => {
+    expect(
+      resolveThreadSurfaceUse(
+        [
+          {
+            ...running,
+            toolName: "mcp__cua_repl__js",
+            toolSurface: "computer",
+            input: { code: "await compactTab.playwright.domSnapshot();" },
+          },
+        ],
+        runId,
+      ),
+    ).toBe(SURFACE_USE.browser);
+  });
 });

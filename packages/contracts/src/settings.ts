@@ -34,6 +34,8 @@ import { DEFAULT_RUNTIME_MODE, RuntimeMode } from "./providerPolicy.ts";
 import { BrowserProfile, BrowserProfileId, DEFAULT_BROWSER_PROFILE_ID } from "./browserProfile.ts";
 import {
   BrowserRecordingFrameRate,
+  BrowserRecordingPointer,
+  DEFAULT_BROWSER_RECORDING_POINTER,
   DEFAULT_BROWSER_RECORDING_FRAME_RATE,
   DEFAULT_PREVIEW_APPEARANCE,
   DEFAULT_PREVIEW_ZOOM_FACTOR,
@@ -81,6 +83,17 @@ export const SidebarThreadPreviewCount = Schema.Int.check(
   }),
 );
 export type SidebarThreadPreviewCount = typeof SidebarThreadPreviewCount.Type;
+export const SidebarSubagentVisibility = Schema.Literals(["show", "active", "hide"]);
+export type SidebarSubagentVisibility = typeof SidebarSubagentVisibility.Type;
+export function resolveSidebarSubagentVisibility(settings: {
+  readonly sidebarSubagentVisibility?: SidebarSubagentVisibility | undefined;
+  readonly sidebarActiveSubagentsEnabled: boolean;
+}): SidebarSubagentVisibility {
+  return (
+    settings.sidebarSubagentVisibility ??
+    (settings.sidebarActiveSubagentsEnabled ? "active" : "hide")
+  );
+}
 const DEFAULT_SIDEBAR_THREAD_PREVIEW_COUNT: SidebarThreadPreviewCount = 6;
 export const MIN_SIDEBAR_AUTO_SETTLE_AFTER_DAYS = 1;
 export const MAX_SIDEBAR_AUTO_SETTLE_AFTER_DAYS = 90;
@@ -336,6 +349,9 @@ export const ClientSettingsSchema = Schema.Struct({
   browserRecordingFrameRate: BrowserRecordingFrameRate.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_BROWSER_RECORDING_FRAME_RATE)),
   ),
+  browserRecordingPointer: BrowserRecordingPointer.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_BROWSER_RECORDING_POINTER)),
+  ),
   browserRecordingShowKeyPresses: Schema.Boolean.pipe(
     Schema.withDecodingDefault(Effect.succeed(false)),
   ),
@@ -437,6 +453,13 @@ export const ClientSettingsSchema = Schema.Struct({
   showSkillsInSlashMenu: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   legacySidebarEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   sidebarActiveSubagentsEnabled: Schema.Boolean.pipe(
+    Schema.withDecodingDefault(Effect.succeed(false)),
+  ),
+  sidebarSubagentVisibility: Schema.optionalKey(SidebarSubagentVisibility),
+  sidebarSubagentPreviewCount: SidebarThreadPreviewCount.pipe(
+    Schema.withDecodingDefault(Effect.succeed(3)),
+  ),
+  sidebarHideInactiveEnabled: Schema.Boolean.pipe(
     Schema.withDecodingDefault(Effect.succeed(false)),
   ),
   sidebarPinnedProjectKeys: Schema.Array(Schema.String).pipe(
@@ -1627,6 +1650,7 @@ export const ClientSettingsPatch = Schema.Struct({
   browserDefaultZoomFactor: Schema.optionalKey(PreviewZoomFactor),
   browserDefaultAppearance: Schema.optionalKey(PreviewAppearancePreference),
   browserRecordingFrameRate: Schema.optionalKey(BrowserRecordingFrameRate),
+  browserRecordingPointer: Schema.optionalKey(BrowserRecordingPointer),
   browserRecordingShowKeyPresses: Schema.optionalKey(Schema.Boolean),
   browserRecordingShowMousePresses: Schema.optionalKey(Schema.Boolean),
   browserLinkTarget: Schema.optionalKey(BrowserLinkTarget),
@@ -1671,6 +1695,9 @@ export const ClientSettingsPatch = Schema.Struct({
   showSkillsInSlashMenu: Schema.optionalKey(Schema.Boolean),
   legacySidebarEnabled: Schema.optionalKey(Schema.Boolean),
   sidebarActiveSubagentsEnabled: Schema.optionalKey(Schema.Boolean),
+  sidebarSubagentVisibility: Schema.optionalKey(SidebarSubagentVisibility),
+  sidebarSubagentPreviewCount: Schema.optionalKey(SidebarThreadPreviewCount),
+  sidebarHideInactiveEnabled: Schema.optionalKey(Schema.Boolean),
   sidebarPinnedProjectKeys: Schema.optionalKey(Schema.Array(Schema.String)),
   ajpemokHeaderScene: Schema.optionalKey(Schema.String),
   ajpemokHeaderMotion: Schema.optionalKey(Schema.Boolean),
