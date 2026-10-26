@@ -94,6 +94,7 @@ import { CheckpointServiceV2 } from "./CheckpointService.ts";
 import {
   CommandPolicyV2,
   isNativeMaintenanceCommand,
+  runIsExecutingNativeMaintenance,
   resolveMessageDispatchIntent,
 } from "./CommandPolicy.ts";
 import { CommandReceiptStoreV2 } from "./CommandReceiptStore.ts";
@@ -1094,7 +1095,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           "contextTransfers",
         ],
         {
-          turnItemTypes: ["user_message", "error"],
+          turnItemTypes: ["user_message", "error", "compaction"],
           messageRoles: ["user"],
           omitSettledLeafNodes: true,
         },
@@ -4289,12 +4290,12 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
     const targetMessage = input.projection.messages.find(
       (message) => message.id === targetRun.userMessageId,
     );
-    if (targetMessage !== undefined && isNativeMaintenanceCommand(targetMessage)) {
+    if (runIsExecutingNativeMaintenance(input.projection, targetRun)) {
       return yield* new OrchestratorDispatchError({
         commandId: input.command.commandId,
         commandType: input.command.type,
         cause:
-          targetMessage.text.trim().toLowerCase() === "/compact"
+          targetMessage?.text.trim().toLowerCase() === "/compact"
             ? "Wait for context compaction to finish before steering the thread."
             : "Wait for sign-out to finish before steering the thread.",
       });
@@ -5272,14 +5273,11 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       const activeTurn = projection.providerTurns.find(
         (turn) => turn.runAttemptId === active?.activeAttemptId && turn.status === "running",
       );
-      const activeMessage = projection.messages.find(
-        (message) => message.id === active?.userMessageId,
-      );
       if (
         active !== undefined &&
         activeTurn !== undefined &&
         providerThread?.providerSessionId != null &&
-        (activeMessage === undefined || !isNativeMaintenanceCommand(activeMessage))
+        !runIsExecutingNativeMaintenance(projection, active)
       ) {
         const session = yield* providerSessions
           .get(providerThread.providerSessionId)
@@ -8217,7 +8215,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           "runtimeRequests",
           "subagents",
         ],
-        { turnItemTypes: [], messageRoles: ["user"] },
+        { turnItemTypes: ["compaction"], messageRoles: ["user"] },
       )
       .pipe(Effect.mapError(() => new OrchestratorProjectionError({ threadId: command.threadId })));
     if (projection.thread.archivedAt !== null || projection.thread.deletedAt !== null) {
