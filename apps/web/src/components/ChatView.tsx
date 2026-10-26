@@ -31,6 +31,7 @@ import { ThreadFind, ThreadFindCanvas } from "./chat/ThreadFindProvider";
 import { closeThreadFind, openThreadFind, useThreadFindOpen } from "./chat/threadFindStore";
 import { THREAD_FIND_BAR_RESERVED_HEIGHT } from "./chat/ThreadFindBar";
 import { usageLimitRecoveryBannerItem } from "./chat/UsageLimitRecoveryBanner";
+import { providerErrorRecoveryBannerItem } from "./chat/ProviderErrorRecoveryBanner";
 import { resolveDraftHeroState } from "./ChatView.logic";
 import { useQueuedRunEdit } from "./chat/useQueuedRunEdit";
 import { recallCheckoutIsRepo, rememberCheckoutIsRepo } from "./ChatView.logic";
@@ -44,6 +45,7 @@ import { visibleThreadPullRequests } from "@t3tools/shared/threadPullRequests";
 import {
   latestExecutedRun,
   latestRootProviderFailure,
+  isRecoverableProviderFailure,
 } from "@t3tools/shared/orchestrationV2ThreadError";
 import type { UsageLimitSourceSnapshots } from "@t3tools/contracts";
 import { feedbackBannerItem } from "./chat/ComposerFeedback";
@@ -788,13 +790,17 @@ export default function ChatView(props: ChatViewProps) {
     isServerThread &&
     serverProjection?.runs.some((run) => run.status === "queued" && run.queueHeld === true) ===
       true;
+  const supportsProviderErrorRecovery =
+    environmentById.get(environmentId)?.serverConfig?.environment.capabilities
+      .providerErrorRecovery === true;
   const resumableRunId = (() => {
     if (!isServerThread || serverProjection === null) return null;
     const run = latestExecutedRun(serverProjection.runs);
     if (run?.status === "interrupted") return run.id;
+    const failure = latestRootProviderFailure(run, serverProjection.turnItems);
     return run?.status === "failed" &&
-      serverRuntime?.lastErrorClass === "usage_limit" &&
-      latestRootProviderFailure(run, serverProjection.turnItems)?.class === "usage_limit"
+      ((serverRuntime?.lastErrorClass === "usage_limit" && failure?.class === "usage_limit") ||
+        (supportsProviderErrorRecovery && isRecoverableProviderFailure(failure)))
       ? run.id
       : null;
   })();
@@ -2495,8 +2501,50 @@ export default function ChatView(props: ChatViewProps) {
           },
         })
       : null;
+  const providerRetrySource = serverProjection ? latestExecutedRun(serverProjection.runs) : null;
+  const providerRetryBanner =
+    supportsProviderErrorRecovery &&
+    serverRuntime?.status === "failed" &&
+    providerRetrySource &&
+    serverProjection &&
+    activeThreadShell?.providerErrorRetryCancelledRunId !== providerRetrySource.id &&
+    !serverProjection.runs.some((run) => run.status === "queued") &&
+    !serverProjection.turnItems.some(
+      (item) => item.type === "run_interrupt_request" && item.runId === providerRetrySource.id,
+    )
+      ? providerErrorRecoveryBannerItem({
+          run: providerRetrySource,
+          failure: latestRootProviderFailure(providerRetrySource, serverProjection.turnItems),
+          candidate: {
+            thread: serverProjection.thread,
+            run: providerRetrySource,
+            failure: latestRootProviderFailure(providerRetrySource, serverProjection.turnItems),
+            blocked:
+              serverProjection.runtimeRequests.some((request) => request.status === "pending") ||
+              serverProjection.providerTurns.some(
+                (turn) =>
+                  turn.nodeId === providerRetrySource.rootNodeId &&
+                  (turn.status === "running" || turn.status === "pending"),
+              ),
+          },
+          limit: settings.providerErrorRetryLimit,
+          disabled: !canOperateThread,
+          onCancel: async () => {
+            const result = await updateThreadMetadata({
+              environmentId,
+              input: {
+                threadId: providerRetrySource.threadId,
+                providerErrorRetryCancelledRunId: providerRetrySource.id,
+              },
+            });
+            if (result._tag === "Failure") throw squashAtomCommandFailure(result);
+          },
+        })
+      : null;
   const composerBannerItems = (() => {
-    const limitRecoveryItems = limitRecoveryBanner === null ? [] : [limitRecoveryBanner];
+    const limitRecoveryItems = [limitRecoveryBanner, providerRetryBanner].filter(
+      (item) => item !== null,
+    );
     const usageLimitsItems = usageLimitsBanner === null ? [] : [usageLimitsBanner];
     const projectCloneItems = projectCloneBannerItem === null ? [] : [projectCloneBannerItem];
     if (!localCheckoutBranchMismatch || !showBranchMismatchBanner || !activeBranchMismatchKey) {

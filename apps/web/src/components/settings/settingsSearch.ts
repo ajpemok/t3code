@@ -404,6 +404,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["usage quota rate limit reset recover continue"],
   },
   {
+    id: "provider-error-retries",
+    title: "Provider Error Retries",
+    to: "/settings/threads",
+    searchTerms: ["capacity overloaded temporary failure automatic resume retry limit"],
+  },
+  {
     id: "working-shelf",
     title: "Working section",
     to: "/settings/general",
