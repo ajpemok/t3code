@@ -47,7 +47,13 @@ are preserved.
 **Compact Unavailable** keeps the reason in a tooltip.
 
 The weekly fuel gauge immediately to its right shows the selected provider account's
-**remaining** quota. Open it for reset and snapshot times. It shows **N/A** for missing,
+**remaining** quota. Open it for the account's usage details and banked manual resets.
+The raised count shows how many resets are available. Its cool accent changes when
+the next credit expires within 48 hours; within 24 hours, a subtle pulse marks it as
+important. Reduced motion keeps the cue static. **Use reset** asks for confirmation
+before spending a credit.
+
+The gauge shows **N/A** for missing,
 failed, expired or older-than-five-minute readings. It uses reported weekly windows
 and matching account/workspace identities. It does not infer a weekly allowance from
 session or monthly limits. Model-specific weekly limits apply only to a recognised
