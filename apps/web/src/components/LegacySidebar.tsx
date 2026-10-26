@@ -199,6 +199,7 @@ import {
   isSidebarNestedLinkClick,
   isTrailingDoubleClick,
   resolveProjectStatusIndicator,
+  activeSubagentsByParent,
   resolveThreadLastVisitedAt,
   resolveThreadStatusPill,
   orderItemsByPreferredIds,
@@ -228,7 +229,13 @@ import { resolveSnoozePresets } from "./Sidebar.snooze";
 import { requestCustomSnooze } from "./CustomSnoozeDialog";
 import { canSnooze } from "@t3tools/client-runtime/state/thread-settled";
 import { ProjectThreadShelves, useProjectThreadSections } from "./sidebar/ProjectThreadShelves";
-import { ActiveSubagentThreads, ActiveSubagentsToggle } from "./sidebar/ActiveSubagentThreads";
+import {
+  ActiveSubagentThreads,
+  ActiveSubagentsToggle,
+  InactiveThreadsToggle,
+  VisibleSubagentsMenuGroup,
+} from "./sidebar/ActiveSubagentThreads";
+import { SidebarActivityCounts } from "./sidebar/SidebarActivityCounts";
 import { useProject } from "~/state/entities";
 import { projectTintColor } from "~/projectIdentity";
 import { useCloseInactiveProjectTabs } from "~/hooks/useCloseInactiveProjectTabs";
@@ -543,14 +550,15 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
   const canSnoozeNow = useCanSnoozeThread(thread);
   const showSnooze = canOperateThread && capabilities?.threadSnooze === true && canSnoozeNow;
   const canSettle = canOperateThread && settlementSupported;
-  const threadMetaClassName = isConfirmingArchive
-    ? "pointer-events-none opacity-0"
-    : canOperateThread && (settlementSupported || !isThreadRunning)
-      ? cn(
-          "pointer-events-none transition-opacity duration-150 group-hover/menu-sub-item:opacity-0 group-focus-within/menu-sub-item:opacity-0",
-          settlementSupported ? "max-sm:opacity-0" : "max-sm:pr-6",
-        )
-      : "pointer-events-none";
+  const threadMetaClassName =
+    isConfirmingArchive || snoozeOpen
+      ? "pointer-events-none invisible"
+      : canOperateThread && (settlementSupported || !isThreadRunning)
+        ? cn(
+            "pointer-events-none group-hover/menu-sub-item:invisible group-focus-within/menu-sub-item:invisible",
+            settlementSupported ? "max-sm:invisible" : "max-sm:pr-6",
+          )
+        : "pointer-events-none";
   const clearConfirmingArchive = () => {
     setConfirmingArchiveThreadKey((current) => (current === threadKey ? null : current));
   };
@@ -879,7 +887,6 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                     }
                   >
                     <CheckIcon className="size-3.5" />
-                    <span>Settle</span>
                   </TooltipTrigger>
                   <TooltipPopup side="top">Settle thread</TooltipPopup>
                 </Tooltip>
@@ -1327,8 +1334,8 @@ function useProjectThreads(project: SidebarProjectSnapshot) {
   );
   const visibleProjectThreads = sortThreads(sectionThreads, threadSortOrder);
   const projectStatus = resolveProjectStatusIndicator(
-    visibleProjectThreads.map((thread) =>
-      resolveProjectThreadStatus(thread, lastVisitedAtByThreadKey),
+    [...visibleProjectThreads, ...[...activeSubagentsByParent(sidebarThreads).values()].flat()].map(
+      (thread) => resolveProjectThreadStatus(thread, lastVisitedAtByThreadKey),
     ),
   );
   const orderedProjectThreadKeys = visibleProjectThreads.map((thread) =>
@@ -2776,6 +2783,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
       >
         <SidebarMenuButton
           ref={isManualProjectSorting ? dragHandleProps?.setActivatorNodeRef : undefined}
+          variant="transparent"
           className={isManualProjectSorting ? "cursor-grab active:cursor-grabbing" : undefined}
           {...(isManualProjectSorting && dragHandleProps ? dragHandleProps.attributes : {})}
           {...(isManualProjectSorting && dragHandleProps ? dragHandleProps.listeners : {})}
@@ -2851,7 +2859,9 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
             </TooltipTrigger>
             <TooltipPopup side="top">{projectEngaged ? projectStatus?.label : "Idle"}</TooltipPopup>
           </Tooltip>
-          <span aria-hidden className="w-12 shrink-0 max-sm:w-14" />
+          <span className="mr-5 shrink-0 group-hover/project-header:invisible group-focus-within/project-header:invisible max-sm:mr-12">
+            <SidebarActivityCounts threads={sidebarThreads} stacked />
+          </span>
         </SidebarMenuButton>
 
         <Tooltip>
@@ -3268,6 +3278,7 @@ function ProjectSortMenu({
             </NumberField>
           </div>
         </MenuGroup>
+        <VisibleSubagentsMenuGroup />
       </MenuPopup>
     </Menu>
   );
@@ -3461,6 +3472,7 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
               onThreadPreviewCountChange={handleThreadPreviewCountChange}
             />
             <ActiveSubagentsToggle />
+            <InactiveThreadsToggle />
             <Tooltip>
               <TooltipTrigger
                 render={
@@ -3659,6 +3671,7 @@ function useSortedLegacySidebarProjects(input: {
   const sidebarThreads = useQuietThreadShells();
   const sectionThreads = useProjectSectionThreads(sidebarThreads);
   const pinnedProjectKeys = useClientSettings((settings) => settings.sidebarPinnedProjectKeys);
+  const hideInactive = useClientSettings((settings) => settings.sidebarHideInactiveEnabled);
   const populatedProjectKeys = new Set(
     sectionThreads.map((thread) => {
       const physicalKey =
@@ -3675,7 +3688,8 @@ function useSortedLegacySidebarProjects(input: {
     .filter(
       (project) =>
         populatedProjectKeys.has(project.projectKey) ||
-        projectPinPreferenceKeys(project).some((key) => pinnedProjectKeys.includes(key)),
+        (!hideInactive &&
+          projectPinPreferenceKeys(project).some((key) => pinnedProjectKeys.includes(key))),
     )
     .map((project) => ({
       ...project,

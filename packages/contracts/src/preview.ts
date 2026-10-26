@@ -229,11 +229,50 @@ export const BrowserRecordingFrameRate = Schema.Literals(BROWSER_RECORDING_FRAME
 export type BrowserRecordingFrameRate = typeof BrowserRecordingFrameRate.Type;
 export const DEFAULT_BROWSER_RECORDING_FRAME_RATE: BrowserRecordingFrameRate = 30;
 
+const PointerColor = Schema.String.check(Schema.isPattern(/^#[\da-f]{6}$/i));
+const PointerFraction = Schema.Number.check(Schema.isBetween({ minimum: 0, maximum: 1 }));
+export const BrowserRecordingPointer = Schema.Struct({
+  enabled: Schema.Boolean,
+  shape: Schema.Literals(["classic", "slim", "rounded", "precision", "delta", "kite", "chevron"]),
+  imageDataUrl: Schema.NullOr(
+    Schema.String.check(
+      Schema.isMaxLength(350_000),
+      Schema.isPattern(/^data:image\/png;base64,[A-Za-z0-9+/]+=*$/),
+    ),
+  ),
+  imageAspectRatio: Schema.Number.check(Schema.isBetween({ minimum: 0.05, maximum: 20 })),
+  size: Schema.Number.check(Schema.isBetween({ minimum: 12, maximum: 96 })),
+  hotspotX: PointerFraction,
+  hotspotY: PointerFraction,
+  fill: PointerColor,
+  outline: PointerColor,
+  haloColor: PointerColor,
+  haloRadius: Schema.Number.check(Schema.isBetween({ minimum: 8, maximum: 64 })),
+  haloDurationMs: Schema.Number.check(Schema.isBetween({ minimum: 150, maximum: 1200 })),
+});
+export type BrowserRecordingPointer = typeof BrowserRecordingPointer.Type;
+export const DEFAULT_BROWSER_RECORDING_POINTER: BrowserRecordingPointer = {
+  enabled: true,
+  shape: "classic",
+  imageDataUrl: null,
+  imageAspectRatio: 2 / 3,
+  size: 18,
+  hotspotX: 0.06,
+  hotspotY: 0.04,
+  fill: "#ffffff",
+  outline: "#111111",
+  haloColor: "#3b82f6",
+  haloRadius: 20,
+  haloDurationMs: 600,
+};
+
 export const PreviewReportProfilesInput = Schema.Struct({
   profiles: Schema.Array(BrowserProfile).check(Schema.isMaxLength(BROWSER_PROFILE_MAX_COUNT)),
   defaultProfileId: BrowserProfileId,
   /** Optional so older clients keep reporting; omitting it keeps the last reported rate. */
   recordingFrameRate: Schema.optional(BrowserRecordingFrameRate),
+  recordingPointer: Schema.optional(BrowserRecordingPointer),
+  recordingShowMousePresses: Schema.optional(Schema.Boolean),
 });
 export type PreviewReportProfilesInput = typeof PreviewReportProfilesInput.Type;
 

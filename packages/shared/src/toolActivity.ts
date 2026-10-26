@@ -25,7 +25,9 @@ export function claudeSkillInvocation(
 }
 
 export function isJavaScriptReplTool(toolName: string | null | undefined): boolean {
-  return toolName === "js" || toolName === "cua_repl.js" || toolName === "node_repl.js";
+  return /^(?:js|(?:cua_repl|node_repl)\.js|mcp__(?:cua_repl|node_repl)__js)$/u.test(
+    toolName ?? "",
+  );
 }
 
 export const COMPUTER_USE_TOOL_SOURCE = {
@@ -35,13 +37,28 @@ export const COMPUTER_USE_TOOL_SOURCE = {
 } as const;
 
 export function dynamicToolSurface(toolName: string | null | undefined, input: unknown) {
-  if (toolName === "cua_repl.js") return "computer" as const;
+  if (!isJavaScriptReplTool(toolName)) return undefined;
   const code = asRecord(input)?.code;
-  return isJavaScriptReplTool(toolName) &&
+  if (
     typeof code === "string" &&
-    (/\bsky\s*\./u.test(code) || /["']@oai\/sky["']/u.test(code))
-    ? ("computer" as const)
-    : undefined;
+    (/\bcua\s*\.\s*(?:getBrowser|getTab|createBrowserTab|listBrowsers|listTabs)\s*\(/u.test(code) ||
+      /\bagent\s*\.\s*browsers\b/u.test(code) ||
+      /\.\s*playwright\s*\./u.test(code) ||
+      /\b(?:\w*(?:Tab|Browser)|tab|browser)\s*\.\s*(?:getAXState|getScreenshot|getAXStateAndScreenshot|screenshot|getJsDialog|nameSession)\s*\(/u.test(
+        code,
+      ) ||
+      /\.\s*send\s*\(\s*["'](?:Page|Runtime|Input|Emulation|Target|DOM|Accessibility)\./u.test(
+        code,
+      ))
+  )
+    return "browser" as const;
+  if (
+    toolName === "cua_repl.js" ||
+    toolName === "mcp__cua_repl__js" ||
+    (typeof code === "string" && (/\bsky\s*\./u.test(code) || /["']@oai\/sky["']/u.test(code)))
+  )
+    return "computer" as const;
+  return undefined;
 }
 
 export function dynamicToolTitle(

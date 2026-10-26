@@ -80,11 +80,14 @@ export function ContextWindowMeter(props: {
                 />
               </svg>
             </span>
-            <span className="text-xs tabular-nums">
+            <span data-composer-usage-figure className="text-xs tabular-nums">
               {usedPercentage ?? `${formatContextWindowTokens(usage.usedTokens)} tokens`}
             </span>
             {usedPercentage ? (
-              <span className="hidden text-xs tabular-nums sm:inline">
+              <span
+                data-composer-usage-figure
+                className="composer-context-total text-xs tabular-nums"
+              >
                 · {formatContextWindowTokens(totalProcessedTokens ?? usage.usedTokens)} tokens
               </span>
             ) : null}

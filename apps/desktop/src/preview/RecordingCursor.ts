@@ -2,6 +2,8 @@ import type {
   DesktopPreviewAnnotationTheme,
   DesktopPreviewRecordingInput,
 } from "@t3tools/contracts";
+import { DEFAULT_BROWSER_RECORDING_POINTER } from "@t3tools/contracts";
+import { recordingPointerImage } from "@t3tools/shared/recordingPointer";
 
 import {
   DEFAULT_RECORDING_INPUT_OPTIONS,
@@ -18,6 +20,7 @@ export function installRecordingCursor(
   options: RecordingInputOptions = DEFAULT_RECORDING_INPUT_OPTIONS,
   emit: (input: DesktopPreviewRecordingInput) => void = () => {},
 ) {
+  const pointerAppearance = options.pointer ?? DEFAULT_BROWSER_RECORDING_POINTER;
   const style = document.createElement("style");
   style.textContent =
     "html, html * { cursor: none !important; } @media (prefers-reduced-motion: reduce) { [data-t3code-recording-agent-cursor] { transition: none !important; } }";
@@ -26,20 +29,22 @@ export function installRecordingCursor(
   cursor.setAttribute("data-t3code-recording-cursor", "");
   cursor.style.cssText =
     "position:fixed;left:0;top:0;width:16px;height:24px;pointer-events:none;z-index:2147483647;display:none;";
-  cursor.innerHTML =
-    '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="24" viewBox="0 0 16 24"><path d="M1 1v18l4-4 4 8 3-1.5-4-8H15Z" fill="black" stroke="white" stroke-width="1.5" stroke-linejoin="round"/></svg>';
   const agentCursor = document.createElement("div");
   agentCursor.setAttribute("aria-hidden", "true");
   agentCursor.setAttribute("data-t3code-recording-agent-cursor", "");
   agentCursor.style.cssText =
     "position:fixed;left:0;top:0;width:20px;height:20px;pointer-events:none;z-index:2147483647;display:none;filter:drop-shadow(0 1px 2px #0003);transition:transform 150ms ease-out,opacity 150ms ease-out;";
-  agentCursor.innerHTML =
-    '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="var(--recording-cursor-background,white)" stroke="var(--recording-cursor-primary,#2563eb)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transform:translate(-2px,-2px)"><path d="M4.037 4.688a.495.495 0 0 1 .651-.651l16 6.5a.5.5 0 0 1-.063.947l-6.124 1.58a2 2 0 0 0-1.438 1.435l-1.579 6.126a.5.5 0 0 1-.947.063z"/></svg>';
+  for (const element of [cursor, agentCursor]) {
+    const image = document.createElement("img");
+    image.src = recordingPointerImage(pointerAppearance);
+    image.style.cssText = `width:${pointerAppearance.size}px;height:${pointerAppearance.size / pointerAppearance.imageAspectRatio}px;transform:translate(${-pointerAppearance.hotspotX * 100}%,${-pointerAppearance.hotspotY * 100}%);max-width:none;`;
+    element.replaceChildren(image);
+  }
   document.documentElement.append(style, cursor, agentCursor);
   let controller: "human" | "agent" | "none" = "none";
   let humanPoint: { readonly x: number; readonly y: number } | null = null;
   const drawHuman = () => {
-    if (!humanPoint) return;
+    if (!humanPoint || !pointerAppearance.enabled) return;
     cursor.style.transform = `translate(${humanPoint.x}px, ${humanPoint.y}px)`;
     cursor.style.display = "block";
   };
@@ -109,7 +114,7 @@ export function installRecordingCursor(
     phase: "move" | "click" = "move",
   ) => {
     agentCursor.style.transform = `translate(${point.x}px, ${point.y}px)`;
-    agentCursor.style.display = "block";
+    agentCursor.style.display = pointerAppearance.enabled ? "block" : "none";
     agentCursor.style.opacity = "1";
     agentActive = true;
     window.clearTimeout(agentTimer);

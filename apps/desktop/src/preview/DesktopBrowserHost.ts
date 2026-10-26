@@ -32,6 +32,9 @@ export interface DesktopBrowserTabKey {
 export interface DesktopBrowserTabDebugger {
   readonly webContents: Electron.WebContents;
   readonly debugger: Electron.Debugger;
+  readonly acquireRendering?: () => Promise<() => Promise<void>>;
+  readonly captureScreenshot?: (params: Record<string, unknown>) => Promise<unknown>;
+  readonly screencastCssWidth?: (deviceWidth: number) => number;
   readonly applyViewport?: (
     size: { readonly width: number; readonly height: number } | null,
   ) => Promise<void>;
@@ -43,7 +46,8 @@ interface AttachedTab {
   readonly key: DesktopBrowserTabKey;
   readonly debuggee: DesktopBrowserTabDebugger;
   relay: CdpRelayConnection | null;
-  screenshotTurn: object | null;
+  screenshotTurn: { release?: () => Promise<void> } | null;
+  screencastRendering: Promise<() => Promise<void>> | null;
   readonly waitingScreenshots: Array<() => void>;
   downloadDirectory: string | null;
   pendingDownloadGuid: string | null;
@@ -91,6 +95,11 @@ export const make = Effect.gen(function* () {
     tab.screenshotTurn = null;
     tab.waitingScreenshots.shift()?.();
   };
+  const releaseScreencast = (tab: AttachedTab) => {
+    const rendering = tab.screencastRendering;
+    tab.screencastRendering = null;
+    return rendering?.then((release) => release()).catch(() => {});
+  };
 
   /**
    * Chromium below 157 crashes the whole app when a guest's renderer exits with a
@@ -110,11 +119,24 @@ export const make = Effect.gen(function* () {
           nextScreenshot(tab);
           return;
         }
-        const turn = {};
+        const turn: NonNullable<AttachedTab["screenshotTurn"]> = {};
         tab.screenshotTurn = turn;
-        capture()
-          .finally(() => {
-            if (tab.screenshotTurn === turn) nextScreenshot(tab);
+        const captured = tab.debuggee.acquireRendering
+          ? tab.debuggee.acquireRendering().then((release) => {
+              turn.release = release;
+              if (tab.screenshotTurn !== turn || tab.relay !== relay) {
+                throw new Error("The preview changed while preparing its screenshot.");
+              }
+              return capture();
+            })
+          : capture();
+        captured
+          .finally(async () => {
+            try {
+              await turn.release?.();
+            } finally {
+              if (tab.screenshotTurn === turn) nextScreenshot(tab);
+            }
           })
           .then(resolve, reject);
       };
@@ -132,6 +154,17 @@ export const make = Effect.gen(function* () {
     const relay: CdpRelayConnection = createCdpRelayConnection(
       {
         send: (method, params, sessionId) => {
+          if (method === "Page.getLayoutMetrics" && tab.debuggee.acquireRendering) {
+            return tab.debuggee.acquireRendering().then(async (release) => {
+              try {
+                if (tab.relay !== relay)
+                  throw new Error("The preview connection closed before reading its viewport.");
+                return await send(method, params, sessionId);
+              } finally {
+                await release();
+              }
+            });
+          }
           if (
             sessionId === undefined &&
             (method === "Emulation.clearDeviceMetricsOverride" ||
@@ -164,8 +197,28 @@ export const make = Effect.gen(function* () {
               )
               .then(() => ({}));
           }
+          if (method === "Page.startScreencast" && tab.debuggee.acquireRendering) {
+            const rendering = (tab.screencastRendering ??= tab.debuggee.acquireRendering());
+            return rendering
+              .then(() => {
+                if (tab.relay !== relay)
+                  throw new Error("The preview connection closed before its screencast started.");
+                return send(method, params, sessionId);
+              })
+              .catch((cause: unknown) => {
+                if (tab.screencastRendering === rendering) void releaseScreencast(tab);
+                throw cause;
+              });
+          }
+          if (method === "Page.stopScreencast") {
+            return send(method, params, sessionId).finally(() => releaseScreencast(tab));
+          }
           return method === "Page.captureScreenshot"
-            ? takeScreenshot(tab, relay, () => send(method, params, sessionId))
+            ? takeScreenshot(tab, relay, () =>
+                sessionId === undefined && tab.debuggee.captureScreenshot
+                  ? tab.debuggee.captureScreenshot(params)
+                  : send(method, params, sessionId),
+              )
             : send(method, params, sessionId);
         },
         targetId: () =>
@@ -205,6 +258,8 @@ export const make = Effect.gen(function* () {
     const tab = tabs.get(id);
     if (!tab) return;
     tabs.delete(id);
+    void releaseScreencast(tab);
+    void tab.screenshotTurn?.release?.().catch(() => {});
     tab.relay = null;
     tab.debuggee.debugger.off("message", tab.onMessage);
     tab.debuggee.webContents.off("did-navigate", tab.onNewDocument);
@@ -220,6 +275,7 @@ export const make = Effect.gen(function* () {
       debuggee,
       relay: null,
       screenshotTurn: null,
+      screencastRendering: null,
       waitingScreenshots: [],
       downloadDirectory: null,
       pendingDownloadGuid: null,
@@ -229,11 +285,26 @@ export const make = Effect.gen(function* () {
           const guid = (params as { guid?: unknown } | undefined)?.guid;
           tab.pendingDownloadGuid = typeof guid === "string" ? guid : null;
         }
+        if (method === "Page.screencastFrame" && debuggee.screencastCssWidth) {
+          const frame = params as { readonly metadata?: { readonly deviceWidth?: number } };
+          const width = frame.metadata?.deviceWidth;
+          if (typeof width === "number" && Number.isFinite(width) && width > 0) {
+            // CDP reports native DIP width; recordings position pointers in page CSS pixels.
+            params = {
+              ...frame,
+              metadata: {
+                ...frame.metadata,
+                t3CssViewportWidth: debuggee.screencastCssWidth(width),
+              },
+            };
+          }
+        }
         tab.relay?.event(method, params, sessionId);
       },
       // A screenshot pending when the page loads a new document, a reload included, can
       // stay unanswered. A crashed page lands here once it reloads, well after its renderer died.
       onNewDocument: () => {
+        void tab.screenshotTurn?.release?.().catch(() => {});
         if (tab.screenshotTurn !== null) nextScreenshot(tab);
       },
     };
@@ -255,6 +326,7 @@ export const make = Effect.gen(function* () {
         return;
       }
       if (command.value.type === "release") {
+        void releaseScreencast(tab);
         tab.relay = null;
         return;
       }
@@ -271,6 +343,7 @@ export const make = Effect.gen(function* () {
     Effect.forEach(
       [...tabs.values()],
       (tab) => {
+        void releaseScreencast(tab);
         tab.relay = null;
         return PubSub.publish(outbox, { type: "attached", ...tab.key });
       },

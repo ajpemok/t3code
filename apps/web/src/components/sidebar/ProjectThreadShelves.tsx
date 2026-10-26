@@ -11,6 +11,7 @@ import { AlarmClockOffIcon, Undo2Icon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useLocalStorage } from "~/hooks/useLocalStorage";
 import { useNowMinute } from "~/hooks/useNowMinute";
+import { useClientSettings } from "~/hooks/useSettings";
 import { useCloseInactiveProjectTabs } from "~/hooks/useCloseInactiveProjectTabs";
 import { useThreadRouteRef } from "~/hooks/useThreadRouteTarget";
 import type { useThreadActions } from "~/hooks/useThreadActions";
@@ -25,12 +26,14 @@ import { stackedThreadToast, toastManager } from "../ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 
 export function useProjectThreadSections(threads: readonly SidebarThreadSummary[]) {
+  const hideInactive = useClientSettings((settings) => settings.sidebarHideInactiveEnabled);
   const configs = useServerConfigs();
   const minute = useNowMinute();
   const [wakeClock, setWakeClock] = useState(() => new Date().toISOString());
   const now = wakeClock > `${minute}:00.000Z` ? wakeClock : `${minute}:00.000Z`;
   const sections = partitionProjectSectionThreads(threads, {
     now,
+    hideInactive,
     capabilities: new Map(
       [...configs].map(([id, config]) => [id, config.environment.capabilities]),
     ),

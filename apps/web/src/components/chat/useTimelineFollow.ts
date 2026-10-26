@@ -19,7 +19,6 @@ import { type LegendListRef } from "@legendapp/list/react";
 import {
   CHAT_TIMELINE_ANCHOR_OFFSET,
   timelineContentOverflowsViewport,
-  readTimelinePosition,
   observeTimelineRun,
   type TimelineRunObservation,
   type TimelineScrollMode,
@@ -73,7 +72,6 @@ export function useTimelineFollow(input: TimelineFollowInput) {
     composerRef,
     composerOverlayElement,
     composerTimelineInset,
-    routeThreadKey,
     activeThreadKey,
     activeThreadId,
     isServerThread,
@@ -619,32 +617,24 @@ export function useTimelineFollow(input: TimelineFollowInput) {
     timelineLiveFollowEnabled,
   ]);
 
-  // A thread switch restores that thread's remembered follow state; the refs
-  // the scroll handlers read catch up after commit.
-  const [timelineThreadReset, setTimelineThreadReset] = useState({
-    threadKey: activeThreadKey,
-    followEnd: true,
-  });
-  if (timelineThreadReset.threadKey !== activeThreadKey) {
-    const followEnd = readTimelinePosition(routeThreadKey)?.atEnd !== false;
-    setTimelineThreadReset({ threadKey: activeThreadKey, followEnd });
-    setTimelineLiveFollowEnabled(followEnd);
-    setShowScrollToBottom(!followEnd);
+  const [timelineThreadKey, setTimelineThreadKey] = useState(activeThreadKey);
+  if (timelineThreadKey !== activeThreadKey) {
+    setTimelineThreadKey(activeThreadKey);
+    setTimelineLiveFollowEnabled(true);
+    setShowScrollToBottom(false);
   }
   useEffect(() => {
-    const { followEnd } = timelineThreadReset;
-    isAtEndRef.current = followEnd;
+    isAtEndRef.current = true;
     timelineScrollIntentRef.current = null;
-    timelineScrollModeRef.current = followEnd ? "following-end" : "free-scrolling";
-    liveFollowUserScrollGenerationRef.current = followEnd
-      ? anchorUserScrollGenerationRef.current
-      : null;
+    timelineScrollModeRef.current = "following-end";
+    liveFollowUserScrollGenerationRef.current = anchorUserScrollGenerationRef.current;
     pendingTimelineAnchorRef.current = null;
     positionedTimelineAnchorRef.current = null;
     settledTimelineAnchorRef.current = null;
     activeTimelineAnchorIndexRef.current = null;
     showScrollDebouncer.current.cancel();
-  }, [timelineThreadReset]);
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- A thread switch resets the scroll handlers' refs.
+  }, [timelineThreadKey]);
 
   /** Arms the anchor for a message the user just sent, before its run exists. */
   const anchorNewTurn = (threadKey: string, messageId: MessageId) => {

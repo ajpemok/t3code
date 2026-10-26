@@ -10,7 +10,14 @@ import { environmentThreadDetails, environmentThreadShells } from "~/state/threa
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import type { ThreadStatusPill } from "../Sidebar.logic";
 
-type TaskActivityKind = "working" | "waiting" | "computer" | "browser" | "t3-browser" | "attention";
+type TaskActivityKind =
+  | "working"
+  | "compacting"
+  | "waiting"
+  | "computer"
+  | "browser"
+  | "t3-browser"
+  | "attention";
 
 export function TaskActivitySymbol({ kind }: { readonly kind: TaskActivityKind }) {
   return (
@@ -53,20 +60,30 @@ export function ThreadActivityStatus({
     ["Pending Approval", "Awaiting Input", "Guest Request", "Plan Ready", "Failed"].includes(
       status.label,
     );
-  const tool = attention
-    ? null
-    : activity & SURFACE_USE.computer
-      ? { kind: "computer" as const, label: "Using Computer" }
-      : activity & SURFACE_USE.t3Browser
-        ? { kind: "t3-browser" as const, label: "Using T3 Browser" }
-        : activity & SURFACE_USE.browser
-          ? { kind: "browser" as const, label: "Using Browser" }
-          : null;
+  const compacting = status?.label === "Compacting";
+  const tool =
+    attention || compacting
+      ? null
+      : activity & SURFACE_USE.computer
+        ? { kind: "computer" as const, label: "Using Computer" }
+        : activity & SURFACE_USE.t3Browser
+          ? { kind: "t3-browser" as const, label: "Using T3 Browser" }
+          : activity & SURFACE_USE.browser
+            ? { kind: "browser" as const, label: "Using Browser" }
+            : null;
   if (!tool && (!status || status.label === "Completed")) return null;
   const kind =
-    tool?.kind ?? (status?.label === "Waiting" ? "waiting" : attention ? "attention" : "working");
+    tool?.kind ??
+    (compacting
+      ? "compacting"
+      : status?.label === "Waiting"
+        ? "waiting"
+        : attention
+          ? "attention"
+          : "working");
   return (
     <span
+      data-thread-activity={kind}
       data-thread-surface-use={tool ? activity : undefined}
       className={`inline-flex shrink-0 items-center gap-1 text-3xs ${tool ? "text-info" : (status?.colorClass ?? "")}`}
     >
