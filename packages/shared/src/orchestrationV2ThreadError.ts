@@ -2,8 +2,85 @@ import type {
   OrchestrationV2ProviderFailure,
   OrchestrationV2Run,
   OrchestrationV2TurnItem,
+  OrchestrationV2AppThread,
 } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
+import { MessageId } from "@t3tools/contracts";
+import { modelSelectionsEqual } from "./model.ts";
+
+export function providerErrorRecoveryPlan(
+  input: {
+    readonly thread: Pick<
+      OrchestrationV2AppThread,
+      | "archivedAt"
+      | "deletedAt"
+      | "settledOverride"
+      | "snoozedUntil"
+      | "providerInstanceId"
+      | "modelSelection"
+      | "providerErrorRetryCancelledRunId"
+    >;
+    readonly run: OrchestrationV2Run;
+    readonly failure: OrchestrationV2ProviderFailure | null;
+    readonly blocked: boolean;
+  },
+  limit: number,
+  nowMs: number,
+) {
+  const { thread, run } = input;
+  if (
+    input.blocked ||
+    thread.archivedAt !== null ||
+    thread.deletedAt !== null ||
+    thread.settledOverride === "settled" ||
+    thread.providerErrorRetryCancelledRunId === run.id ||
+    thread.providerInstanceId !== run.providerInstanceId ||
+    !modelSelectionsEqual(thread.modelSelection, run.modelSelection) ||
+    (thread.snoozedUntil != null && DateTime.toEpochMillis(thread.snoozedUntil) > nowMs)
+  )
+    return null;
+  return providerErrorRetryPlan(run, input.failure, limit, nowMs);
+}
+
+export function isRecoverableProviderFailure(failure: OrchestrationV2ProviderFailure | null) {
+  if (
+    !failure ||
+    failure.retryable === false ||
+    (failure.class !== "provider_error" && failure.class !== "transport_error") ||
+    /(?:^|[_: -])(?:400|401|403|404)(?:$|[_: -])|invalid_api_key|unauthori[sz]ed|authentication/iu.test(
+      failure.code ?? "",
+    )
+  )
+    return false;
+  return (
+    failure.retryable === true ||
+    /(?:^|[_: -])(?:429|500|502|503|504|529)(?:$|[_: -])|overloaded|at_capacity|capacity_exceeded|temporarily_unavailable|service_unavailable|server_error|econnreset|etimedout/iu.test(
+      failure.code ?? "",
+    )
+  );
+}
+
+export function providerErrorRetryPlan(
+  run: Pick<OrchestrationV2Run, "id" | "status" | "userMessageId" | "completedAt">,
+  failure: OrchestrationV2ProviderFailure | null,
+  limit: number,
+  nowMs: number,
+) {
+  if (run.status !== "failed" || run.completedAt === null || !isRecoverableProviderFailure(failure))
+    return null;
+  const stoppedAt = DateTime.toEpochMillis(run.completedAt);
+  if (nowMs - stoppedAt > 10 * 60_000 || stoppedAt > nowMs + 999) return null;
+  const previousAttempt = /^provider-error-retry:(\d+):/u.exec(run.userMessageId)?.[1];
+  const attempt = previousAttempt === undefined ? 1 : Number(previousAttempt) + 1;
+  if (attempt > limit || attempt > 5 || limit <= 0) return null;
+  const delayMs = [10_000, 30_000, 60_000][Math.min(attempt - 1, 2)]!;
+  return {
+    attempt,
+    delayMs,
+    dueAt: stoppedAt + delayMs,
+    messageId: MessageId.make(`provider-error-retry:${attempt}:${run.id}`),
+  };
+}
 
 type ErrorTurnItem = Extract<OrchestrationV2TurnItem, { type: "error" }>;
 /** Only error items are read, so callers may pass items stripped of other fields. */

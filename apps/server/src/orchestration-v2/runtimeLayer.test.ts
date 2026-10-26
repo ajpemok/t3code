@@ -1,5 +1,6 @@
 import { SourceControlProviderKind } from "@t3tools/contracts";
 import { limitRecoveryCommand } from "./UsageLimitRecoveryWorker.ts";
+import { providerErrorRecoveryCommand } from "./ProviderErrorRecoveryWorker.ts";
 import * as McpProviderSessions from "@t3tools/provider-core/server/McpProviderSessions";
 import * as SourceControlProviderRegistry from "../sourceControl/SourceControlProviderRegistry.ts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -283,7 +284,7 @@ const layerTest = Layer.mergeAll(
   Layer.provide(SqlitePersistence.layerMemory),
   Layer.provide(layerCheckpointStoreTest),
   Layer.provide(layerServerConfig),
-  Layer.provide(ServerSettings.layerTest()),
+  Layer.provideMerge(ServerSettings.layerTest()),
   Layer.provide(layerTestProviderInstanceRegistry),
   Layer.provide(layerGitWorkflowTest),
   Layer.provide(layerProjectServiceTest),
@@ -6022,7 +6023,7 @@ it.layer(layerSharedApplicationDataPlaneTest)("shared application data plane", (
 });
 
 it.layer(layerTest)("usage-limit recovery", (it) => {
-  it.effect.each(["interrupted", "usage_limit"] as const)(
+  it.effect.each(["interrupted", "usage_limit", "provider_error"] as const)(
     "manually resumes an %s run ahead of its queued message only once",
     (reason) =>
       Effect.gen(function* () {
@@ -6103,7 +6104,7 @@ it.layer(layerTest)("usage-limit recovery", (it) => {
           ],
         });
         let scheduledResume: ReturnType<typeof limitRecoveryCommand> = null;
-        if (reason === "usage_limit") {
+        if (reason !== "interrupted") {
           const resetAt = DateTime.formatIso(DateTime.add(now, { minutes: 1 }));
           yield* events.write({
             events: [
@@ -6129,27 +6130,29 @@ it.layer(layerTest)("usage-limit recovery", (it) => {
                   completedAt: now,
                   updatedAt: now,
                   failure: {
-                    class: "usage_limit",
+                    class: reason,
                     message: "Plan limit reached.",
-                    code: "usageLimitExceeded",
-                    retryable: null,
+                    code: reason === "usage_limit" ? "usageLimitExceeded" : "api_error_529",
+                    retryable: reason === "provider_error" ? true : null,
                     resetAt,
                   },
                 },
               },
             ],
           });
-          const shell = (yield* orchestrator.getShellSnapshot()).threads.find(
-            (thread) => thread.id === threadId,
-          )!;
-          yield* orchestrator.dispatch(
-            limitRecoveryCommand(shell, true, DateTime.toEpochMillis(now))!,
-          );
-          const armed = (yield* orchestrator.getShellSnapshot()).threads.find(
-            (thread) => thread.id === threadId,
-          )!;
-          scheduledResume = limitRecoveryCommand(armed, true, Date.parse(resetAt));
-          assert.isNotNull(scheduledResume);
+          if (reason === "usage_limit") {
+            const shell = (yield* orchestrator.getShellSnapshot()).threads.find(
+              (thread) => thread.id === threadId,
+            )!;
+            yield* orchestrator.dispatch(
+              limitRecoveryCommand(shell, true, DateTime.toEpochMillis(now))!,
+            );
+            const armed = (yield* orchestrator.getShellSnapshot()).threads.find(
+              (thread) => thread.id === threadId,
+            )!;
+            scheduledResume = limitRecoveryCommand(armed, true, Date.parse(resetAt));
+            assert.isNotNull(scheduledResume);
+          }
         }
         const resume = (suffix: string) => ({
           type: "message.dispatch" as const,
@@ -6865,3 +6868,168 @@ it.layer(layerQueueResumeDisabledInstanceTest)(
     );
   },
 );
+
+it.layer(layerTest)("temporary provider error recovery", (it) => {
+  it.effect.each([
+    "resume",
+    "cancel",
+    "stop",
+    "changed-model",
+    "queued",
+    "disabled",
+    "too-early",
+    "newer-run",
+  ] as const)("guards automatic provider continuation against %s", (scenario) =>
+    Effect.gen(function* () {
+      const orchestrator = yield* Orchestrator.OrchestratorV2;
+      const events = yield* EventSink.EventSinkV2;
+      const now = yield* DateTime.now;
+      const threadId = ThreadId.make(`provider-retry:${scenario}`);
+      yield* (yield* ServerSettings.ServerSettingsService).updateSettings({
+        providerErrorRetryLimit: 3,
+      });
+      const projectId = ProjectId.make(`provider-retry:project:${scenario}`);
+      yield* seedProject({
+        projectId,
+        title: "Retry project",
+        workspaceRoot: process.cwd(),
+        defaultModelSelection: modelSelection,
+        createdAt: DateTime.formatIso(now),
+      });
+      yield* orchestrator.dispatch({
+        type: "thread.create",
+        commandId: CommandId.make(`retry:create:${scenario}`),
+        threadId,
+        projectId,
+        title: "Retry thread",
+        modelSelection,
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        branch: null,
+        worktreePath: null,
+        createdBy: "user",
+        creationSource: "web",
+      });
+      yield* orchestrator.dispatch({
+        type: "message.dispatch",
+        commandId: CommandId.make(`retry:start:${scenario}`),
+        threadId,
+        messageId: MessageId.make(`retry:original:${scenario}`),
+        text: "Work on this.",
+        attachments: [],
+        dispatchMode: { type: "defer_start" },
+        createdBy: "user",
+        creationSource: "web",
+      });
+      const initial = yield* orchestrator.getThreadProjection(threadId);
+      const run = { ...initial.runs[0]!, status: "failed" as const, completedAt: now };
+      const failure = {
+        class: "provider_error" as const,
+        message: "Capacity unavailable",
+        code: "api_error_529",
+        retryable: true,
+      };
+      yield* events.write({
+        events: [
+          {
+            id: EventId.make(`retry:failed:${scenario}`),
+            type: "run.updated",
+            threadId,
+            occurredAt: now,
+            payload: run,
+          },
+          {
+            id: EventId.make(`retry:error:${scenario}`),
+            type: "turn-item.updated",
+            threadId,
+            occurredAt: now,
+            payload: {
+              id: TurnItemId.make(`retry:error:${scenario}`),
+              threadId,
+              runId: run.id,
+              nodeId: run.rootNodeId,
+              providerThreadId: null,
+              providerTurnId: null,
+              nativeItemRef: null,
+              parentItemId: null,
+              ordinal: 1,
+              status: "failed",
+              title: failure.message,
+              startedAt: now,
+              completedAt: now,
+              updatedAt: now,
+              type: "error",
+              failure,
+            },
+          },
+        ],
+      });
+      const command = providerErrorRecoveryCommand(
+        { thread: initial.thread, run, failure, blocked: false },
+        3,
+        DateTime.toEpochMillis(now) + 10_000,
+      )!;
+      assert.isNotNull(command);
+      if (scenario === "cancel")
+        yield* orchestrator.dispatch({
+          type: "thread.metadata.update",
+          commandId: CommandId.make("retry:cancel"),
+          threadId,
+          providerErrorRetryCancelledRunId: run.id,
+        });
+      if (scenario === "stop")
+        yield* orchestrator.dispatch({
+          type: "thread.stop",
+          commandId: CommandId.make("retry:stop"),
+          threadId,
+        });
+      if (scenario === "disabled")
+        yield* (yield* ServerSettings.ServerSettingsService).updateSettings({
+          providerErrorRetryLimit: 0,
+        });
+      if (scenario === "changed-model")
+        yield* events.write({
+          events: [
+            {
+              id: EventId.make("retry:model-change"),
+              type: "thread.metadata-updated",
+              threadId,
+              occurredAt: now,
+              payload: {
+                ...initial.thread,
+                modelSelection: { ...modelSelection, model: "different-model" },
+              },
+            },
+          ],
+        });
+      if (scenario === "queued" || scenario === "newer-run")
+        yield* orchestrator.dispatch({
+          type: "message.dispatch",
+          commandId: CommandId.make(`retry:replacement:${scenario}`),
+          threadId,
+          messageId: MessageId.make(`retry:replacement:${scenario}`),
+          text: "New instructions",
+          attachments: [],
+          dispatchMode: { type: scenario === "queued" ? "queue_after_active" : "defer_start" },
+          createdBy: "user",
+          creationSource: "web",
+        });
+      const before = yield* orchestrator.getThreadProjection(threadId);
+      if (scenario !== "too-early") yield* TestClock.adjust("10 seconds");
+      yield* orchestrator.dispatch(command);
+      yield* orchestrator.dispatch(command);
+      const after = yield* orchestrator.getThreadProjection(threadId);
+      assert.lengthOf(after.runs, before.runs.length + (scenario === "resume" ? 1 : 0));
+      assert.lengthOf(
+        after.messages.filter(
+          (message) => command.type === "message.dispatch" && message.id === command.messageId,
+        ),
+        scenario === "resume" ? 1 : 0,
+      );
+      assert.equal(
+        after.messages.find((message) => message.id === run.userMessageId)?.text,
+        "Work on this.",
+      );
+    }),
+  );
+});

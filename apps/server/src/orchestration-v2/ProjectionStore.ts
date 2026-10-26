@@ -10,6 +10,7 @@ import type {
   OrchestrationV2ThreadHistoryPage,
 } from "@t3tools/contracts";
 import {
+  latestExecutedRun,
   latestRootProviderFailure,
   latestUnheldRun,
   threadErrorSummary,
@@ -288,6 +289,13 @@ export interface ProjectionProviderControlContext {
   readonly run: OrchestrationV2Run | undefined;
 }
 
+export interface ProjectionProviderErrorRecoveryCandidate {
+  readonly thread: OrchestrationV2AppThread;
+  readonly run: OrchestrationV2Run;
+  readonly failure: NonNullable<ReturnType<typeof latestRootProviderFailure>>;
+  readonly blocked: boolean;
+}
+
 export interface ProjectionProviderControlTarget {
   readonly providerThreadId: ProviderThreadId;
   readonly providerTurnId: ProviderTurnId;
@@ -506,6 +514,12 @@ export interface ProjectionStoreV2Shape {
     readonly autoResume: boolean;
     readonly snooze: boolean;
   }) => Effect.Effect<ReadonlyArray<ProjectionLimitRecoveryCandidate>, ProjectionStoreV2Error>;
+  readonly getProviderErrorRecoveryCandidates: (
+    now: DateTime.Utc,
+  ) => Effect.Effect<
+    ReadonlyArray<ProjectionProviderErrorRecoveryCandidate>,
+    ProjectionStoreV2Error
+  >;
   readonly getSettlementCandidates: (
     threadId?: ThreadId,
   ) => Effect.Effect<ReadonlyArray<ProjectionSettlementCandidate>, ProjectionStoreV2Error>;
@@ -1731,6 +1745,7 @@ export function threadShellFromProjection(
     opens: projection.thread.opens ?? null,
     titleRegeneration: projection.thread.titleRegeneration ?? null,
     limitRecovery: projection.thread.limitRecovery ?? null,
+    providerErrorRetryCancelledRunId: projection.thread.providerErrorRetryCancelledRunId ?? null,
     deletedAt: projection.thread.deletedAt,
   };
 }
@@ -1993,6 +2008,7 @@ function shellFromState(input: {
     opens: input.state.thread.opens ?? null,
     titleRegeneration: input.state.thread.titleRegeneration ?? null,
     limitRecovery: input.state.thread.limitRecovery ?? null,
+    providerErrorRetryCancelledRunId: input.state.thread.providerErrorRetryCancelledRunId ?? null,
     deletedAt: input.state.thread.deletedAt,
   };
 }
@@ -3871,6 +3887,59 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
               : new ProjectionStoreReadError({ threadId, cause }),
           ),
         ),
+    );
+
+    const getProviderErrorRecoveryCandidates = Effect.fn(
+      "ProjectionStore.getProviderErrorRecoveryCandidates",
+    )(
+      function* (now: DateTime.Utc) {
+        const rows = yield* sql<{
+          readonly thread_json: string;
+          readonly run_json: string;
+          readonly failure_json: string;
+          readonly blocked: number;
+        }>`
+        SELECT t.payload_json AS thread_json, r.payload_json AS run_json, item.payload_json AS failure_json,
+          (EXISTS (SELECT 1 FROM orchestration_v2_projection_runtime_requests request WHERE request.thread_id = t.thread_id AND request.status = 'pending')
+           OR EXISTS (SELECT 1 FROM orchestration_v2_projection_runs queued WHERE queued.thread_id = t.thread_id AND queued.status = 'queued')
+           OR EXISTS (SELECT 1 FROM orchestration_v2_projection_turn_items stop WHERE stop.thread_id = t.thread_id AND stop.run_id = r.run_id AND stop.type = 'run_interrupt_request')
+           OR EXISTS (SELECT 1 FROM orchestration_v2_projection_provider_turns turn WHERE turn.thread_id = t.thread_id AND turn.node_id IS json_extract(r.payload_json, '$.rootNodeId') AND turn.status IN ('running', 'pending'))) AS blocked
+        FROM orchestration_v2_projection_runs r
+        INNER JOIN orchestration_v2_projection_threads t ON t.thread_id = r.thread_id
+        INNER JOIN orchestration_v2_projection_turn_items item ON item.turn_item_id = (
+          SELECT error.turn_item_id FROM orchestration_v2_projection_turn_items error
+          WHERE error.thread_id = t.thread_id AND error.run_id = r.run_id
+            AND error.type = 'error' AND error.status = 'failed'
+            AND error.node_id IS json_extract(r.payload_json, '$.rootNodeId')
+          ORDER BY error.updated_at DESC, error.ordinal DESC, error.turn_item_id DESC LIMIT 1
+        )
+        WHERE r.status = 'failed' AND r.completed_at >= ${DateTime.formatIso(DateTime.subtract(now, { minutes: 10 }))}
+          AND t.deleted_at IS NULL
+          AND json_extract(t.payload_json, '$.archivedAt') IS NULL
+          AND json_extract(t.payload_json, '$.settledOverride') IS NOT 'settled'
+          AND json_extract(item.payload_json, '$.failure.class') IN ('provider_error', 'transport_error')
+          AND r.run_id = (
+            SELECT latest.run_id FROM orchestration_v2_projection_runs latest WHERE latest.thread_id = t.thread_id
+              AND latest.status <> 'queued'
+              AND NOT (latest.status = 'cancelled' AND json_extract(latest.payload_json, '$.startedAt') IS NULL)
+            ORDER BY latest.completed_at IS NULL DESC, latest.completed_at DESC, latest.ordinal DESC, latest.run_id DESC LIMIT 1
+          )
+        ORDER BY t.thread_id
+      `;
+        const candidates: ProjectionProviderErrorRecoveryCandidate[] = [];
+        for (const row of rows) {
+          const item = yield* decodeTurnItemPayload(row.failure_json);
+          if (item.type !== "error" || item.failure == null) continue;
+          candidates.push({
+            thread: yield* decodeThreadPayload(row.thread_json),
+            run: yield* decodeRunPayload(row.run_json),
+            failure: item.failure,
+            blocked: row.blocked !== 0,
+          });
+        }
+        return candidates;
+      },
+      Effect.mapError((cause) => new ProjectionStoreSetupError({ cause })),
     );
 
     const getLimitRecoveryCandidates = Effect.fn("ProjectionStore.getLimitRecoveryCandidates")(
@@ -6841,6 +6910,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
       getPlan: readOnReader(getPlan),
       getProviderControlContext: readOnReader(getProviderControlContext),
       getLimitRecoveryCandidates: readOnReader(getLimitRecoveryCandidates),
+      getProviderErrorRecoveryCandidates: readOnReader(getProviderErrorRecoveryCandidates),
       getRecoveryThreadIds: readOnReader(getRecoveryThreadIds),
       getUnreadableThreadIds: readOnReader(getUnreadableThreadIds),
       getThreadSnapshot: readOnReader(getThreadSnapshot),
@@ -7094,6 +7164,46 @@ export const layerMemory: Layer.Layer<ProjectionStoreV2> = Layer.effect(
                 settledAt: thread.settledAt,
                 pullRequests: thread.pullRequests ?? [],
               })),
+          ),
+        ),
+      getProviderErrorRecoveryCandidates: (now) =>
+        Ref.get(replayState).pipe(
+          Effect.map((state) =>
+            [...state.projections.values()]
+              .flatMap((projection): ProjectionProviderErrorRecoveryCandidate[] => {
+                const { thread } = projection;
+                const run = latestExecutedRun(projection.runs);
+                const failure = latestRootProviderFailure(run, projection.turnItems);
+                if (
+                  !run?.completedAt ||
+                  !failure ||
+                  (failure.class !== "provider_error" && failure.class !== "transport_error") ||
+                  DateTime.toEpochMillis(run.completedAt) < DateTime.toEpochMillis(now) - 600_000 ||
+                  thread.deletedAt !== null ||
+                  thread.archivedAt !== null ||
+                  thread.settledOverride === "settled"
+                )
+                  return [];
+                return [
+                  {
+                    thread,
+                    run,
+                    failure,
+                    blocked:
+                      projection.runtimeRequests.some((request) => request.status === "pending") ||
+                      projection.runs.some((candidate) => candidate.status === "queued") ||
+                      projection.turnItems.some(
+                        (item) => item.runId === run.id && item.type === "run_interrupt_request",
+                      ) ||
+                      projection.providerTurns.some(
+                        (turn) =>
+                          turn.nodeId === run.rootNodeId &&
+                          (turn.status === "running" || turn.status === "pending"),
+                      ),
+                  },
+                ];
+              })
+              .toSorted((a, b) => a.thread.id.localeCompare(b.thread.id)),
           ),
         ),
       getLimitRecoveryCandidates: (options) =>
