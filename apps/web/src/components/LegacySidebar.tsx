@@ -131,7 +131,7 @@ import { useComposerDraftStore } from "../composerDraftStore";
 import { useNewThreadHandler } from "../hooks/useHandleNewThread";
 import { useDesktopUpdateState } from "../state/desktopUpdate";
 
-import { useThreadActions } from "../hooks/useThreadActions";
+import { useAcknowledgeThreadWoke, useThreadActions } from "../hooks/useThreadActions";
 import { projectEnvironment } from "../state/projects";
 import { threadEnvironment, useEnvironmentThread } from "../state/threads";
 import { readUnloadedThreadCount } from "../state/olderSettledShelf";
@@ -465,6 +465,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     return () => window.removeEventListener("dragend", clearFileDrag);
   }, [isFileDragOver]);
   const { leaseLiveStatus, rowRef } = useSidebarRowSubscriptionLease(isActive);
+  const acknowledgeWoke = useAcknowledgeThreadWoke();
   const localLastVisitedAt = useUiStateStore((state) => state.threadLastVisitedAtById[threadKey]);
   const lastVisitedAt = resolveThreadLastVisitedAt(thread.lastVisitedAt, localLastVisitedAt);
   const isSelected = useThreadSelectionStore((state) => state.selectedThreadKeys.has(threadKey));
@@ -1012,6 +1013,15 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                       threadRef={scopeThreadRef(thread.environmentId, thread.id)}
                       enabled={leaseLiveStatus}
                       status={threadStatus}
+                      onAcknowledgeWoke={
+                        threadStatus?.wokeAt
+                          ? () =>
+                              acknowledgeWoke(
+                                scopeThreadRef(thread.environmentId, thread.id),
+                                threadStatus.wokeAt!,
+                              )
+                          : undefined
+                      }
                     />
                     <RelativeTime
                       timestamp={thread.latestUserMessageAt ?? thread.updatedAt ?? thread.createdAt}
