@@ -339,6 +339,72 @@ the command policy alongside the existing bounded command projection.
 
 These changes derive current activity without rewriting old task results or live history.
 
+## Provider Error Recovery
+
+Retry reported temporary provider and transport failures through the server scheduler,
+with a saved limit of three by default, capped at five. Use increasing delays and
+durable continuation message IDs. Keep the original message and queued work intact.
+Cancel, Stop, a changed provider/model, pending input, active native provider work,
+newer runs and the normal thread lifecycle must prevent stale retries. Revalidate
+the source run and current settings inside the serialised command before dispatch.
+Old failures and permanent or usage-limit failures retain their own recovery paths.
+
+| Files                                                                 | Fork Responsibility                                                    |
+| --------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `packages/shared/src/orchestrationV2ThreadError.ts`                   | Temporary-failure policy, bounded retry chain and deadlines.           |
+| `packages/shared/src/orchestrationV2ThreadError.test.ts`              | Limits, stable identities, stale readings and permanent failures.      |
+| `packages/contracts/src/settings.ts`                                  | Per-environment retry limit and Off value.                             |
+| `packages/contracts/src/settings.test.ts`                             | Default, bounds and disabled setting.                                  |
+| `packages/contracts/src/orchestrationV2.ts`                           | Cancellation marker and guarded automatic continuation.                |
+| `packages/client-runtime/src/operations/commands.ts`                  | Send cancellation through the protected metadata command.              |
+| `packages/client-runtime/src/state/models.ts`                         | Preserve cancellation across shell updates.                            |
+| `apps/server/src/orchestration-v2/ProviderErrorRecoveryWorker.ts`     | Scheduled, idempotent recovery with no client timer.                   |
+| `apps/server/src/orchestration-v2/ProjectionStore.ts`                 | Bounded candidate reads and native-work/Stop guards.                   |
+| `apps/server/src/orchestration-v2/ProjectionStore.test.ts`            | SQL/memory candidate, lifecycle and native-work parity.                |
+| `apps/server/src/orchestration-v2/Orchestrator.ts`                    | Commit-time validation, cancellation and manual Resume.                |
+| `apps/server/src/orchestration-v2/runtimeLayer.ts`                    | Register the worker with the existing scheduler.                       |
+| `apps/server/src/orchestration-v2/runtimeLayer.test.ts`               | Retry, cancellation races, duplicates and queued-message preservation. |
+| `apps/server/src/orchestration-v2/ProviderTurnControlService.test.ts` | Updated projection-service fixture.                                    |
+| `apps/web/src/components/ChatView.tsx`                                | Current-thread recovery and manual Resume availability.                |
+| `apps/web/src/components/chat/ProviderErrorRecoveryBanner.tsx`        | Countdown and permission-aware cancellation.                           |
+| `apps/web/src/components/settings/SettingsPanels.tsx`                 | Scoped retry limit, mixed values and restore defaults.                 |
+| `apps/web/src/components/settings/settingsSearch.ts`                  | Discoverable recovery setting.                                         |
+
+Only advertise automatic recovery when the connected environment reports the
+capability. Older or official servers must not show a countdown for a worker they lack.
+
+| Files                                                   | Fork Responsibility                                          |
+| ------------------------------------------------------- | ------------------------------------------------------------ |
+| `packages/contracts/src/environment.ts`                 | Optional recovery capability for older-server compatibility. |
+| `packages/contracts/src/environment.test.ts`            | Preserve missing capabilities and explicit support.          |
+| `apps/server/src/environment/ServerEnvironment.ts`      | Advertise the installed worker.                              |
+| `apps/server/src/environment/ServerEnvironment.test.ts` | Verify the server reports recovery support.                  |
+
+## Wake Indicators and Window Resizing
+
+Grouped rows use the same snooze-wake calculation and acknowledgement command as
+the flat view. Keep Woke until visited or dismissed. Its brief alarm effect settles
+to a static clock and pauses with the other activity effects.
+
+Give window-width changes to an open inline side panel, preserving the conversation
+width within existing size limits. Closed, sheet and maximised panels must not
+accumulate viewport deltas. Sidebar drags still update the size cap. Persist divider
+adjustments at drag end rather than writing preferences on every window resize.
+
+| Files                                                           | Fork Responsibility                                          |
+| --------------------------------------------------------------- | ------------------------------------------------------------ |
+| `apps/web/src/components/Sidebar.logic.ts`                      | Shared Woke presentation and activity priority.              |
+| `apps/web/src/components/Sidebar.logic.test.ts`                 | Wake acknowledgement and settled-thread regression.          |
+| `apps/web/src/components/LegacySidebar.tsx`                     | Grouped wake dismissal through native visitation.            |
+| `apps/web/src/components/sidebar/SidebarThreadRow.tsx`          | Flat alarm presentation in both row layouts.                 |
+| `apps/web/src/components/sidebar/ThreadSurfaceUseIndicator.tsx` | Wake symbol and optional acknowledgement control.            |
+| `apps/web/src/index.css`                                        | Bounded wake animation and static reduced-motion state.      |
+| `apps/web/src/hooks/usePreviewPanelInlineSize.ts`               | Viewport measurements and mode changes.                      |
+| `apps/web/src/hooks/useResizableWidth.ts`                       | Apply viewport deltas without changing other width controls. |
+| `apps/web/src/hooks/usePreviewPanelInlineSize.browser.test.tsx` | Window resize, closed-panel and reopen regression.           |
+| `apps/web/src/components/chat/ChatRightPanel.tsx`               | Enable window-edge resizing only for the open inline panel.  |
+| `apps/web/src/components/preview/PreviewPanelShell.tsx`         | Match enabled state in standalone panel callers.             |
+
 ## Fork Maintenance Files
 
 | Files                            | Fork Responsibility                                                          |

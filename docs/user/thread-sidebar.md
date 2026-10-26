@@ -45,6 +45,8 @@ This closes views; it does not delete files or stop development servers or emula
 
 Working, Waiting, Computer, Browser and T3 Browser have distinct activity symbols.
 Compacting uses a separate loading indicator in the theme's error accent.
+Woke marks an unread snooze wake in both views. Open the thread or dismiss its
+Woke notification to acknowledge it.
 Browser use carries the Brave logo. The grouped view puts status above the timestamp
 on the right. Working uses the project colour, with a softer shade for subagents.
 Effects pause offscreen, in hidden windows and with reduced motion.
@@ -77,6 +79,19 @@ model family. The gauge reads existing snapshots without starting another quota 
 Choose **Header Scene** in the same settings to select a Sydney backdrop.
 **Header Effects** controls brief hover and idle light sweeps. Effects pause while
 the window is hidden or unfocused and respect your reduced-motion preference.
+
+## Recover From a Provider Error
+
+Update the connected environment to use automatic provider recovery.
+Temporary capacity and connection failures retry up to three times, with increasing
+delays. **Provider Error Retries** in **Settings → General** sets the limit from one
+to five; choose **Off** to disable it. The composer shows the countdown and **Cancel retry**.
+Automatic recovery applies to failures from the last ten minutes. New instructions,
+queued messages and Stop take priority. Authentication, permission and quota errors
+keep their existing recovery controls.
+
+Choose **Resume** to continue manually after cancelling automatic recovery or reaching
+its limit. Your queued messages remain available.
 
 ## Start a Thread
 
