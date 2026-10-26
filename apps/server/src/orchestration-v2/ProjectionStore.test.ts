@@ -76,6 +76,98 @@ const traceSqlStatements = () => {
   return { statements, tracer };
 };
 
+it.effect("tracks runless native subagent work in direct and listed shells", () =>
+  Effect.gen(function* () {
+    const store = yield* ProjectionStore.ProjectionStoreV2;
+    const now = yield* DateTime.now;
+    for (const creationSource of ["provider", "mcp"] as const) {
+      const threadId = ThreadId.make(`thread:runless-child:${creationSource}`);
+      const parentId = ThreadId.make("thread:runless-child:parent");
+      const nodeId = NodeId.make(`node:runless-child:${creationSource}`);
+      yield* store.apply({
+        id: EventId.make(`event:runless-child:${creationSource}:created`),
+        type: "thread.created",
+        threadId,
+        occurredAt: now,
+        payload: {
+          createdBy: "agent",
+          creationSource,
+          id: threadId,
+          projectId: ProjectId.make("project:runless-child"),
+          title: "Native child",
+          providerInstanceId,
+          modelSelection,
+          runtimeMode: "full-access",
+          interactionMode: "default",
+          branch: null,
+          worktreePath: null,
+          activeProviderThreadId: null,
+          lineage: {
+            parentThreadId: parentId,
+            relationshipToParent: "subagent",
+            rootThreadId: parentId,
+          },
+          forkedFrom: null,
+          createdAt: now,
+          updatedAt: now,
+          archivedAt: null,
+          settledOverride: null,
+          settledAt: null,
+          lastVisitedAt: null,
+          deletedAt: null,
+        },
+      });
+      for (const status of ["pending", "running", "waiting", "completed", "failed"] as const) {
+        const active = status === "pending" || status === "running" || status === "waiting";
+        yield* store.apply({
+          id: EventId.make(`event:runless-child:${creationSource}:${status}`),
+          type: "node.updated",
+          threadId,
+          nodeId,
+          driver,
+          occurredAt: now,
+          payload: {
+            id: nodeId,
+            threadId,
+            runId: null,
+            parentNodeId: null,
+            rootNodeId: nodeId,
+            kind: "root_turn",
+            status,
+            countsForRun: false,
+            providerThreadId: null,
+            providerTurnId: null,
+            nativeItemRef: null,
+            runtimeRequestId: null,
+            checkpointScopeId: null,
+            startedAt: status === "pending" ? null : now,
+            completedAt: active ? null : now,
+          },
+        });
+        const listed = (yield* store.getShellSnapshot()).threads.find((row) => row.id === threadId);
+        yield* store.getThread(threadId);
+        for (const shell of [listed, yield* store.getThreadShell(threadId)]) {
+          const expected =
+            creationSource === "provider" ? (status === "pending" ? "preparing" : status) : "idle";
+          assert.strictEqual(shell?.status, expected);
+          assert.strictEqual(shell?.latestRunId, null);
+          assert.strictEqual(shell?.activeRunId, null);
+          assert.strictEqual(
+            shell?.activityRunStatus,
+            creationSource === "provider" && active ? expected : null,
+          );
+          assert.strictEqual(
+            shell?.activityRunStartedAt ? DateTime.formatIso(shell.activityRunStartedAt) : null,
+            creationSource === "provider" && active && status !== "pending"
+              ? DateTime.formatIso(now)
+              : null,
+          );
+        }
+      }
+    }
+  }).pipe(Effect.provide(layerTest)),
+);
+
 const addRolledBackRecoveryCandidate = Effect.fn("addRolledBackRecoveryCandidate")(function* (
   suffix: string,
 ) {

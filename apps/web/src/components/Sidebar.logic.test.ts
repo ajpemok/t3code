@@ -58,6 +58,38 @@ import {
 const localEnvironmentId = EnvironmentId.make("environment-local");
 
 describe("project section visibility", () => {
+  it("keeps runless native children in the active set from their shell activity", () => {
+    const parentId = ThreadId.make("native-parent");
+    const base = makeThreadFixture();
+    for (const status of ["preparing", "running", "waiting"] as const) {
+      const source = {
+        ...base.source,
+        creationSource: "provider" as const,
+        lineage: {
+          rootThreadId: parentId,
+          parentThreadId: parentId,
+          relationshipToParent: "subagent" as const,
+        },
+        latestRunId: null,
+        activeProviderThreadId: null,
+        status,
+        activityRunStatus: status,
+        activityRunStartedAt: base.source.updatedAt,
+      };
+      const child = presentThreadShell(localEnvironmentId, source);
+      expect(activeSubagentsByParent([child]).get(`${localEnvironmentId}:${parentId}`)).toEqual([
+        child,
+      ]);
+      const finished = presentThreadShell(localEnvironmentId, {
+        ...source,
+        status: "completed",
+        activityRunStatus: null,
+        activityRunStartedAt: null,
+      });
+      expect(activeSubagentsByParent([finished]).size).toBe(0);
+    }
+  });
+
   const now = "2026-10-25T12:00:00.000Z";
   const capabilities = new Map([
     ["environment-test", { threadSettlement: true, threadSnooze: true }],

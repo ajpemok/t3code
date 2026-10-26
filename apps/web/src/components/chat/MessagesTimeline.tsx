@@ -121,13 +121,16 @@ import { useThreadFindPositionReader } from "./useThreadFindPositionReader";
 import { ThreadActivityAnnouncer } from "./ThreadActivityAnnouncer";
 import { useStableHandoffRuns, useIncrementalTimelineRows, useStableRows } from "./useTimelineRows";
 
-function timelineListStateFor(identity: string): {
+function timelineListStateFor(
+  identity: string,
+  restoreReadingPosition: boolean,
+): {
   readonly identity: string;
   readonly rememberedPosition: RememberedTimelinePosition | undefined;
   readonly workGroupViewState: WorkGroupViewState;
 } {
   const saved = readTimelinePosition(identity);
-  const rememberedPosition = saved ? { ...saved, atEnd: true } : undefined;
+  const rememberedPosition = saved && !restoreReadingPosition ? { ...saved, atEnd: true } : saved;
   return {
     identity,
     rememberedPosition,
@@ -386,7 +389,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
   // Find open at the opening is part of the snapshot: opening find later
   // announces its own navigation (threadFindStore's announceOpening).
   const [listState, setListState] = useState(() => ({
-    ...timelineListStateFor(listIdentityKey),
+    ...timelineListStateFor(listIdentityKey, findOpen),
     findOpenAtOpening: findOpen,
   }));
   const [expandedRunIds, setExpandedRunIds] = useState<ReadonlySet<RunId>>(
@@ -411,7 +414,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
   let paintedExpandedAttemptIds = expandedAttemptIds;
   const identityChanged = listState.identity !== listIdentityKey;
   const { rememberedPosition, workGroupViewState } = identityChanged
-    ? timelineListStateFor(listIdentityKey)
+    ? timelineListStateFor(listIdentityKey, findOpen)
     : listState;
   if (identityChanged) {
     setPlayingAudioRows(new Map());
