@@ -6056,6 +6056,19 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
       WHERE i.type IN ('command_execution', 'dynamic_tool', 'subagent')
         AND i.status NOT IN ('completed', 'interrupted', 'failed', 'cancelled')
         AND (i.run_id IS NULL OR r.status <> 'rolled_back')
+        AND NOT (
+          i.type = 'subagent'
+          AND COALESCE(json_extract(i.payload_json, '$.origin'), '') = 'app_owned'
+          AND EXISTS (
+            SELECT 1 FROM orchestration_v2_projection_turn_items newer
+            LEFT JOIN orchestration_v2_projection_runs newer_run ON newer_run.run_id = newer.run_id
+            WHERE newer.thread_id = i.thread_id AND newer.ordinal > i.ordinal
+              AND newer.type = 'subagent' AND newer.status = 'completed'
+              AND json_extract(newer.payload_json, '$.origin') = 'app_owned'
+              AND json_extract(newer.payload_json, '$.childThreadId') = json_extract(i.payload_json, '$.childThreadId')
+              AND (newer.run_id IS NULL OR newer_run.status <> 'rolled_back')
+          )
+        )
         ${threadIds === undefined ? sql`` : sql`AND i.thread_id IN ${sql.in(threadIds)}`}
       ${
         activeRunIds.length === 0

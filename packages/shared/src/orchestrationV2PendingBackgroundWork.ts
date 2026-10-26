@@ -134,6 +134,8 @@ type PendingBackgroundWorkTurnItem = {
   readonly monitor?: boolean | undefined;
   readonly prompt?: string | undefined;
   readonly childThreadId?: ThreadId | null;
+  readonly origin?: "app_owned" | "provider_native";
+  readonly ordinal?: number;
 };
 
 function isLatestRunSettledForBackgroundWait(
@@ -273,7 +275,35 @@ export function derivePendingBackgroundWork(input: {
     }
   }
 
+  const completedChildOrdinals = new Map<ThreadId, number>();
+  const rolledBackRunIds = new Set(
+    (input.runs ?? []).filter((run) => run.status === "rolled_back").map((run) => String(run.id)),
+  );
+  for (const item of input.turnItems) {
+    if (
+      item.type === "subagent" &&
+      item.origin === "app_owned" &&
+      item.childThreadId != null &&
+      item.status === "completed" &&
+      item.ordinal !== undefined &&
+      (item.runId == null || !rolledBackRunIds.has(String(item.runId)))
+    ) {
+      completedChildOrdinals.set(
+        item.childThreadId,
+        Math.max(completedChildOrdinals.get(item.childThreadId) ?? -1, item.ordinal),
+      );
+    }
+  }
   for (const item of pendingBackgroundTurnItems(input)) {
+    // Legacy follow-ups can lack run linkage; later completed work on that child supersedes them.
+    if (
+      item.type === "subagent" &&
+      item.origin === "app_owned" &&
+      item.childThreadId != null &&
+      item.ordinal !== undefined &&
+      item.ordinal < (completedChildOrdinals.get(item.childThreadId) ?? -1)
+    )
+      continue;
     const taskId = nativeTaskIdFromTurnItem(item);
     if (byTaskId.has(taskId)) {
       continue;
