@@ -14,6 +14,7 @@ const state = vi.hoisted(() => ({
   canOperate: true,
 }));
 vi.mock("~/state/entities", () => ({
+  useProject: () => null,
   readThreadShell: () => null,
   readProject: () => null,
   useQuietThreadShells: () =>
