@@ -4,6 +4,7 @@ import { SettingsRow, SettingsSection } from "./settingsLayout";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { Switch } from "../ui/switch";
 import { searchableSetting } from "./settingsSearch";
+import { resolveSidebarSubagentVisibility } from "@t3tools/contracts";
 
 export function AjpemokAppearanceSettings() {
   const settings = useScopedSettings();
@@ -26,15 +27,28 @@ export function AjpemokAppearanceSettings() {
       />
       <SettingsRow
         {...searchableSetting("sidebar-active-subagents")}
-        description="Show running subagents and those awaiting input beneath their parent task. Completed subagents stay hidden."
+        description="Choose which subagents appear beneath their parent thread."
         control={
-          <Switch
-            aria-label="Active Subagents"
-            checked={settings.sidebarActiveSubagentsEnabled}
-            onCheckedChange={(checked) =>
-              updateSettings({ sidebarActiveSubagentsEnabled: Boolean(checked) })
-            }
-          />
+          <Select
+            value={resolveSidebarSubagentVisibility(settings)}
+            onValueChange={(value) => {
+              if (value === "show" || value === "active" || value === "hide") {
+                updateSettings({
+                  sidebarSubagentVisibility: value,
+                  sidebarActiveSubagentsEnabled: value !== "hide",
+                });
+              }
+            }}
+          >
+            <SelectTrigger aria-label="Subagents">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectPopup>
+              <SelectItem value="show">Show</SelectItem>
+              <SelectItem value="active">Show active</SelectItem>
+              <SelectItem value="hide">Hide</SelectItem>
+            </SelectPopup>
+          </Select>
         }
       />
       <SettingsRow
