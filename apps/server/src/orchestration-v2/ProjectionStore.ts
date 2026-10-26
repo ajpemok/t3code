@@ -48,6 +48,7 @@ import type {
 import {
   IDLE_COMPACTION_TEXT,
   idleCompactionOf,
+  isProviderNativeSubagentThread,
   OrchestrationV2AppThreadJson as OrchestrationV2AppThreadJsonSchema,
   OrchestrationV2CheckpointJson as OrchestrationV2CheckpointJsonSchema,
   OrchestrationV2CheckpointScopeJson as OrchestrationV2CheckpointScopeJsonSchema,
@@ -1122,6 +1123,7 @@ type ShellPendingTurnItemRow = PayloadRow & {
 type ShellThreadRow = {
   readonly thread_id: string;
   readonly payload_json: string;
+  readonly native_root_payload_json: string | null;
   readonly forked_from_run_source_thread_id: string | null;
   readonly latest_run_id: string | null;
   readonly latest_run_status: string | null;
@@ -1592,6 +1594,21 @@ function hasRunningCompaction(
   );
 }
 
+function providerNativeShellState(
+  thread: OrchestrationV2AppThread,
+  node: OrchestrationV2ExecutionNode | undefined,
+) {
+  if (!isProviderNativeSubagentThread(thread) || node === undefined) return null;
+  const status = node.status === "pending" ? ("preparing" as const) : node.status;
+  const activityRunStatus =
+    status === "preparing" || status === "running" || status === "waiting" ? status : null;
+  return {
+    status,
+    activityRunStatus,
+    activityRunStartedAt: activityRunStatus === null ? null : node.startedAt,
+  };
+}
+
 export function threadShellFromProjection(
   projection: OrchestrationV2ThreadProjection,
 ): OrchestrationV2ThreadShell {
@@ -1659,6 +1676,10 @@ export function threadShellFromProjection(
     runs,
     pullRequests: projection.thread.pullRequests,
   });
+  const nativeWork = providerNativeShellState(
+    projection.thread,
+    projection.nodes.findLast((node) => node.kind === "root_turn" && node.runId === null),
+  );
   return {
     createdBy: projection.thread.createdBy,
     creationSource: projection.thread.creationSource,
@@ -1699,10 +1720,12 @@ export function threadShellFromProjection(
     activeRunId: activeRun?.id ?? null,
     blockedOnThreadWait: deriveBlockedOnThreadWait({ activeRun, turnItems: projection.turnItems }),
     isCompacting: hasRunningCompaction(activeRun?.id ?? null, projection.turnItems),
-    activityRunStatus: activityRun?.status ?? null,
+    activityRunStatus: activityRun?.status ?? nativeWork?.activityRunStatus ?? null,
     activityRunStartedAt:
-      activityRun === null ? null : orchestrationV2RunWorkStartedAt(activityRun),
-    status: latestRun?.status ?? "idle",
+      activityRun === null
+        ? (nativeWork?.activityRunStartedAt ?? null)
+        : orchestrationV2RunWorkStartedAt(activityRun),
+    status: latestRun?.status ?? nativeWork?.status ?? "idle",
     ...threadErrorSummary(
       latestRootProviderFailure(latestRun, projection.turnItems),
       providerSession?.lastError ?? null,
@@ -5887,6 +5910,15 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
             SELECT
               t.thread_id,
               t.payload_json,
+              CASE WHEN json_extract(t.payload_json, '$.creationSource') = 'provider'
+                AND json_extract(t.payload_json, '$.lineage.relationshipToParent') = 'subagent'
+                THEN (
+                  SELECT node.payload_json FROM orchestration_v2_projection_nodes node
+                  WHERE node.thread_id = t.thread_id AND node.kind = 'root_turn' AND node.run_id IS NULL
+                  ORDER BY COALESCE(node.started_at, '') DESC, node.node_id DESC LIMIT 1
+                )
+                ELSE NULL
+              END AS native_root_payload_json,
               CASE
                 WHEN json_extract(t.payload_json, '$.forkedFrom.type') = 'run'
                   THEN json_extract(t.payload_json, '$.forkedFrom.threadId')
@@ -6435,6 +6467,12 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
           pendingTurnItemsByThreadId,
         } = input;
         const thread = yield* decodeThreadPayload(row.payload_json);
+        const nativeWork = providerNativeShellState(
+          thread,
+          row.native_root_payload_json === null
+            ? undefined
+            : yield* decodeNodePayload(row.native_root_payload_json),
+        );
         let pendingRuntimeRequest =
           row.pending_request_payload_json !== null
             ? pendingRuntimeRequestSummary(
@@ -6455,7 +6493,10 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
             ? null
             : yield* decodeTurnItemPayload(row.terminal_failure_payload_json);
         let latestRunId = row.latest_run_id === null ? null : RunId.make(row.latest_run_id);
-        let latestRunStatus = shellStatusFromStoredRunStatus(row.latest_run_status);
+        let latestRunStatus =
+          row.latest_run_id === null && nativeWork !== null
+            ? nativeWork.status
+            : shellStatusFromStoredRunStatus(row.latest_run_status);
         let latestRunRequestedAt =
           row.latest_run_requested_at === null
             ? null
@@ -6536,7 +6577,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
           }),
           activityRunStartedAt:
             row.activity_run_started_at === null
-              ? null
+              ? (nativeWork?.activityRunStartedAt ?? null)
               : DateTime.makeUnsafe(row.activity_run_started_at),
           activityRunStatus:
             row.activity_run_status === "preparing" ||
@@ -6544,7 +6585,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
             row.activity_run_status === "running" ||
             row.activity_run_status === "waiting"
               ? row.activity_run_status
-              : null,
+              : (nativeWork?.activityRunStatus ?? null),
           ...threadErrorSummary(
             terminalFailureItem?.type === "error" ? terminalFailureItem.failure : null,
             row.last_error,

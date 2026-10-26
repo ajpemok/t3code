@@ -178,7 +178,7 @@ describe("MessagesTimeline messages", () => {
         timelineEntries={data}
         liveFollowEnabled={liveFollowEnabled}
         contentInsetEndAdjustment={inset}
-        onManualNavigation={onManualNavigation}
+        onViewportAttach={(viewport) => viewport.subscribe(onManualNavigation)}
       />
     );
     await using screen = await renderElement(timeline(entries));
