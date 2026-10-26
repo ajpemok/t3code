@@ -2,6 +2,7 @@ import * as NodeZlib from "node:zlib";
 import {
   DesktopPreviewRecordingInputSchema,
   DESKTOP_PREVIEW_RECORDING_CAPTURE_TRIGGER,
+  DESKTOP_PREVIEW_CAPTURE_ACTIVITY_TRIGGER,
 } from "@t3tools/contracts";
 import type {
   DesktopPreviewAnnotationTheme,
@@ -373,7 +374,7 @@ interface ManagedListeners {
   readonly webContents: Electron.WebContents;
 }
 
-type FrameCaptureConsumer = "picture-in-picture" | "recording";
+type FrameCaptureConsumer = "picture-in-picture" | "recording" | `automation:${number}`;
 
 interface FrameCaptureSession {
   readonly recordingInputOptions?: RecordingInputOptions;
@@ -2429,6 +2430,22 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
           debugger: control.debugger,
           applyViewport: (size) =>
             runViewport(setViewport(tabId, size).pipe(Effect.timeout("3 seconds"))),
+          acquireRendering: () => runViewport(acquireAutomationRendering(tabId, wc)),
+          screencastCssWidth: (deviceWidth) =>
+            viewportOverrides.get(tabId)?.width ?? deviceWidth / wc.getZoomFactor(),
+          captureScreenshot: (params) =>
+            control.debugger.sendCommand("Page.captureScreenshot", params).finally(() =>
+              runViewport(
+                withTabLifecycleLock(
+                  tabId,
+                  Effect.gen(function* () {
+                    // Captures can change Chromium's emulation without updating our viewport cache.
+                    appliedViewports.delete(control);
+                    yield* restoreViewportUnlocked(tabId, wc);
+                  }),
+                ),
+              ),
+            ),
         });
       }
       yield* withTabLifecycleLock(tabId, restoreViewportUnlocked(tabId, wc));
@@ -2809,6 +2826,49 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
       ),
     );
   });
+
+  let automationCaptureSequence = 0;
+  const acquireAutomationRendering = Effect.fn("PreviewManager.acquireAutomationRendering")(
+    function* (tabId: string, wc: Electron.WebContents) {
+      const host = wc.hostWebContents;
+      if (host === null || host.isDestroyed()) {
+        return yield* new PreviewMainWindowClosedError({ tabId });
+      }
+      const consumer = `automation:${++automationCaptureSequence}` as const;
+      const expression = (active: boolean) =>
+        `globalThis[${JSON.stringify(DESKTOP_PREVIEW_CAPTURE_ACTIVITY_TRIGGER)}]?.(${JSON.stringify(tabId)}, ${JSON.stringify(consumer)}, ${active})`;
+      const activity = (active: boolean) =>
+        attemptPromise({ operation: "automation.rendering", tabId, webContentsId: wc.id }, () =>
+          host.executeJavaScript(expression(active)),
+        ).pipe(Effect.timeout("3 seconds"));
+      const release = activity(false).pipe(
+        Effect.ignore,
+        Effect.ensuring(stopFrameCapture(tabId, consumer)),
+      );
+      yield* startFrameCapture(tabId, consumer);
+      yield* activity(true).pipe(
+        Effect.flatMap((ready) =>
+          ready === true && !wc.isDestroyed()
+            ? Effect.void
+            : Effect.fail(
+                new PreviewOperationError({
+                  operation: "automation.rendering",
+                  tabId,
+                  webContentsId: wc.id,
+                  cause: new Error("The preview renderer did not acknowledge capture activity."),
+                }),
+              ),
+        ),
+        Effect.onError(() => release),
+      );
+      let released = false;
+      return () => {
+        if (released) return Promise.resolve();
+        released = true;
+        return runViewport(release);
+      };
+    },
+  );
 
   const releasePictureInPicture = Effect.fn("PreviewManager.releasePictureInPicture")(function* (
     tabId: string,

@@ -2090,6 +2090,49 @@ describe("PreviewManager", () => {
     ),
   );
 
+  effectIt.effect.each([{ viewport: null }, { viewport: { width: 1280, height: 800 } }])(
+    "restores native viewport intent after capture changes Chromium emulation (%s)",
+    ({ viewport }) =>
+      Effect.gen(function* () {
+        const host = yield* DesktopBrowserHost.DesktopBrowserHost;
+        using attached = vi.spyOn(host, "attach");
+        const wc = makeTestPreviewWebContents(async () => ({
+          toJPEG: () => Buffer.from("jpeg"),
+          getSize: () => ({ width: 100, height: 80 }),
+        }));
+        Object.assign(wc, { isDevToolsOpened: () => false, getUserAgent: () => "Electron" });
+        let debuggerAttached = false;
+        wc.debugger.isAttached = () => debuggerAttached;
+        wc.debugger.attach = () => {
+          debuggerAttached = true;
+        };
+        let emulatedWidth: number | null = null;
+        wc.debugger.sendCommand = vi.fn(
+          async (method: string, params?: Record<string, unknown>) => {
+            if (method === "Emulation.setDeviceMetricsOverride")
+              emulatedWidth = Number(params?.width);
+            if (method === "Emulation.clearDeviceMetricsOverride") emulatedWidth = null;
+            if (method === "Page.captureScreenshot") {
+              emulatedWidth = 400;
+              return { data: "fixture" };
+            }
+            return {};
+          },
+        );
+        fromId.mockReturnValue(wc);
+        const manager = yield* PreviewManager.PreviewManager;
+        yield* manager.createTab("capture-viewport", {
+          serverTab: { threadId: "thread-1", tabId: "server-tab-1" },
+        });
+        yield* manager.registerWebview("capture-viewport", wc.id);
+        yield* manager.setViewport("capture-viewport", viewport);
+        const capture = attached.mock.calls.at(-1)?.[1].captureScreenshot;
+        expect(capture).toBeDefined();
+        yield* Effect.promise(() => capture!({ format: "png" }));
+        expect(emulatedWidth).toBe(viewport?.width ?? null);
+      }).pipe(Effect.provide(managerLayer()), Effect.scoped),
+  );
+
   effectIt.effect("tells the server when a tab it renders natively closes", () =>
     Effect.gen(function* () {
       const host = yield* DesktopBrowserHost.DesktopBrowserHost;

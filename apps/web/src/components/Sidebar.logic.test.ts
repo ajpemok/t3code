@@ -17,6 +17,8 @@ import {
   projectThreadPinTargets,
   filterProjectSectionThreads,
   activeSubagentsByParent,
+  subagentsByParent,
+  sidebarActivityCounts,
   resolveSidebarSweepKeys,
   resolveSidebarThreadStatus,
   resolveSidebarV2TopStatus,
@@ -60,6 +62,36 @@ describe("project section visibility", () => {
   const capabilities = new Map([
     ["environment-test", { threadSettlement: true, threadSnooze: true }],
   ]);
+
+  it("retains a queued thread while its runtime projection is not yet available", () => {
+    const queued = makeThreadFixture({
+      latestRun: { ...makeLatestRun(), status: "queued" },
+      runtime: null,
+    });
+    expect(
+      filterProjectSectionThreads([queued], { now, capabilities, hideInactive: true }),
+    ).toEqual([queued]);
+    expect(sidebarActivityCounts([queued], now).threads).toEqual({ active: 1, inactive: 0 });
+  });
+
+  it("hides idle and completed tasks while retaining tasks awaiting input", () => {
+    const idle = makeThreadFixture({ id: ThreadId.make("idle") });
+    const question = makeThreadFixture({
+      id: ThreadId.make("question"),
+      hasPendingUserInput: true,
+    });
+    const approval = makeThreadFixture({
+      id: ThreadId.make("approval"),
+      hasPendingApprovals: true,
+    });
+    expect(
+      filterProjectSectionThreads([idle, question, approval], {
+        now,
+        capabilities,
+        hideInactive: true,
+      }),
+    ).toEqual([question, approval]);
+  });
 
   it("keeps idle unsettled tasks and hides settled tasks even when pinned", () => {
     const idle = makeThreadFixture({ id: ThreadId.make("idle") });
@@ -133,6 +165,26 @@ describe("active subagent groups", () => {
     parentThreadId: parentId,
     relationshipToParent: "subagent" as const,
   };
+
+  it("includes idle children in Show and keeps an idle parent reachable while a child works", () => {
+    const parent = makeThreadFixture({ id: parentId });
+    const active = makeThreadFixture({ id: ThreadId.make("working-child"), lineage, runtime });
+    const idle = makeThreadFixture({ id: ThreadId.make("idle-child"), lineage });
+    const all = [parent, active, idle];
+    expect(subagentsByParent(all, "show").get("environment-test:parent")).toEqual([active, idle]);
+    expect(subagentsByParent(all, "active").get("environment-test:parent")).toEqual([active]);
+    expect(
+      filterProjectSectionThreads(all, {
+        now: "2026-10-25T12:00:00Z",
+        capabilities: new Map(),
+        hideInactive: true,
+      }),
+    ).toEqual([parent]);
+    expect(sidebarActivityCounts(all)).toEqual({
+      threads: { active: 0, inactive: 1 },
+      subagents: { active: 1, inactive: 1 },
+    });
+  });
 
   it("shows a running child and removes it when its runtime stops", () => {
     const child = makeThreadFixture({ id: ThreadId.make("child"), lineage, runtime });
@@ -593,6 +645,18 @@ describe("resolveThreadStatusPill", () => {
       updatedAt: "2026-03-09T10:00:00.000Z",
     },
   };
+
+  it("distinguishes active compaction from work and preserves input priority", () => {
+    const compacting = { ...baseThread, isCompacting: true };
+    expect(resolveThreadStatusPill({ thread: compacting })?.label).toBe("Compacting");
+    expect(
+      resolveThreadStatusPill({ thread: { ...compacting, hasPendingUserInput: true } })?.label,
+    ).toBe("Awaiting Input");
+    expect(resolveThreadStatusPill({ thread: { ...compacting, isCompacting: false } })?.label).toBe(
+      "Working",
+    );
+    expect(resolveThreadStatusPill({ thread: { ...compacting, runtime: null } })).toBeNull();
+  });
 
   it("shows an active thread wait without a pulse and resumes Working when it ends", () => {
     const blocked = { ...baseThread, blockedOnThreadWait: true };

@@ -5,6 +5,7 @@ import {
   BUILT_IN_BROWSER_PROFILES,
   DEFAULT_BROWSER_PROFILE_ID,
   DEFAULT_BROWSER_RECORDING_FRAME_RATE,
+  DEFAULT_BROWSER_RECORDING_POINTER,
   FILL_PREVIEW_VIEWPORT,
   findBrowserProfile,
   INCOGNITO_BROWSER_PROFILE_ID,
@@ -1309,10 +1310,15 @@ const make = Effect.gen(function* () {
   // Agent recordings encode here, so they need the client's Browser recording frame rate. The
   // last report outlives the client, which lets agents record while no client is connected.
   let recordingFrameRate = DEFAULT_BROWSER_RECORDING_FRAME_RATE;
+  let recordingPointer = DEFAULT_BROWSER_RECORDING_POINTER;
+  let recordingShowMousePresses = true;
 
   const reportProfiles: ServerBrowser["Service"]["reportProfiles"] = (input) =>
     Effect.sync(() => {
       if (input.recordingFrameRate !== undefined) recordingFrameRate = input.recordingFrameRate;
+      if (input.recordingPointer !== undefined) recordingPointer = input.recordingPointer;
+      if (input.recordingShowMousePresses !== undefined)
+        recordingShowMousePresses = input.recordingShowMousePresses;
       const profiles = resolveBrowserProfiles(input.profiles);
       reportedProfiles = {
         profiles,
@@ -1506,9 +1512,18 @@ const make = Effect.gen(function* () {
         try {
           await awaitCapture(
             signal,
-            encoder.evaluate(ServerBrowserPage.recordingEncoderScript(recordingFrameRate)),
+            encoder.evaluate(
+              ServerBrowserPage.recordingEncoderScript(
+                recordingFrameRate,
+                recordingPointer,
+                recordingShowMousePresses,
+              ),
+            ),
           );
           // Seed idle pages before returning so an immediate stop has a frame to encode.
+          const seedCssWidth = tab.desktop
+            ? (await awaitCapture(signal, ServerBrowserPage.readPageMetrics(tab.cdp))).width
+            : (tab.page.viewportSize()?.width ?? UNATTACHED_FILL_VIEWPORT.width);
           const firstFrame = await awaitCapture(
             signal,
             ServerBrowserPage.captureViewport(tab.page, tab.cdp, {
@@ -1522,10 +1537,7 @@ const make = Effect.gen(function* () {
             encoder.evaluate(
               ([data, width]) =>
                 (globalThis as unknown as EncoderWindow).__t3Recorder.frame(data, width),
-              [
-                firstFrame,
-                tab.page.viewportSize()?.width ?? UNATTACHED_FILL_VIEWPORT.width,
-              ] as const,
+              [firstFrame, seedCssWidth] as const,
             ),
           );
           const opened = await awaitCapture(
@@ -1542,7 +1554,14 @@ const make = Effect.gen(function* () {
           session = opened;
           const framesInFlight = new Set<Promise<void>>();
           opened.on("Page.screencastFrame", (frame) => {
-            const cssWidth = tab.page.viewportSize()?.width ?? frame.metadata.deviceWidth;
+            const nativeWidth = (
+              frame.metadata as typeof frame.metadata & { readonly t3CssViewportWidth?: number }
+            ).t3CssViewportWidth;
+            const cssWidth = tab.desktop
+              ? typeof nativeWidth === "number" && Number.isFinite(nativeWidth) && nativeWidth > 0
+                ? nativeWidth
+                : seedCssWidth
+              : (tab.page.viewportSize()?.width ?? frame.metadata.deviceWidth);
             const delivered: Promise<void> = encoder
               .evaluate(
                 ([data, width]) =>

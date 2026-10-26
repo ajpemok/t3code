@@ -3,6 +3,10 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./recordingPointer": {
+      "types": "./src/recordingPointer.ts",
+      "import": "./src/recordingPointer.ts"
+    },
     "./changedFileKind": {
       "types": "./src/changedFileKind.ts",
       "import": "./src/changedFileKind.ts"
