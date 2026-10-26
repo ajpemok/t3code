@@ -19,6 +19,7 @@ import type { AsyncResult } from "effect/reactivity";
 import { planPinnedReorder } from "@t3tools/client-runtime/state/thread-sort";
 import {
   effectiveSnoozed,
+  threadWokeAt,
   type ThreadSnoozeShell,
 } from "@t3tools/client-runtime/state/thread-settled";
 import {
@@ -746,6 +747,7 @@ export interface ThreadStatusPill {
   label:
     | "Working"
     | "Compacting"
+    | "Woke"
     | "Connecting"
     | "Completed"
     | "Failed"
@@ -757,6 +759,7 @@ export interface ThreadStatusPill {
   colorClass: string;
   dotClass: string;
   pulse: boolean;
+  wokeAt?: string;
 }
 
 function isSidebarThreadActive(thread: ThreadStatusInput): boolean {
@@ -776,6 +779,7 @@ const THREAD_STATUS_PRIORITY: Record<ThreadStatusPill["label"], number> = {
   Failed: 3.5,
   Working: 3,
   Compacting: 3.25,
+  Woke: 2.25,
   Connecting: 3,
   Waiting: 2.5,
   "Plan Ready": 2,
@@ -797,6 +801,9 @@ type ThreadStatusInput = Pick<
   pendingBackgroundTasks?: SidebarThreadSummary["pendingBackgroundTasks"] | undefined;
   blockedOnThreadWait?: boolean | undefined;
   isCompacting?: boolean | undefined;
+  snoozedUntil?: string | null;
+  snoozedAt?: string | null;
+  settledOverride?: "settled" | "active" | null | undefined;
 };
 
 /**
@@ -1183,6 +1190,7 @@ export function resolveWorkingStartedAt(
 
 export function resolveThreadStatusPill(input: {
   thread: ThreadStatusInput;
+  now?: string;
 }): ThreadStatusPill | null {
   const { thread } = input;
 
@@ -1265,6 +1273,23 @@ export function resolveThreadStatusPill(input: {
       colorClass: "text-red-600 dark:text-red-300/90",
       dotClass: "bg-red-500 dark:bg-red-300/90",
       pulse: false,
+    };
+  }
+
+  const wokeAt =
+    thread.snoozedUntil == null || thread.settledOverride === "settled"
+      ? null
+      : threadWokeAt(thread, { now: input.now ?? new Date().toISOString() });
+  if (
+    wokeAt !== null &&
+    (thread.lastVisitedAt == null || Date.parse(thread.lastVisitedAt) < Date.parse(wokeAt))
+  ) {
+    return {
+      label: "Woke",
+      colorClass: "text-warning-foreground",
+      dotClass: "bg-warning-foreground",
+      pulse: false,
+      wokeAt,
     };
   }
 
