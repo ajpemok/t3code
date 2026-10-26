@@ -43,7 +43,7 @@ export function PreviewPanelShell(props: PreviewPanelShellProps) {
 function ResizablePreviewPanelShell(props: PreviewPanelShellProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const inlineSize = usePreviewPanelInlineSize(hostRef, {
-    enabled: props.mode === "inline" && !props.maximized,
+    enabled: props.mode === "inline" && !props.maximized && props.open !== false,
     widthStorageKey: props.widthStorageKey,
     defaultWidth: props.defaultWidth,
   });
