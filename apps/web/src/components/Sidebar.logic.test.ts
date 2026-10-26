@@ -646,6 +646,21 @@ describe("resolveThreadStatusPill", () => {
     },
   };
 
+  it("shows an unacknowledged wake in grouped rows and clears it after a visit", () => {
+    const now = "2026-10-26T08:00:00Z";
+    const thread = {
+      ...baseThread,
+      runtime: null,
+      snoozedUntil: "2026-10-26T07:00:00Z",
+      lastVisitedAt: "2026-10-26T06:00:00Z",
+    };
+    expect(resolveThreadStatusPill({ thread, now })?.label).toBe("Woke");
+    expect(resolveThreadStatusPill({ thread: { ...thread, lastVisitedAt: now }, now })).toBeNull();
+    expect(
+      resolveThreadStatusPill({ thread: { ...thread, settledOverride: "settled" }, now }),
+    ).toBeNull();
+  });
+
   it("distinguishes active compaction from work and preserves input priority", () => {
     const compacting = { ...baseThread, isCompacting: true };
     expect(resolveThreadStatusPill({ thread: compacting })?.label).toBe("Compacting");
