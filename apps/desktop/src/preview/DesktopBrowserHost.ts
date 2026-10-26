@@ -291,6 +291,7 @@ export const make = Effect.gen(function* () {
   };
 
   const dropRelay = (tab: AttachedTab) => {
+    void releaseScreencast(tab);
     tab.relay = null;
     tab.screencasts.clear();
     tab.agentUsed = false;
@@ -300,6 +301,7 @@ export const make = Effect.gen(function* () {
   /** A detached session, such as a closed viewer, waits on nothing it sent. */
   const dropSessionHolds = (tab: AttachedTab, owner: string) => {
     tab.screencasts.delete(owner);
+    if (tab.screencasts.size === 0) void releaseScreencast(tab);
     for (const [pending, hold] of tab.focusPending) {
       if (hold.owner === owner) tab.focusPending.delete(pending);
     }
@@ -394,21 +396,26 @@ export const make = Effect.gen(function* () {
             tab.agentUsed = true;
           }
           const sendCurrent = () => {
-            if (method === "Page.startScreencast" && tab.debuggee.acquireRendering) {
+            if (
+              sessionId === undefined &&
+              method === "Page.startScreencast" &&
+              tab.debuggee.acquireRendering
+            ) {
               const rendering = (tab.screencastRendering ??= tab.debuggee.acquireRendering());
               return rendering.then(() => {
                 if (tab.relay !== relay)
                   throw new Error("The preview connection closed before its screencast started.");
                 return send(method, params, sessionId);
-              }).catch((cause: unknown) => {
-                if (tab.screencastRendering === rendering) void releaseScreencast(tab);
-                throw cause;
               });
             }
-            if (method === "Page.stopScreencast") {
-              return send(method, params, sessionId).finally(() => releaseScreencast(tab));
+            if (sessionId === undefined && method === "Page.stopScreencast") {
+              return send(method, params, sessionId).finally(() => {
+                if (tab.screencasts.size === 0) return releaseScreencast(tab);
+              });
             }
-            return method === "Page.captureScreenshot" && sessionId === undefined && tab.debuggee.captureScreenshot
+            return method === "Page.captureScreenshot" &&
+              sessionId === undefined &&
+              tab.debuggee.captureScreenshot
               ? tab.debuggee.captureScreenshot(params)
               : send(method, params, sessionId);
           };
@@ -433,6 +440,7 @@ export const make = Effect.gen(function* () {
               ? holdFocus(tab, method, owner, forward).catch((cause: unknown) => {
                   // A viewer can outlive a refused stream; nothing is streaming for it.
                   if (sessionId === undefined && tab.relay === relay) tab.screencasts.delete(owner);
+                  if (tab.screencasts.size === 0) void releaseScreencast(tab);
                   releaseFocusWhenIdle(tab);
                   syncPainting(tab);
                   throw cause;
