@@ -150,6 +150,41 @@ export function goalCommandStopsActiveRun(
   }
 }
 
+export function runIsExecutingNativeMaintenance(
+  projection: Pick<OrchestrationV2ThreadProjection, "messages" | "providerTurns" | "turnItems">,
+  run: OrchestrationV2Run,
+): boolean {
+  const message = projection.messages.find((candidate) => candidate.id === run.userMessageId);
+  if (message === undefined || !isNativeMaintenanceCommand(message)) return false;
+  if (message.text.trim().toLowerCase() !== "/compact") return true;
+  const activeTurn = projection.providerTurns.find(
+    (turn) => turn.runAttemptId === run.activeAttemptId && turn.status === "running",
+  );
+  if (activeTurn === undefined) return true;
+  // A Codex goal can continue in a new provider turn within the original /compact run.
+  return (
+    !projection.providerTurns.some(
+      (turn) =>
+        turn.runAttemptId === run.activeAttemptId &&
+        turn.status === "completed" &&
+        turn.ordinal < activeTurn.ordinal &&
+        projection.turnItems.some(
+          (item) =>
+            item.type === "compaction" &&
+            item.runId === run.id &&
+            item.providerTurnId === turn.id &&
+            item.status === "completed",
+        ),
+    ) ||
+    projection.turnItems.some(
+      (item) =>
+        item.type === "compaction" &&
+        item.providerTurnId === activeTurn.id &&
+        item.status === "running",
+    )
+  );
+}
+
 export function resolveMessageDispatchIntent(
   projection: OrchestrationV2ThreadProjection,
   requestedMode: MessageDispatchMode,
@@ -159,8 +194,7 @@ export function resolveMessageDispatchIntent(
   if (mode.type !== "steer_active") return mode;
   // Compaction and sign-out cannot accept steers; queue follow-ups.
   const target = projection.runs.find((run) => run.id === mode.targetRunId);
-  const targetMessage = projection.messages.find((message) => message.id === target?.userMessageId);
-  return targetMessage !== undefined && isNativeMaintenanceCommand(targetMessage)
+  return target !== undefined && runIsExecutingNativeMaintenance(projection, target)
     ? { type: "queue_after_active" }
     : mode;
 }
