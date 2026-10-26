@@ -50,6 +50,11 @@ temporary paintable placement and native layout-metrics lease together. Release
 the lease after physical capture completion; a broker timeout cannot cancel a
 Chromium screenshot copy. Retain screenshot serialisation and viewport restoration.
 
+Keep upstream's focus and painting ownership for hidden tabs. The
+rendering handshake complements those holds; it must survive until physical
+capture completes or the last screencast viewer leaves. One viewer closing must
+not release another viewer's rendering lease.
+
 Agent recordings use the reported pointer configuration and mouse-press preference.
 Desktop screencasts supply CSS viewport width separately from native DIP width so
 pointer placement survives zoom and Fill resizing. Seed frames use measured width.

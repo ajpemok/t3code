@@ -6,7 +6,6 @@ import { ActiveSubagentThreads } from "./ActiveSubagentThreads";
 import { discardComposerDraft } from "../../lib/discardComposerDraft";
 import { requestCustomSnooze } from "../CustomSnoozeDialog";
 import { useSupportsMultiplePullRequests } from "~/hooks/useSupportsMultiplePullRequests";
-import { useDeadlinePassed } from "~/hooks/useDeadline";
 import { resolveThreadCurrentPullRequestLink } from "@t3tools/client-runtime/thread-pull-requests";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -27,6 +26,7 @@ import {
 
 import type { TimestampFormat } from "@t3tools/contracts/settings";
 import {
+  AlarmClockIcon,
   AlarmClockOffIcon,
   ArrowRightLeftIcon,
   CheckIcon,
@@ -685,7 +685,6 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     wokeAtDate !== null &&
     (lastVisitedDate === null || lastVisitedDate < wokeAtDate) &&
     thread.settledOverride !== "settled";
-  const projectIconColors = useClientSettings((s) => s.sidebarProjectIconColors);
   const shouldRecede =
     status !== "working" &&
     shouldRecedeSidebarThread({

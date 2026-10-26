@@ -29,6 +29,7 @@ import {
 } from "react";
 
 import { ensureLocalApi } from "../../localApi";
+import { cn } from "../../lib/utils";
 import { ProviderInstanceIcon } from "../chat/ProviderInstanceIcon";
 import { providerClients } from "../settings/providerDriverMeta";
 import { Button } from "../ui/button";
@@ -225,7 +226,7 @@ function SegmentTriggers({
             />
           ) : null}
           {/* A single-account bar repeats the headline percentage. */}
-          {showAccountName ? (
+          {showUsageAccountName ? (
             <span className="shrink-0 font-semibold text-foreground tabular-nums">
               {remaining}%
             </span>

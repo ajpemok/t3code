@@ -1035,7 +1035,13 @@ describe("DesktopBrowserHost", () => {
     Effect.gen(function* () {
       const host = yield* DesktopBrowserHost.make;
       const debuggee = makeDebuggee();
-      host.attach(key, debuggee.tab);
+      let releases = 0;
+      host.attach(key, {
+        ...debuggee.tab,
+        acquireRendering: async () => async () => {
+          releases += 1;
+        },
+      });
       const replies = yield* watchReplies(host);
       const painting = yield* watchPainting(host);
       const raw = (message: Record<string, unknown>) =>
@@ -1051,6 +1057,7 @@ describe("DesktopBrowserHost", () => {
       debuggee.release();
       yield* settle;
       expect(painting).toEqual([true]);
+      expect(releases).toBe(0);
 
       yield* raw({
         id: 6,
@@ -1059,6 +1066,7 @@ describe("DesktopBrowserHost", () => {
       });
       yield* settle;
       expect(painting).toEqual([true, false]);
+      expect(releases).toBe(1);
     }).pipe(Effect.scoped),
   );
 
