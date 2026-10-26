@@ -176,6 +176,37 @@
   border-radius: inherit;
 }
 
+.weekly-reset-counter {
+  align-self: flex-start;
+  margin-inline-start: -2px;
+  padding-block-start: 1px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.weekly-reset-counter[data-attention="important"] {
+  animation: weekly-reset-attention 10s ease-in-out infinite;
+  animation-play-state: var(--visible-animation-state, paused);
+}
+
+@keyframes weekly-reset-attention {
+  0%,
+  18%,
+  100% {
+    opacity: 1;
+  }
+  9% {
+    opacity: 0.72;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .weekly-reset-counter[data-attention="important"] {
+    animation: none;
+  }
+}
+
 .task-activity-symbol {
   position: relative;
   display: inline-flex;
@@ -630,6 +661,8 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
   --color-diff-addition-foreground: var(--diff-addition-foreground);
   --color-diff-deletion-foreground: var(--diff-deletion-foreground);
   --color-info-foreground: var(--info-foreground);
+  --color-reset-attention: light-dark(var(--color-cyan-700), var(--color-cyan-300));
+  --color-reset-important: light-dark(var(--color-violet-700), var(--color-violet-300));
   --color-info: var(--info);
   --color-guest: var(--guest);
   --color-guest-foreground: var(--guest-foreground);
