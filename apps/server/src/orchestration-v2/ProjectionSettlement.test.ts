@@ -349,6 +349,58 @@ it.effect.each([
   }).pipe(Effect.provide(testLayer)),
 );
 
+it.effect.each([
+  ["sql", layerSql],
+  ["memory", ProjectionStore.layerMemory],
+] as const)("%s: completed child follow-ups supersede stale older task activity", ([, testLayer]) =>
+  Effect.gen(function* () {
+    const store = yield* ProjectionStore.ProjectionStoreV2;
+    const threadId = yield* createThread("stale-child");
+    const runId = yield* createRun(threadId);
+    for (const [ordinal, status] of [
+      [1, "running"],
+      [2, "completed"],
+    ] as const) {
+      yield* store.apply({
+        id: EventId.make(`event:child:${ordinal}`),
+        type: "turn-item.updated",
+        threadId,
+        occurredAt: old,
+        payload: {
+          id: TurnItemId.make(`item:child:${ordinal}`),
+          threadId,
+          runId,
+          nodeId: null,
+          providerThreadId: null,
+          providerTurnId: null,
+          nativeItemRef: null,
+          parentItemId: null,
+          ordinal,
+          type: "subagent",
+          status,
+          title: "Child follow-up",
+          startedAt: old,
+          completedAt: status === "completed" ? old : null,
+          updatedAt: old,
+          subagentId: NodeId.make(`task:${ordinal}`),
+          origin: "app_owned",
+          driver: ProviderDriverKind.make("codex"),
+          providerInstanceId,
+          childThreadId: ThreadId.make("child:serial-work"),
+          prompt: "Review",
+          result: status === "completed" ? "Done" : null,
+        },
+      });
+    }
+    assert.deepEqual((yield* store.getThreadShell(threadId))?.pendingBackgroundTasks, []);
+    assert.deepEqual((yield* store.getShellSnapshot()).threads[0]?.pendingBackgroundTasks, []);
+    assert.deepEqual(
+      (yield* store.getSettlementCandidates(threadId))[0]?.pendingBackgroundTasks,
+      [],
+    );
+  }).pipe(Effect.provide(testLayer)),
+);
+
 const pullRequestLink = (number: number) => ({
   host: "github.com",
   repository: "owner/repository",
