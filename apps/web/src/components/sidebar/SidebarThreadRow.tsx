@@ -1359,6 +1359,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                         </Tooltip>
                       ) : (
                         <span
+                          data-thread-activity={topStatus.icon}
                           className={cn(
                             "inline-flex items-center gap-1 font-medium",
                             topStatus.className,
