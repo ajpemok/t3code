@@ -36,6 +36,9 @@ vi.mock("~/hooks/useSettings", () => ({
   },
 }));
 vi.mock("~/state/entities", () => ({ readThreadShell: () => null, readProject: () => null }));
+vi.mock("~/hooks/useCloseInactiveProjectTabs", () => ({
+  useCloseInactiveProjectTabs: () => ({ showTaskContextMenu: async () => {} }),
+}));
 vi.mock("~/state/threads", () => ({
   environmentThreadShells: {
     get quietThreadShellsAtom() {
