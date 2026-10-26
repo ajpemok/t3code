@@ -2,6 +2,7 @@
 import { ipcRenderer } from "electron";
 import { getElementContext } from "react-grab/primitives";
 import type {
+  BrowserRecordingPointer,
   DesktopPreviewAnnotationTheme,
   PickedElementPayload,
   PickedElementStackFrame,
@@ -56,6 +57,7 @@ ipcRenderer.on(
                 "showKeyPresses" in inputOptions && inputOptions.showKeyPresses === true,
               showMousePresses:
                 "showMousePresses" in inputOptions && inputOptions.showMousePresses === true,
+              pointer: (inputOptions as { pointer?: BrowserRecordingPointer }).pointer,
             }
           : DEFAULT_RECORDING_INPUT_OPTIONS;
       recordingCursor ??= installRecordingCursor(document, window, options, (input) =>

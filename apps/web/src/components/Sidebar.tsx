@@ -1,4 +1,6 @@
 import { projectTintColor } from "~/projectIdentity";
+import { activeSidebarThreadKeys } from "./Sidebar.logic";
+import { SidebarActivityCounts } from "./sidebar/SidebarActivityCounts";
 import { type EnvironmentId, type ScopedProjectRef } from "@t3tools/contracts";
 import type { EnvironmentServerConfig } from "@t3tools/client-runtime/connection";
 import { ThreadContextDragGhost } from "./chat/ThreadContextDragGhost";
@@ -383,6 +385,7 @@ function useSidebarThreads(input: {
     threads,
     routeRowThreadKey,
   } = input;
+  const hideInactive = useClientSettings((settings) => settings.sidebarHideInactiveEnabled);
   const workingShelfEnabled = useClientSettings((s) => s.sidebarWorkingShelfEnabled);
   const inboxReturnsVersion = useSyncExternalStore(
     inboxReturns.subscribe,
@@ -425,8 +428,14 @@ function useSidebarThreads(input: {
     clockKey: `${nowMinute}:${snoozeWakeClock}:${inboxReturnsVersion}`,
   });
 
-  const { pinnedThreads, activeThreads, workingThreads, snoozedThreads, settledThreads } =
-    partition;
+  const { workingThreads, snoozedThreads, settledThreads } = partition;
+  const activeThreadKeys = hideInactive ? activeSidebarThreadKeys(threads) : null;
+  const pinnedThreads = activeThreadKeys
+    ? partition.pinnedThreads.filter((thread) => activeThreadKeys.has(threadShellKey(thread)))
+    : partition.pinnedThreads;
+  const activeThreads = activeThreadKeys
+    ? partition.activeThreads.filter((thread) => activeThreadKeys.has(threadShellKey(thread)))
+    : partition.activeThreads;
   // Older settled threads load in pages; the shelf lists them only as far as they are loaded.
   const olderSettledShelf = useOlderSettledShelf({
     scopes: olderSettledScopes([...serverConfigs.keys()], scopedProjectKeys),
@@ -478,6 +487,8 @@ function useSidebarThreads(input: {
   }
   return {
     ...partition,
+    pinnedThreads,
+    activeThreads,
     threads,
     workingShelfEnabled,
     searchableThreads: [
@@ -2712,6 +2723,17 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
         fixedHeader={
           <SidebarGroup className="z-[1]">
             <SidebarThreadHeader
+              activityCounts={
+                <SidebarActivityCounts
+                  threads={
+                    scopedProjectKeys === null
+                      ? threads
+                      : threads.filter((thread) =>
+                          scopedProjectKeys.has(`${thread.environmentId}:${thread.projectId}`),
+                        )
+                  }
+                />
+              }
               searchFieldRef={headerSearchRef}
               hasProjects={projectGroups.length > 0}
               projectScope={

@@ -1,5 +1,24 @@
 @import "tailwindcss";
 
+@keyframes recording-pointer-preview-halo {
+  from {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0.9;
+  }
+  to {
+    transform: translate(-50%, -50%) scale(1.5);
+    opacity: 0;
+  }
+}
+.recording-pointer-preview-halo {
+  animation: recording-pointer-preview-halo ease-out both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .recording-pointer-preview-halo {
+    animation-timing-function: steps(1, end);
+  }
+}
+
 [data-project-color="gray"] {
   --project-accent: var(--color-gray-500);
 }
@@ -71,6 +90,19 @@
   );
 }
 
+.project-tint-main[data-project-color] {
+  background-color: color-mix(in srgb, var(--project-accent) 2%, var(--background));
+}
+.project-tint-details[data-project-color] {
+  background-color: color-mix(in srgb, var(--project-accent) 10%, var(--background));
+}
+.dark .project-tint-main[data-project-color] {
+  background-color: color-mix(in srgb, var(--project-accent) 3%, var(--background));
+}
+.dark .project-tint-details[data-project-color] {
+  background-color: color-mix(in srgb, var(--project-accent) 18%, var(--background));
+}
+
 .project-tint-row {
   isolation: isolate;
   border-radius: 0;
@@ -91,11 +123,8 @@
 .project-tint-row:hover,
 .project-tint-row:focus-within,
 .project-tint-row[data-highlighted] {
-  background-color: color-mix(
-    in srgb,
-    var(--project-tint-accent, var(--project-accent)) var(--project-row-hover-tint, 10%),
-    var(--sidebar)
-  );
+  outline: 1px solid var(--ring);
+  outline-offset: -1px;
 }
 
 .project-tint-row.project-tint-selected {
@@ -154,6 +183,24 @@
     color-mix(in srgb, var(--project-accent, var(--sidebar-foreground)) 45%, transparent);
 }
 
+.project-tint-row.project-tint-subagent {
+  --project-row-tint: 3%;
+  --project-row-selected-tint: 8%;
+}
+
+.dark .project-tint-row.project-tint-subagent {
+  --project-row-tint: 6%;
+  --project-row-selected-tint: 11%;
+}
+
+[data-project-color] [data-thread-activity="working"] {
+  color: color-mix(in oklab, var(--project-accent) 55%, var(--sidebar-foreground));
+}
+
+.project-tint-subagent [data-thread-activity="working"] {
+  color: color-mix(in oklab, var(--project-accent) 40%, var(--sidebar-foreground));
+}
+
 .project-thread-guide::before {
   content: "";
   position: absolute;
@@ -174,6 +221,22 @@
   pointer-events: none;
   border: 1px solid color-mix(in srgb, var(--color-info) 65%, transparent);
   border-radius: inherit;
+}
+
+[data-chat-composer-footer-compact="true"] [data-composer-usage-figure] {
+  display: none;
+}
+
+@container composer (max-width: 48.75rem) {
+  .composer-context-total {
+    display: none;
+  }
+}
+
+@container composer (max-width: 38.75rem) {
+  [data-composer-usage-figure] {
+    display: none;
+  }
 }
 
 .weekly-reset-counter {
@@ -266,6 +329,25 @@
   border: 1px solid currentColor;
   border-radius: 50%;
   opacity: 0.3;
+}
+
+.task-activity-symbol[data-task-activity="compacting"]::before {
+  inset: 2px;
+  border: 1px solid currentColor;
+  border-radius: 3px;
+  opacity: 0.25;
+}
+
+.task-activity-symbol[data-task-activity="compacting"]::after {
+  inset: 1px;
+  border: 2px solid transparent;
+  border-top-color: currentColor;
+  border-bottom-color: currentColor;
+  border-radius: 3px;
+  animation-name: task-waiting-orbit;
+  animation-duration: 3s;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
 }
 
 .task-activity-symbol[data-task-activity="waiting"]::after {

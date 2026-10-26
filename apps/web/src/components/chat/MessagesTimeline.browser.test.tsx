@@ -62,8 +62,7 @@ const CREATED_AT = "2026-03-17T19:12:28.000Z";
 type TimelineProps = ComponentProps<typeof MessagesTimeline>;
 type Entry = TimelineProps["timelineEntries"][number];
 
-// The timeline remembers scroll position and open disclosures per thread key,
-// so every render gets a fresh thread.
+// Disclosure state is retained per thread key, so every render gets a fresh thread.
 function baseProps(): Omit<TimelineProps, "timelineEntries"> {
   return {
     isWorking: false,
@@ -156,6 +155,72 @@ const TASK_ID = ScheduledTaskId.make("task-1");
 const AUTOMATION_PROMPT = "Triage the inbox\n\nLabel every new issue and close duplicates.";
 
 describe("MessagesTimeline messages", () => {
+  it("reopens at the end despite a saved reading position and follows later content growth", async () => {
+    setup();
+    const props = baseProps();
+    const entries = Array.from({ length: 40 }, (_, index) =>
+      message("Conversation history. ".repeat(40), { role: "assistant" }, `history-${index}`),
+    );
+    rememberTimelinePosition(
+      props.routeThreadKey,
+      {
+        rowId: entries[0]!.id,
+        offsetWithinRow: 0,
+        scrollOffset: 0,
+        atEnd: false,
+      },
+      false,
+    );
+    const onManualNavigation = vi.fn();
+    const timeline = (data: Entry[], liveFollowEnabled = true, inset = 0) => (
+      <MessagesTimeline
+        {...props}
+        timelineEntries={data}
+        liveFollowEnabled={liveFollowEnabled}
+        contentInsetEndAdjustment={inset}
+        onManualNavigation={onManualNavigation}
+      />
+    );
+    await using screen = await renderElement(timeline(entries));
+    const assertAtEnd = () => {
+      const viewport = props.listRef.current!.getScrollableNode()!;
+      expect(viewport.scrollHeight).toBeGreaterThan(viewport.clientHeight * 2);
+      expect(
+        viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop,
+      ).toBeLessThanOrEqual(2);
+    };
+    await vi.waitFor(assertAtEnd);
+    expect(onManualNavigation).not.toHaveBeenCalled();
+    const grown = [
+      ...entries.slice(0, -1),
+      message("Late attachment layout.\n\n".repeat(120), { role: "assistant" }, "history-39"),
+    ];
+    await screen.rerender(timeline(grown));
+    await vi.waitFor(assertAtEnd);
+    await screen.rerender(timeline(grown, true, 240));
+    await vi.waitFor(assertAtEnd);
+    await screen.rerender(timeline(grown, false));
+    await act(async () => {
+      const viewport = props.listRef.current!.getScrollableNode()!;
+      viewport.dispatchEvent(new WheelEvent("wheel", { deltaY: -500 }));
+      await props.listRef.current!.scrollToOffset({ offset: 0, animated: false });
+    });
+    await screen.rerender(timeline([...grown, message("New reply", {}, "new-reply")], false));
+    await vi.waitFor(() =>
+      expect(props.listRef.current!.getScrollableNode()!.scrollTop).toBeLessThan(20),
+    );
+    await screen.rerender(
+      <MessagesTimeline
+        {...props}
+        routeThreadKey={`${props.routeThreadKey}-other`}
+        timelineEntries={entries}
+      />,
+    );
+    await vi.waitFor(assertAtEnd);
+    await screen.rerender(timeline(grown));
+    await vi.waitFor(assertAtEnd);
+  });
+
   it("settles when equally long messages have very different rendered heights", async () => {
     const props = baseProps();
     const tall = message("a\n\n".repeat(6000), { role: "assistant" }, "tall");
