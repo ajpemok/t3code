@@ -25,6 +25,13 @@ const decodeClientSettingsPatch = Schema.decodeUnknownSync(ClientSettingsPatch);
 const encodeClientSettings = Schema.encodeSync(ClientSettingsSchema);
 const decodeServerSettings = Schema.decodeUnknownSync(ServerSettings);
 const decodeServerSettingsPatch = Schema.decodeUnknownSync(ServerSettingsPatch);
+it("bounds automatic provider recovery and supports disabling it", () => {
+  expect(DEFAULT_SERVER_SETTINGS.providerErrorRetryLimit).toBe(3);
+  expect(decodeServerSettingsPatch({ providerErrorRetryLimit: 0 }).providerErrorRetryLimit).toBe(0);
+  expect(decodeServerSettingsPatch({ providerErrorRetryLimit: 5 }).providerErrorRetryLimit).toBe(5);
+  expect(() => decodeServerSettingsPatch({ providerErrorRetryLimit: 6 })).toThrow();
+  expect(() => decodeServerSettingsPatch({ providerErrorRetryLimit: -1 })).toThrow();
+});
 const encodeServerSettings = Schema.encodeSync(ServerSettings);
 const decodeClaudeSettings = Schema.decodeUnknownSync(ClaudeSettings);
 
