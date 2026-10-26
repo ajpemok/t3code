@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
-import { ProviderInstanceId, ProviderThreadId } from "@t3tools/contracts";
+import { ProviderInstanceId, ProviderThreadId, ThreadId } from "@t3tools/contracts";
 import {
   backgroundWorkHoldsCompletion,
   derivePendingBackgroundWork,
@@ -17,6 +17,48 @@ describe("backgroundWorkHoldsCompletion", () => {
 });
 
 describe("derivePendingBackgroundWork", () => {
+  it.each(["completed", "running", "cancelled", "other child", "rolled back"] as const)(
+    "supersedes older child activity only with later completed work: %s",
+    (state) => {
+      const childThreadId = ThreadId.make("child");
+      const tasks = derivePendingBackgroundWork({
+        latestRun: { id: "run-2" as never, ordinal: 2, status: "completed" },
+        providerThreads: [],
+        runs:
+          state === "rolled back"
+            ? [{ id: "rolled-back" as never, ordinal: 2, status: "rolled_back" }]
+            : [],
+        turnItems: [
+          {
+            id: "legacy-task",
+            type: "subagent",
+            origin: "app_owned",
+            childThreadId,
+            ordinal: 1,
+            status: "running",
+            title: "Legacy follow-up",
+          },
+          {
+            id: "newer-task",
+            type: "subagent",
+            origin: "app_owned",
+            childThreadId: state === "other child" ? ThreadId.make("other-child") : childThreadId,
+            ordinal: 2,
+            status: state === "running" || state === "cancelled" ? state : "completed",
+            runId: state === "rolled back" ? "rolled-back" : null,
+            title: "Newer work",
+          },
+        ],
+      });
+      expect(tasks.map((task) => task.taskId)).toEqual(
+        state === "completed"
+          ? []
+          : state === "running"
+            ? ["legacy-task", "newer-task"]
+            : ["legacy-task"],
+      );
+    },
+  );
   it("takes each subagent item's instance from its joined owner", () => {
     const owner = ProviderInstanceId.make("claude-owner");
     const tasks = derivePendingBackgroundWork({
