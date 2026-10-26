@@ -7,6 +7,7 @@ import {
   ProviderInstanceId,
   ProviderSessionId,
   ProviderThreadId,
+  ProviderTurnId,
   RunAttemptId,
   RunId,
   ThreadId,
@@ -198,6 +199,59 @@ it.each(["/compact", " /LOGOUT "])("queues a steer sent while %s runs", (text) =
 });
 
 const layer = it.layer(CommandPolicy.layer);
+
+it.each(["completed", "running", "failed", "previous attempt", "new compaction"] as const)(
+  "checks the provider turn before steering a manual compaction run: %s",
+  (state) => {
+    const projection = dispatchProjection(baseCapabilities);
+    const compactTurnId = ProviderTurnId.make("compaction-turn");
+    const continuedTurnId = ProviderTurnId.make("continued-turn");
+    const continued = {
+      ...projection,
+      messages: [{ id: userMessageId, text: "/compact", attachments: [] }],
+      providerTurns: [
+        {
+          id: compactTurnId,
+          runAttemptId:
+            state === "previous attempt" ? RunAttemptId.make("old-attempt") : activeAttemptId,
+          status: "completed",
+          ordinal: 1,
+        },
+        { id: continuedTurnId, runAttemptId: activeAttemptId, status: "running", ordinal: 2 },
+      ],
+      turnItems: [
+        {
+          type: "compaction",
+          runId: activeRunId,
+          providerTurnId: compactTurnId,
+          status: state === "running" || state === "failed" ? state : "completed",
+        },
+        ...(state === "new compaction"
+          ? [
+              {
+                type: "compaction",
+                runId: activeRunId,
+                providerTurnId: continuedTurnId,
+                status: "running",
+              },
+            ]
+          : []),
+      ],
+    } as unknown as OrchestrationV2ThreadProjection;
+    for (const deliveryIntent of ["auto", "steer"] as const) {
+      assert.deepEqual(
+        CommandPolicy.resolveMessageDispatchIntent(
+          continued,
+          { type: "start_immediately" },
+          deliveryIntent,
+        ),
+        state === "completed"
+          ? { type: "steer_active", targetRunId: activeRunId }
+          : { type: "queue_after_active" },
+      );
+    }
+  },
+);
 
 layer("CommandPolicyV2", (it) => {
   it.effect("falls back to portable context when Cursor cannot fork natively", () =>
