@@ -48,7 +48,7 @@ are preserved.
 
 The weekly fuel gauge immediately to its right shows the selected provider account's
 **remaining** quota. Open it for the account's usage details and banked manual resets.
-The raised count shows how many resets are available. Its cool accent changes when
+The raised count shows how many resets are available. Its theme accent changes when
 the next credit expires within 48 hours; within 24 hours, a subtle pulse marks it as
 important. Reduced motion keeps the cue static. **Use reset** asks for confirmation
 before spending a credit.

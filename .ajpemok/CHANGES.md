@@ -225,8 +225,9 @@ Read the current selected-instance snapshot even when the composer retains an ol
 provider object after a check-time-only update. Merge banked reset reports only for
 that account and workspace. Use native reset routing and confirmation, and dismiss
 the confirmation on an account change. Hide stale or expired balances. The raised
-counter uses a cyan cue within 48 hours and violet within 24 hours, with a subtle
-opacity pulse paused offscreen, when hidden and with reduced motion.
+counter uses the active theme's information colour within 48 hours and warning
+colour within 24 hours. The important state also has a tinted badge and stronger
+weight, with a subtle opacity pulse paused offscreen, when hidden and with reduced motion.
 
 ## Steering After Compaction and Stale Delegated Activity
 
