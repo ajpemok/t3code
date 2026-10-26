@@ -2105,6 +2105,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
       readEnvironmentScope(threadRef.environmentId, AuthOrchestrationOperateScope),
     );
 
+    // oxlint-disable-next-line react/purity -- This native-menu event handler resolves presets at the time the menu opens.
     const snoozePresets = resolveSnoozePresets(new Date(), timestampFormat);
     const supportsAll = (
       key: "threadSettlement" | "threadPinning" | "threadSnooze" | "threadTitleRegeneration",
@@ -3589,7 +3590,7 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
         )}
         {projectsLength > 0 && sortedProjects.length === 0 && (
           <div className="px-2 pt-4 text-center text-secondary-label text-xs">
-            No unsettled tasks
+            No unsettled threads
           </div>
         )}
       </SidebarGroup>
