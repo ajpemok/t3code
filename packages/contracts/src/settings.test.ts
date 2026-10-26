@@ -56,7 +56,12 @@ describe("sidebar thread visibility settings", () => {
       resolveSidebarSubagentVisibility(
         decodeClientSettings({ sidebarActiveSubagentsEnabled: true }),
       ),
-    ).toBe("active");
+    ).toBe("show");
+    expect(
+      resolveSidebarSubagentVisibility(
+        decodeClientSettings({ sidebarSubagentVisibility: "active" }),
+      ),
+    ).toBe("show");
     const patch = {
       sidebarSubagentVisibility: "show",
       sidebarSubagentPreviewCount: 5,

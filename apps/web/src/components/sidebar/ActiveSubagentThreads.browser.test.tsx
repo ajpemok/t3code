@@ -93,6 +93,7 @@ function setup() {
 it("opts into active children, removes completed children and retains input requests without reading transcripts", async () => {
   const { registry, threads } = setup();
   using _registry = { [Symbol.dispose]: () => registry.dispose() };
+  state.hideInactive = true;
   const parentId = ThreadId.make("parent");
   const child = makeThreadFixture({
     id: ThreadId.make("child"),
@@ -118,7 +119,7 @@ it("opts into active children, removes completed children and retains input requ
     .element(screen.getByRole("link", { name: "Open active subagent: Inspect the Diff" }))
     .not.toBeInTheDocument();
   await screen.getByRole("button", { name: "Subagents: Hide" }).click();
-  await page.getByRole("menuitemradio", { name: "Show active", exact: true }).click();
+  await page.getByRole("menuitemradio", { name: "Show", exact: true }).click();
   await userEvent.keyboard("{Escape}");
   await expect.element(page.getByRole("menu")).not.toBeInTheDocument();
   await expect
@@ -129,7 +130,7 @@ it("opts into active children, removes completed children and retains input requ
   await expect.element(screen.getByRole("link")).not.toBeInTheDocument();
   await act(() => registry.set(threads, [{ ...child, runtime: null, hasPendingUserInput: true }]));
   await expect.element(screen.getByText("Awaiting Input", { exact: true })).toBeVisible();
-  await screen.getByRole("button", { name: "Subagents: Show active" }).click();
+  await screen.getByRole("button", { name: "Subagents: Show" }).click();
   await expect.element(page.getByRole("menu")).toBeVisible();
   await page.getByRole("menuitemradio", { name: "Hide", exact: true }).click();
   await expect.element(screen.getByRole("link")).not.toBeInTheDocument();

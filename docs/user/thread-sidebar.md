@@ -28,13 +28,13 @@ Use **Hide Inactive Threads and Projects** to focus both views on current work a
 input requests. An idle parent stays available while one of its subagents works.
 This filter also hides empty pinned project headers; turning it off restores them.
 
-Choose **Show**, **Show active** or **Hide** from the **Subagents** menu beside the
+Choose **Show** or **Hide** from the **Subagents** menu beside the
 sidebar controls or in **Settings → Appearance**. **Show** includes idle children
 and respects Hide Inactive. **Visible Subagents** sets the initial count per parent;
 expand the remaining children when needed. Project summaries count active and inactive
 threads and subagents separately. These choices apply to both views.
 Assign shortcuts to **Sidebar: Hide/Show Inactive Threads and Projects** and
-**Sidebar: Cycle Subagent Visibility** in **Settings → Keybindings**.
+**Sidebar: Show/Hide Subagents** in **Settings → Keybindings**.
 
 Choose **Close all inactive tabs (N)** from a project, thread or subagent menu to
 close its eligible idle right-panel views and release unclaimed browser sessions.

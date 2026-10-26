@@ -83,16 +83,16 @@ export const SidebarThreadPreviewCount = Schema.Int.check(
   }),
 );
 export type SidebarThreadPreviewCount = typeof SidebarThreadPreviewCount.Type;
+// Older clients and saved preferences can still send "active".
 export const SidebarSubagentVisibility = Schema.Literals(["show", "active", "hide"]);
 export type SidebarSubagentVisibility = typeof SidebarSubagentVisibility.Type;
 export function resolveSidebarSubagentVisibility(settings: {
   readonly sidebarSubagentVisibility?: SidebarSubagentVisibility | undefined;
   readonly sidebarActiveSubagentsEnabled: boolean;
-}): SidebarSubagentVisibility {
-  return (
-    settings.sidebarSubagentVisibility ??
-    (settings.sidebarActiveSubagentsEnabled ? "active" : "hide")
-  );
+}): "show" | "hide" {
+  const mode = settings.sidebarSubagentVisibility;
+  if (mode !== undefined) return mode === "hide" ? "hide" : "show";
+  return settings.sidebarActiveSubagentsEnabled ? "show" : "hide";
 }
 const DEFAULT_SIDEBAR_THREAD_PREVIEW_COUNT: SidebarThreadPreviewCount = 6;
 export const MIN_SIDEBAR_AUTO_SETTLE_AFTER_DAYS = 1;
