@@ -213,11 +213,40 @@ Remove the old explanatory paragraphs without removing reported usage figures.
 | `apps/web/src/components/chat/WeeklyQuotaGauge.browser.test.tsx` | Account switching, reported zero and failed-probe rendering.                                                   |
 | `apps/web/src/lib/weeklyQuota.ts`                                | Exact account/workspace matching, weekly model buckets and five-minute freshness limit.                        |
 | `apps/web/src/lib/weeklyQuota.test.ts`                           | Numeric, identity, model, missing-data and freshness boundaries.                                               |
+| `apps/web/src/components/usage/UsageLimitDetails.tsx`            | Shared account usage details and native reset-credit action.                                                   |
+| `apps/web/src/components/usage/UsageLimitsPooled.tsx`            | Usage page reuses the same details component as the composer.                                                  |
+| `scripts/effect-budget.json`                                     | Existing fork observer, native guest synchronisation and snooze timer effects under upstream's effect budget.  |
 | `apps/web/src/assets/brave.svg`                                  | Browser glyph from [Brave's official assets](https://brave.com/static-assets/images/brave-logo-sans-text.svg). |
 
 Do not replace unavailable quota with a full gauge, use another account or infer a weekly window.
 The gauge reads existing native/source snapshots without probing credentials.
 Source failures and elapsed reset clocks invalidate the reading.
+Read the current selected-instance snapshot even when the composer retains an older
+provider object after a check-time-only update. Merge banked reset reports only for
+that account and workspace. Use native reset routing and confirmation, and dismiss
+the confirmation on an account change. Hide stale or expired balances. The raised
+counter uses a cyan cue within 48 hours and violet within 24 hours, with a subtle
+opacity pulse paused offscreen, when hidden and with reduced motion.
+
+## Steering After Compaction and Stale Delegated Activity
+
+Allow steering and completion delivery after a manual compaction finishes and a goal
+continues in another provider turn within the same run. Keep the maintenance guard
+for unfinished compaction and sign-out. Read only the compaction items needed by
+the command policy alongside the existing bounded command projection.
+
+| Files                                                                     | Fork Responsibility                                                               |
+| ------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `apps/server/src/orchestration-v2/CommandPolicy.ts`                       | Current provider-turn maintenance guard.                                          |
+| `apps/server/src/orchestration-v2/CommandPolicy.test.ts`                  | Continued goals, unfinished compaction and attempt isolation.                     |
+| `apps/server/src/orchestration-v2/Orchestrator.ts`                        | Normal dispatch, queued promotion and completion delivery use the same guard.     |
+| `apps/server/src/orchestration-v2/SteeringCompletion.integration.test.ts` | Direct and queued steering continue without restarting provider work.             |
+| `packages/shared/src/orchestrationV2PendingBackgroundWork.ts`             | Later completed work on a child supersedes legacy stale activity for that child.  |
+| `packages/shared/src/orchestrationV2PendingBackgroundWork.test.ts`        | Same-child, terminal-status and rollback boundaries.                              |
+| `apps/server/src/orchestration-v2/ProjectionStore.ts`                     | Matching SQL shell and settlement reads, using the existing thread/ordinal index. |
+| `apps/server/src/orchestration-v2/ProjectionSettlement.test.ts`           | Memory and SQL parity for superseded activity.                                    |
+
+These changes derive current activity without rewriting old task results or live history.
 
 ## Fork Maintenance Files
 

@@ -3785,6 +3785,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     reserveContextWindowMeter={reserveContextWindowMeter}
                     weeklyQuota={
                       <WeeklyQuotaGauge
+                        environmentId={environmentId}
                         provider={selectedProviderStatus}
                         sources={props.usageLimitSources ?? []}
                         model={selectedModel}
