@@ -192,7 +192,7 @@ export function ProjectThreadShelves({ actions }: { readonly actions: ShelfActio
           <CollapsibleSectionHeader
             expanded={shelf.expanded}
             onClick={shelf.toggle}
-            tone={shelf.kind === "snoozed" ? "info" : "muted"}
+            tone={shelf.kind === "snoozed" ? "accent" : "muted"}
           >
             {shelf.label} ({shelf.threads.length})
           </CollapsibleSectionHeader>
