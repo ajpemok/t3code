@@ -194,7 +194,7 @@
 }
 
 [data-project-color] [data-thread-activity="working"] {
-  color: color-mix(in oklab, var(--project-accent) 55%, var(--sidebar-foreground));
+  color: var(--project-accent);
 }
 
 .project-tint-subagent [data-thread-activity="working"] {
