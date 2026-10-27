@@ -420,6 +420,19 @@ adjustments at drag end rather than writing preferences on every window resize.
 | `apps/web/src/components/chat/ChatRightPanel.tsx`               | Enable window-edge resizing only for the open inline panel.  |
 | `apps/web/src/components/preview/PreviewPanelShell.tsx`         | Match enabled state in standalone panel callers.             |
 
+## T3 Connect Packaging
+
+AJPEMOK desktop builds require upstream's public T3 Connect configuration.
+Set `T3CODE_DESKTOP_REQUIRE_CONNECT=1` when packaging. Reject missing public
+identifiers, a missing Electron sign-in module and bundles from a different
+configuration, including when reusing build output. Local-only upstream builds
+remain available without that opt-in. Account credentials stay outside builds.
+
+| Files                                    | Fork Responsibility                                                       |
+| ---------------------------------------- | ------------------------------------------------------------------------- |
+| `scripts/build-desktop-artifact.ts`      | Opt-in validation of emitted T3 Connect support and public configuration. |
+| `scripts/build-desktop-artifact.test.ts` | Offline, configured, missing-module and stale-configuration bundle cases. |
+
 ## Fork Maintenance Files
 
 | Files                            | Fork Responsibility                                                          |
