@@ -37,7 +37,6 @@ export function providerErrorRecoveryBannerItem(
   return {
     id: `provider-error-recovery:${props.run.id}`,
     variant: "warning",
-    priority: "urgent",
     icon: <RotateCwIcon />,
     title: "Provider Retry",
     actions: <RecoveryControls key={props.run.id} {...props} />,

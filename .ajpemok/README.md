@@ -116,8 +116,15 @@ CI still owns the full suites.
 Follow the current [desktop build guide](../docs/operations/development.md#desktop-artifacts) for prerequisites and the [release runbook](../docs/operations/release.md) for packaging details.
 Build after source checks, with the official nightly version so the existing nightly update channel remains available:
 
+AJPEMOK packages require T3 Connect. If this checkout has no `.env`, copy
+`.env.example` to `.env`; it contains upstream's public production identifiers.
+Retain an existing `.env` and configure its public Clerk key, JWT template and
+relay URL. Do not copy account credentials. The build guard below rejects a
+client bundle with missing sign-in support or stale public configuration.
+
 ```powershell
 $buildVersion = $targetTag -replace '^v', ''
+$env:T3CODE_DESKTOP_REQUIRE_CONNECT = '1'
 vp run dist:desktop:win --build-version $buildVersion
 ```
 

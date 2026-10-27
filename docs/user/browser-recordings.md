@@ -5,7 +5,7 @@ Click it again to stop and save. You can also ask an agent to record its browser
 actions; its recording tools save the resulting video in the connected environment.
 Choose the browser profile that holds the logins needed for your tutorial.
 
-Set **Recording Pointer** in **Settings → Integrations** before starting a recording.
+Set **Recording Pointer** in **Settings → Browser** before starting a recording.
 Choose an arrow, Precision Ring or an angular Delta, Kite or Chevron, or import a PNG,
 WebP or SVG image. Adjust its size and hotspot. The hotspot is
 the point on the image that touches the click target; X and Y are percentages of

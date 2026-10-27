@@ -22,6 +22,7 @@ import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
 import {
   buildDesktopBundles,
+  validateBundledClientAssets,
   DesktopBuildManifestRestoreError,
   BundleNotSelfContainedError,
   BuildCommandFailedError,
@@ -66,11 +67,58 @@ import {
   releasePackageFiles,
 } from "./update-release-package-versions.ts";
 import * as HostProcess from "@t3tools/shared/HostProcess";
+import { resolvePublicConfig } from "./lib/public-config.ts";
 import { symlinksSupported } from "@t3tools/shared/testing/symlinks";
 
 const encodeModuleUrl = Schema.encodeEffect(Schema.fromJsonString(Schema.String));
 const decodePackageVersion = Schema.decodeUnknownEffect(
   Schema.fromJsonString(Schema.Struct({ version: Schema.String })),
+);
+
+it.effect("rejects offline client bundles when a Connect-enabled package is required", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-connect-package-" });
+      yield* fs.makeDirectory(path.join(root, "assets"));
+      yield* fs.writeFileString(
+        path.join(root, "index.html"),
+        '<script src="/assets/main.js"></script>',
+      );
+      yield* fs.writeFileString(path.join(root, "assets/main.js"), "console.log('local only')");
+      yield* validateBundledClientAssets(root);
+      const connectConfig = resolvePublicConfig({
+        T3CODE_CLERK_PUBLISHABLE_KEY: "pk_test_fixture",
+        T3CODE_CLERK_JWT_TEMPLATE: "fixture-template",
+        T3CODE_RELAY_URL: "https://relay.example.test",
+      });
+      const offline = yield* Effect.exit(validateBundledClientAssets(root, { connectConfig }));
+      assert.isTrue(Exit.isFailure(offline));
+      yield* fs.writeFileString(
+        path.join(root, "assets/main.js"),
+        JSON.stringify([
+          connectConfig.clerkPublishableKey,
+          connectConfig.clerkJwtTemplate,
+          connectConfig.relayUrl,
+        ]),
+      );
+      const noSignIn = yield* Effect.exit(validateBundledClientAssets(root, { connectConfig }));
+      assert.isTrue(Exit.isFailure(noSignIn));
+      yield* fs.writeFileString(path.join(root, "assets/ElectronManagedAuthShell-fixture.js"), "");
+      yield* validateBundledClientAssets(root, { connectConfig });
+      const stale = yield* Effect.exit(
+        validateBundledClientAssets(root, {
+          connectConfig: { ...connectConfig, relayUrl: "https://changed.example.test" },
+        }),
+      );
+      assert.isTrue(Exit.isFailure(stale));
+      const unconfigured = yield* Effect.exit(
+        validateBundledClientAssets(root, { connectConfig: resolvePublicConfig({}) }),
+      );
+      assert.isTrue(Exit.isFailure(unconfigured));
+    }).pipe(Effect.provide(NodeServices.layer)),
+  ),
 );
 
 // Keeps pnpm from auto-installing TypeScript, a types-only peer, into the app.
