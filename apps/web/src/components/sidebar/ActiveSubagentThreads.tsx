@@ -1,7 +1,7 @@
+import { useRecentThreads } from "~/hooks/useRecentThreads";
 import { useAtomValue } from "@effect/atom-react";
 import { Link } from "@tanstack/react-router";
 import { scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environment";
-import { effectiveSnoozed } from "@t3tools/client-runtime/state/thread-settled";
 import { resolveSidebarSubagentVisibility, type ScopedThreadRef } from "@t3tools/contracts";
 import { Atom } from "effect/reactivity";
 import { EyeOffIcon, GitForkIcon, PinIcon } from "lucide-react";
@@ -49,7 +49,7 @@ const activeChildrenAtom = Atom.family((key: string | null) => {
   return Atom.make((get) => {
     const mode = key?.startsWith("show:") ? "show" : "active";
     const next =
-      key === null ? [] : (get(subagentsAtom(mode)).get(key.slice(mode.length + 1)) ?? []);
+      key === null ? [] : (get(subagentsAtom("show")).get(key.slice(mode.length + 1)) ?? []);
     if (
       previous.length === next.length &&
       previous.every((thread, index) => thread === next[index])
@@ -196,9 +196,13 @@ export function ActiveSubagentThreads({
   const count = useClientSettings((settings) => settings.sidebarSubagentPreviewCount) ?? 3;
   const key = mode !== "hide" && enabled ? `${mode}:${scopedThreadKey(threadRef)}` : null;
   const minute = useNowMinute();
-  const children = useAtomValue(activeChildrenAtom(key)).filter(
-    (child) => !effectiveSnoozed(child, { now: `${minute}:00.000Z` }),
-  );
+  const { retainedKeys } = useRecentThreads(enabled && mode !== "hide");
+  const candidates = useAtomValue(activeChildrenAtom(key));
+  const children =
+    subagentsByParent(candidates, mode === "active" ? "active" : "show", {
+      now: `${minute}:00.000Z`,
+      recentKeys: retainedKeys,
+    }).get(scopedThreadKey(threadRef)) ?? [];
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const expansionKey = key === null ? null : `${count}:${key}`;
   const expanded = expansionKey !== null && expandedKey === expansionKey;
@@ -212,7 +216,15 @@ export function ActiveSubagentThreads({
   return (
     <ul
       className="project-subagent-list"
-      aria-label={mode === "active" ? "Active subagents" : "Subagents"}
+      aria-label={
+        mode === "active"
+          ? children.some((child) =>
+              retainedKeys.has(scopedThreadKey(scopeThreadRef(child.environmentId, child.id))),
+            )
+            ? "Active and recent subagents"
+            : "Active subagents"
+          : "Subagents"
+      }
     >
       {visibleChildren.map((child) => {
         const ref = scopeThreadRef(child.environmentId, child.id);
@@ -229,7 +241,7 @@ export function ActiveSubagentThreads({
                   selected.threadId === ref.threadId &&
                   "project-tint-selected",
               )}
-              aria-label={`Open ${mode === "active" ? "active " : ""}subagent: ${child.title}`}
+              aria-label={`Open ${retainedKeys.has(childKey) ? "recent " : mode === "active" ? "active " : ""}subagent: ${child.title}`}
               title={child.title}
               onContextMenu={(event) => {
                 event.preventDefault();

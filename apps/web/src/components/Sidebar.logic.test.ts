@@ -106,6 +106,29 @@ describe("project section visibility", () => {
     expect(sidebarActivityCounts([queued], now).threads).toEqual({ active: 1, inactive: 0 });
   });
 
+  it("retains only recent keys under Hide Inactive and still respects pinned-only", () => {
+    const idle = makeThreadFixture({ id: ThreadId.make("idle") });
+    const recent = makeThreadFixture({ id: ThreadId.make("recent") });
+    const recentKeys = new Set(["environment-test:recent"]);
+    expect(
+      filterProjectSectionThreads([idle, recent], {
+        now,
+        capabilities,
+        hideInactive: true,
+        recentKeys,
+      }),
+    ).toEqual([recent]);
+    expect(
+      filterProjectSectionThreads([idle, recent], {
+        now,
+        capabilities,
+        hideInactive: true,
+        pinnedOnly: true,
+        recentKeys,
+      }),
+    ).toEqual([]);
+  });
+
   it("combines pinned-only and active-only filters without exposing unpinned working threads", () => {
     const idlePin = makeThreadFixture({ id: ThreadId.make("idle-pin"), pinnedAt: now });
     const activePin = makeThreadFixture({

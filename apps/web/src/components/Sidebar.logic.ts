@@ -602,6 +602,7 @@ export function filterProjectSectionThreads<T extends SidebarThreadSummary>(
     readonly now: string;
     readonly hideInactive?: boolean;
     readonly pinnedOnly?: boolean;
+    readonly recentKeys?: ReadonlySet<string>;
     readonly capabilities: ReadonlyMap<
       string,
       { readonly threadSettlement?: boolean; readonly threadSnooze?: boolean }
@@ -632,13 +633,19 @@ export function partitionProjectSectionThreads<T extends SidebarThreadSummary>(
 }
 
 export function sidebarMainThreadFilter(
-  options: { readonly hideInactive?: boolean; readonly pinnedOnly?: boolean },
+  options: {
+    readonly hideInactive?: boolean;
+    readonly pinnedOnly?: boolean;
+    readonly recentKeys?: ReadonlySet<string>;
+  },
   allThreads: readonly SidebarThreadSummary[],
 ) {
   const activeKeys = options.hideInactive ? activeSidebarThreadKeys(allThreads) : null;
   return (thread: SidebarThreadSummary) =>
     (!options.pinnedOnly || thread.pinnedAt !== null) &&
-    (activeKeys === null || activeKeys.has(`${thread.environmentId}:${thread.id}`));
+    (activeKeys === null ||
+      activeKeys.has(`${thread.environmentId}:${thread.id}`) ||
+      options.recentKeys?.has(`${thread.environmentId}:${thread.id}`) === true);
 }
 
 export function activeSubagentsByParent<T extends SidebarThreadSummary>(threads: readonly T[]) {
@@ -648,7 +655,11 @@ export function activeSubagentsByParent<T extends SidebarThreadSummary>(threads:
 export function subagentsByParent<T extends SidebarThreadSummary>(
   threads: readonly T[],
   mode: "show" | "active",
-  options: { readonly now?: string; readonly includeSnoozed?: boolean } = {},
+  options: {
+    readonly now?: string;
+    readonly includeSnoozed?: boolean;
+    readonly recentKeys?: ReadonlySet<string>;
+  } = {},
 ) {
   const now = options.now ?? new Date().toISOString();
   const byParent = new Map<string, T[]>();
@@ -674,7 +685,13 @@ export function subagentsByParent<T extends SidebarThreadSummary>(
       thread.runtime?.status === "starting" ||
       thread.runtime?.status === "running" ||
       ((thread.runtime === null || thread.runtime.status === "idle") && runActive);
-    if (mode === "active" && !needsInput && !runtimeActive && !isSidebarThreadActive(thread))
+    if (
+      mode === "active" &&
+      !needsInput &&
+      !runtimeActive &&
+      !isSidebarThreadActive(thread) &&
+      !options.recentKeys?.has(`${thread.environmentId}:${thread.id}`)
+    )
       continue;
     const parentKey = `${thread.environmentId}:${parentId}`;
     const siblings = byParent.get(parentKey);

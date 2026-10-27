@@ -1,3 +1,5 @@
+import { useRecentThreads } from "~/hooks/useRecentThreads";
+import { RecentThreadsShelf } from "./sidebar/RecentThreadsShelf";
 import { projectTintColor } from "~/projectIdentity";
 import { sidebarMainThreadFilter } from "./Sidebar.logic";
 import { SidebarActivityCounts } from "./sidebar/SidebarActivityCounts";
@@ -387,6 +389,8 @@ function useSidebarThreads(input: {
   } = input;
   const hideInactive = useClientSettings((settings) => settings.sidebarHideInactiveEnabled);
   const pinnedOnly = useClientSettings((settings) => settings.sidebarPinnedOnlyEnabled);
+  const recent = useRecentThreads();
+  const { retainedKeys } = recent;
   const workingShelfEnabled = useClientSettings((s) => s.sidebarWorkingShelfEnabled);
   const inboxReturnsVersion = useSyncExternalStore(
     inboxReturns.subscribe,
@@ -430,7 +434,10 @@ function useSidebarThreads(input: {
   });
 
   const { snoozedThreads, settledThreads } = partition;
-  const showMainThread = sidebarMainThreadFilter({ hideInactive, pinnedOnly }, threads);
+  const showMainThread = sidebarMainThreadFilter(
+    { hideInactive, pinnedOnly, recentKeys: retainedKeys },
+    threads,
+  );
   const pinnedThreads = partition.pinnedThreads.filter(showMainThread);
   const activeThreads = partition.activeThreads.filter(showMainThread);
   const workingThreads = partition.workingThreads.filter(showMainThread);
@@ -485,6 +492,13 @@ function useSidebarThreads(input: {
   }
   return {
     ...partition,
+    hasRecentThreads:
+      recent.showSection &&
+      recent.entries.some(
+        ({ thread }) =>
+          scopedProjectKeys === null ||
+          scopedProjectKeys.has(`${thread.environmentId}:${thread.projectId}`),
+      ),
     workingThreads,
     pinnedThreads,
     activeThreads,
@@ -1110,6 +1124,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   );
 
   const {
+    hasRecentThreads,
     workingShelfEnabled,
     pinnedThreads,
     draggableThreadKeys,
@@ -3254,6 +3269,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
             </TooltipProvider>
           ) : null}
           {!isSearchingThreads &&
+          !hasRecentThreads &&
           visibleDraftSessionCount === 0 &&
           pinnedThreads.length +
             activeThreads.length +
@@ -3282,6 +3298,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
             </div>
           ) : null}
         </SidebarGroup>
+        {!isSearchingThreads ? <RecentThreadsShelf scopedProjectKeys={scopedProjectKeys} /> : null}
       </SidebarContent>
       <SidebarChromeFooter
         showUndoNotice={isSearchingThreads || sidebarListItemsFresh.length === 0}

@@ -13,6 +13,9 @@ const state = vi.hoisted(() => ({
   listeners: new Set<() => void>(),
   canOperate: true,
 }));
+vi.mock("~/hooks/useRecentThreads", () => ({
+  useRecentThreads: () => ({ entries: [], retainedKeys: new Set<string>(), showSection: false }),
+}));
 vi.mock("~/state/entities", () => ({
   useProject: () => null,
   readThreadShell: () => null,

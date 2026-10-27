@@ -18,9 +18,9 @@ additional native-window confirmation has been removed. Thread opening and
 saved scroll positions also use upstream behaviour. Keep the compaction,
 child-activity and preview repairs until their exact regressions pass upstream.
 
-The earlier 3770 packages predate the pinned-only filter and model details.
-They remain historical qualification evidence; build the maintained source
-before the next installation.
+The earlier 3770 packages predate the current maintenance changes. They remain
+historical qualification evidence; build the maintained source before the next
+installation.
 
 ## Refresh From a Published Nightly
 
@@ -87,7 +87,11 @@ if ($LASTEXITCODE -ne 0) { throw 'Rebase stopped; inspect its state before conti
 
 Use unique names if either ref already exists, or inspect an existing attempt before resuming it.
 The backup retains the old fork and the original published branch stays unchanged.
-Replay only the commits after the recorded official base.
+Replay only the commits after the recorded official base. On the private
+candidate, fold follow-up fixes and retired hunks into their owning feature
+commits before replaying. Preserve the backup and verify that consolidation
+leaves the tree unchanged. This avoids resolving conflicts for code the final
+fork no longer contains.
 Use the [conflict procedure](#resolve-conflicts) if Git stops.
 
 ### 4. Record the New Base and Check the Patch Set

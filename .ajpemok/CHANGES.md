@@ -204,6 +204,28 @@ shared active-only filter.
 | `apps/web/src/hooks/useCanSnoozeThread.browser.test.tsx` | Reopen the gate without another shell update and block pending input.             |
 | `apps/web/src/lib/visibleAnimation.browser.test.tsx`     | Verify offscreen, hidden-document and reduced-motion pauses and observer cleanup. |
 
+## Recent Finished Threads
+
+Both sidebars have a Recent shelf. Default to five finished threads within sixty
+minutes; a zero age limit keeps the last N regardless of age. Separate client
+preferences control the shelf, normal-list retention under Hide Inactive and
+including subagents. Subagents still respect Show/Hide. Preserve ancestor
+visibility so a recent child remains reachable. Pinned Only applies to the
+parent, and parked/archived threads or descendants stay out of Recent.
+Use completion metadata, including the native terminal shell status for runless
+children. A running or input-blocked thread leaves Recent and follows normal
+activity filtering. Share the bounded quiet-shell derivation across rows; no
+transcript subscription or server mutation is needed for this client view.
+
+| Files                                                                 | Fork Responsibility                                                           |
+| --------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `apps/web/src/components/sidebar/recentThreads.logic.ts`              | Completion ordering, count/age bounds, exclusions and ancestor keys.          |
+| `apps/web/src/components/sidebar/recentThreads.logic.test.ts`         | Boundaries, parking, native children, environments and normal-list retention. |
+| `apps/web/src/hooks/useRecentThreads.ts`                              | Shared quiet-shell derivation, saved preferences and minute clock.            |
+| `apps/web/src/components/sidebar/RecentThreadsShelf.tsx`              | Shared Recent section, collapse, links and existing context actions.          |
+| `apps/web/src/components/sidebar/RecentThreadsShelf.browser.test.tsx` | Collapse, finished-thread display and removal on resume.                      |
+| `apps/web/src/components/settings/RecentThreadsSettings.tsx`          | Shelf, retention, subagent, count and age controls.                           |
+
 ## Read-Only Model Details
 
 Working and Goal statuses include a compact model name. The shared hover/focus

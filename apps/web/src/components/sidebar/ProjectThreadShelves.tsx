@@ -1,3 +1,5 @@
+import { RecentThreadsShelf } from "./RecentThreadsShelf";
+import { useRecentThreads } from "~/hooks/useRecentThreads";
 import { Link } from "@tanstack/react-router";
 import {
   scopeProjectRef,
@@ -33,6 +35,7 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 export function useProjectThreadSections(threads: readonly SidebarThreadSummary[]) {
   const hideInactive = useClientSettings((settings) => settings.sidebarHideInactiveEnabled);
   const pinnedOnly = useClientSettings((settings) => settings.sidebarPinnedOnlyEnabled);
+  const { retainedKeys } = useRecentThreads();
   const configs = useServerConfigs();
   const minute = useNowMinute();
   const [wakeClock, setWakeClock] = useState(() => new Date().toISOString());
@@ -41,6 +44,7 @@ export function useProjectThreadSections(threads: readonly SidebarThreadSummary[
     now,
     hideInactive,
     pinnedOnly,
+    recentKeys: retainedKeys,
     capabilities: new Map(
       [...configs].map(([id, config]) => [id, config.environment.capabilities]),
     ),
@@ -237,6 +241,7 @@ export function ProjectThreadShelves({ actions }: { readonly actions: ShelfActio
           ) : null}
         </section>
       ))}
+      <RecentThreadsShelf className="pt-2" />
     </div>
   );
 }

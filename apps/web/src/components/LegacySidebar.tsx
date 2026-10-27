@@ -3599,7 +3599,7 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
         )}
         {projectsLength > 0 && sortedProjects.length === 0 && (
           <div className="px-2 pt-4 text-center text-secondary-label text-xs">
-            No unsettled threads
+            No threads match the project filters
           </div>
         )}
       </SidebarGroup>

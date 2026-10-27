@@ -462,6 +462,21 @@ export const ClientSettingsSchema = Schema.Struct({
   sidebarHideInactiveEnabled: Schema.Boolean.pipe(
     Schema.withDecodingDefault(Effect.succeed(false)),
   ),
+  sidebarRecentSectionEnabled: Schema.Boolean.pipe(
+    Schema.withDecodingDefault(Effect.succeed(true)),
+  ),
+  sidebarKeepRecentThreadsVisible: Schema.Boolean.pipe(
+    Schema.withDecodingDefault(Effect.succeed(true)),
+  ),
+  sidebarRecentIncludeSubagents: Schema.Boolean.pipe(
+    Schema.withDecodingDefault(Effect.succeed(true)),
+  ),
+  sidebarRecentThreadCount: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 50 })).pipe(
+    Schema.withDecodingDefault(Effect.succeed(5)),
+  ),
+  sidebarRecentThreadMaxAgeMinutes: Schema.Int.check(
+    Schema.isBetween({ minimum: 0, maximum: 1440 }),
+  ).pipe(Schema.withDecodingDefault(Effect.succeed(60))),
   sidebarPinnedOnlyEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   sidebarPinnedProjectKeys: Schema.Array(Schema.String).pipe(
     Schema.withDecodingDefault(Effect.succeed([])),
@@ -1705,6 +1720,15 @@ export const ClientSettingsPatch = Schema.Struct({
   sidebarSubagentVisibility: Schema.optionalKey(SidebarSubagentVisibility),
   sidebarSubagentPreviewCount: Schema.optionalKey(SidebarThreadPreviewCount),
   sidebarHideInactiveEnabled: Schema.optionalKey(Schema.Boolean),
+  sidebarRecentSectionEnabled: Schema.optionalKey(Schema.Boolean),
+  sidebarKeepRecentThreadsVisible: Schema.optionalKey(Schema.Boolean),
+  sidebarRecentIncludeSubagents: Schema.optionalKey(Schema.Boolean),
+  sidebarRecentThreadCount: Schema.optionalKey(
+    Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 50 })),
+  ),
+  sidebarRecentThreadMaxAgeMinutes: Schema.optionalKey(
+    Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 1440 })),
+  ),
   sidebarPinnedOnlyEnabled: Schema.optionalKey(Schema.Boolean),
   sidebarPinnedProjectKeys: Schema.optionalKey(Schema.Array(Schema.String)),
   ajpemokHeaderScene: Schema.optionalKey(Schema.String),

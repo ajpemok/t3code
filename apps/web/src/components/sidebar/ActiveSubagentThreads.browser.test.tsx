@@ -1,11 +1,11 @@
 import { RegistryContext } from "@effect/atom-react";
-import { EnvironmentId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
+import { EnvironmentId, ProviderInstanceId, RunId, ThreadId } from "@t3tools/contracts";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { Atom, AtomRegistry } from "effect/reactivity";
 import { useSyncExternalStore } from "react";
 import { expect, it, vi } from "vite-plus/test";
 import { page, userEvent } from "vite-plus/test/browser";
-import { act, render } from "../../../test/render";
+import { act, fakeTimers, render } from "../../../test/render";
 import { makeThreadFixture } from "../../test-fixtures";
 import type { SidebarThreadSummary } from "../../types";
 import { ActiveSubagentThreads, ActiveSubagentsToggle } from "./ActiveSubagentThreads";
@@ -17,6 +17,7 @@ const state = vi.hoisted(() => ({
   mode: undefined as "show" | "active" | "hide" | undefined,
   previewCount: 3,
   hideInactive: false,
+  keepRecent: false,
   revision: 0,
   listeners: new Set<() => void>(),
   threads: null as unknown,
@@ -29,6 +30,9 @@ vi.mock("~/hooks/useSettings", () => ({
       sidebarSubagentVisibility?: "show" | "active" | "hide" | undefined;
       sidebarSubagentPreviewCount: number;
       sidebarHideInactiveEnabled: boolean;
+      sidebarRecentSectionEnabled: boolean;
+      sidebarKeepRecentThreadsVisible: boolean;
+      sidebarRecentIncludeSubagents: boolean;
     }) => unknown,
   ) => {
     useSyncExternalStore(
@@ -45,6 +49,9 @@ vi.mock("~/hooks/useSettings", () => ({
       sidebarSubagentVisibility: state.mode,
       sidebarSubagentPreviewCount: state.previewCount,
       sidebarHideInactiveEnabled: state.hideInactive,
+      sidebarRecentSectionEnabled: false,
+      sidebarKeepRecentThreadsVisible: state.keepRecent,
+      sidebarRecentIncludeSubagents: true,
     });
   },
   updateClientSettings: async (patch: {
@@ -87,6 +94,7 @@ function setup() {
   state.mode = undefined;
   state.previewCount = 3;
   state.hideInactive = false;
+  state.keepRecent = false;
   state.revision = 0;
   state.detailReads = 0;
   state.listeners.clear();
@@ -220,5 +228,44 @@ it("limits shown children, expands them and respects Hide Inactive without readi
   await expect
     .element(screen.getByRole("link", { name: "Open active subagent: First" }))
     .not.toBeInTheDocument();
+  expect(state.detailReads).toBe(0);
+});
+
+it("keeps a recently finished subagent under Hide Inactive when retention is enabled", async () => {
+  using _timers = fakeTimers({ now: Date.parse("2026-10-28T12:00:00Z") });
+  const { registry, threads } = setup();
+  using _registry = { [Symbol.dispose]: () => registry.dispose() };
+  state.mode = "show";
+  state.hideInactive = true;
+  state.keepRecent = true;
+  const parentId = ThreadId.make("parent");
+  const child = makeThreadFixture({
+    id: ThreadId.make("recent-child"),
+    title: "Finished Child",
+    lineage: { rootThreadId: parentId, parentThreadId: parentId, relationshipToParent: "subagent" },
+    latestRun: {
+      runId: RunId.make("child-run"),
+      status: "completed",
+      requestedAt: null,
+      startedAt: "2026-10-28T11:50:00Z",
+      completedAt: "2026-10-28T11:59:00Z",
+      assistantMessageId: null,
+    },
+  });
+  registry.set(threads, [child]);
+  await using screen = await render(
+    <RegistryContext.Provider value={registry}>
+      <ActiveSubagentThreads threadRef={scopeThreadRef(child.environmentId, parentId)} enabled />
+    </RegistryContext.Provider>,
+  );
+  await expect
+    .element(screen.getByRole("link", { name: "Open recent subagent: Finished Child" }))
+    .toBeVisible();
+  await act(() => {
+    state.keepRecent = false;
+    state.revision++;
+    for (const listener of state.listeners) listener();
+  });
+  await expect.element(screen.getByRole("link")).not.toBeInTheDocument();
   expect(state.detailReads).toBe(0);
 });

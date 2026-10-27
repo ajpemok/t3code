@@ -710,6 +710,36 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["Sydney harbour copper skyline background image sidebar"],
   },
   {
+    id: "sidebar-recent-section",
+    title: "Recent Section",
+    to: "/settings/appearance",
+    searchTerms: ["recent finished completed previous last history"],
+  },
+  {
+    id: "sidebar-keep-recent",
+    title: "Keep Recent Threads Visible",
+    to: "/settings/appearance",
+    searchTerms: ["hide inactive project list disappear finish retention recent"],
+  },
+  {
+    id: "sidebar-recent-subagents",
+    title: "Include Recent Subagents",
+    to: "/settings/appearance",
+    searchTerms: ["recent finished children agents subagents"],
+  },
+  {
+    id: "sidebar-recent-count",
+    title: "Recent Thread Count",
+    to: "/settings/appearance",
+    searchTerms: ["last N five 5 recent limit maximum"],
+  },
+  {
+    id: "sidebar-recent-age",
+    title: "Recent Thread Age Limit",
+    to: "/settings/appearance",
+    searchTerms: ["recent minutes hour duration time age unlimited"],
+  },
+  {
     id: "sidebar-pinned-only",
     title: "Pinned Threads Only",
     to: "/settings/appearance",

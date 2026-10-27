@@ -86,6 +86,36 @@ describe("sidebar thread visibility settings", () => {
   });
 });
 
+describe("recent thread preferences", () => {
+  it("defaults to five within an hour and supports count-only retention", () => {
+    expect(decodeClientSettings({})).toMatchObject({
+      sidebarRecentSectionEnabled: true,
+      sidebarKeepRecentThreadsVisible: true,
+      sidebarRecentIncludeSubagents: true,
+      sidebarRecentThreadCount: 5,
+      sidebarRecentThreadMaxAgeMinutes: 60,
+    });
+    const patch = {
+      sidebarRecentSectionEnabled: false,
+      sidebarKeepRecentThreadsVisible: true,
+      sidebarRecentIncludeSubagents: false,
+      sidebarRecentThreadCount: 12,
+      sidebarRecentThreadMaxAgeMinutes: 0,
+    };
+    expect(decodeClientSettingsPatch(patch)).toEqual(patch);
+    expect(decodeClientSettings(encodeClientSettings(decodeClientSettings(patch)))).toMatchObject(
+      patch,
+    );
+    for (const invalid of [
+      { sidebarRecentThreadCount: 0 },
+      { sidebarRecentThreadCount: 51 },
+      { sidebarRecentThreadMaxAgeMinutes: -1 },
+      { sidebarRecentThreadMaxAgeMinutes: 1441 },
+    ])
+      expect(() => decodeClientSettingsPatch(invalid)).toThrow();
+  });
+});
+
 describe("recording pointer settings", () => {
   it("retains a custom image and hotspot while refusing remote images and out-of-range values", () => {
     const pointer = {

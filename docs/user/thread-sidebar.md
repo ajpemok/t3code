@@ -35,6 +35,17 @@ Use **Hide Inactive Threads and Projects** to focus both views on current work a
 input requests. An idle parent stays available while one of its subagents works.
 This filter also hides empty pinned project headers; turning it off restores them.
 
+**Recent** keeps the last five finished threads within the past hour. In
+**Settings → Appearance → Recent Threads**, change the count or age limit. Set
+age to **0** for the last N regardless of age. The count includes subagents when
+**Include Recent Subagents** and **Show Subagents** are on.
+
+**Keep Recent Threads Visible** also keeps these threads in the normal project
+list while Hide Inactive is on, including parents needed to reach recent
+subagents. It defaults on so a thread stays within reach when its turn ends.
+Switch the **Recent Section** or normal-list retention off independently.
+Pinned Only still applies; snoozed, settled and archived threads stay out of Recent.
+
 Choose **Show** or **Hide** from the **Subagents** menu beside the
 sidebar controls or in **Settings → Appearance**. **Show** includes idle children
 and respects Hide Inactive. **Visible Subagents** sets the initial count per parent;
