@@ -7,9 +7,9 @@ Git records previous bases and patch revisions.
 
 ## Maintenance Branch
 
-`ajpemok/maintained-3770` groups the fork changes by feature on the recorded 3770
-base. Use this branch as the replay source for the next nightly. The published
-`ajpemok/nightly-20261027.3770` branch retains the earlier history. Shared
+`ajpemok/nightly-20261027.3783` groups the fork changes by feature on the recorded
+3783 base. Use this branch as the replay source for the next nightly. The published
+3770 branches retain the earlier history. Shared
 contracts and styles serve several features, so retire repairs by comparing
 the behaviour and affected hunks, rather than skipping a whole mixed commit.
 
