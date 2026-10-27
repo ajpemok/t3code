@@ -45,4 +45,29 @@ describe("toolActivity", () => {
     }
     expect(dynamicToolSurface("github.js", { code: "await sky.click(app);" })).toBeUndefined();
   });
+
+  it("distinguishes browser APIs in the CUA and browser REPLs, including MCP tool names", () => {
+    for (const name of ["cua_repl.js", "mcp__cua_repl__js", "node_repl.js", "js"]) {
+      expect(
+        dynamicToolSurface(name, {
+          code: "const tab = await cua.getTab('123', { browser: '1' });",
+        }),
+      ).toBe("browser");
+      expect(
+        dynamicToolSurface(name, {
+          code: "await compactTab.playwright.getByRole('button').click();",
+        }),
+      ).toBe("browser");
+      expect(dynamicToolSurface(name, { code: "await compactTab.getAXState();" })).toBe("browser");
+      expect(
+        dynamicToolSurface(name, { code: "await compactCdp.send('Page.captureScreenshot', {});" }),
+      ).toBe("browser");
+    }
+    expect(dynamicToolSurface("mcp__cua_repl__js", { code: "await app.getAXState();" })).toBe(
+      "computer",
+    );
+    expect(
+      dynamicToolSurface("js", { code: "const browser = 3; await fs.readFile(path);" }),
+    ).toBeUndefined();
+  });
 });
