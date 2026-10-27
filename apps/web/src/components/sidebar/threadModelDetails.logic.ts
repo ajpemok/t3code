@@ -23,8 +23,19 @@ export function sidebarExecutionModel(
     (candidate) => candidate.id === providerThreadId,
   )?.nativeMetadata?.modelSelection;
   const selection = run?.modelSelection ?? thread.modelSelection;
-  if (reported?.instanceId === selection.instanceId) {
-    return { selection: reported, source: "reported" };
+  if (reported?.instanceId === selection.instanceId && reported.model === selection.model) {
+    const options = [
+      ...new Map(
+        [...(reported.options ?? []), ...(selection.options ?? [])].map((option) => [
+          option.id,
+          option,
+        ]),
+      ).values(),
+    ];
+    return {
+      selection: { ...selection, ...(options.length > 0 ? { options } : {}) },
+      source: run ? "run" : "reported",
+    };
   }
   return { selection, source: run ? "run" : "selected" };
 }

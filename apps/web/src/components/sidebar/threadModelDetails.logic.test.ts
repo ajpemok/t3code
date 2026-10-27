@@ -1,4 +1,10 @@
-import { MessageId, ProviderDriverKind, ProviderInstanceId, RunId } from "@t3tools/contracts";
+import {
+  MessageId,
+  ProviderDriverKind,
+  ProviderInstanceId,
+  ProviderThreadId,
+  RunId,
+} from "@t3tools/contracts";
 import type { ServerProvider } from "@t3tools/contracts";
 import { expect, it } from "vite-plus/test";
 import { makeThreadFixture, makeThreadProjectionFixture } from "~/test-fixtures";
@@ -124,4 +130,57 @@ it("keeps the executing run's model when next-turn settings change", () => {
     selection: thread.modelSelection,
     source: "selected",
   });
+});
+
+it("fills missing options from a matching provider report without losing explicit settings", () => {
+  const projection = makeThreadProjectionFixture();
+  const providerThreadId = ProviderThreadId.make("provider-thread");
+  const selection = {
+    instanceId,
+    model: "gpt-6.1-sol",
+    options: [{ id: "reasoningEffort", value: "xhigh" }],
+  };
+  const thread = makeThreadFixture({ modelSelection: selection });
+  const reported = { ...selection, options: [{ id: "fastMode", value: true }] };
+  const providerThread = {
+    id: providerThreadId,
+    driver: provider.driver,
+    providerInstanceId: instanceId,
+    providerSessionId: null,
+    appThreadId: thread.id,
+    ownerNodeId: null,
+    nativeThreadRef: null,
+    nativeConversationHeadRef: null,
+    status: "active" as const,
+    firstRunOrdinal: null,
+    lastRunOrdinal: null,
+    handoffIds: [],
+    forkedFrom: null,
+    pendingBackgroundTasks: [],
+    contextUsage: null,
+    nativeMetadata: { modelSelection: reported },
+    goal: null,
+    createdAt: projection.updatedAt,
+    updatedAt: projection.updatedAt,
+  };
+  const snapshot = {
+    ...projection,
+    thread: { ...projection.thread, activeProviderThreadId: providerThreadId },
+    providerThreads: [providerThread],
+  };
+  expect(sidebarExecutionModel(thread, snapshot).selection.options).toEqual([
+    { id: "fastMode", value: true },
+    { id: "reasoningEffort", value: "xhigh" },
+  ]);
+  expect(
+    sidebarExecutionModel(thread, {
+      ...snapshot,
+      providerThreads: [
+        {
+          ...providerThread,
+          nativeMetadata: { modelSelection: { ...reported, model: "previous-model" } },
+        },
+      ],
+    }),
+  ).toEqual({ selection, source: "selected" });
 });
