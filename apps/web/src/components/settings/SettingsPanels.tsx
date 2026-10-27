@@ -1035,6 +1035,19 @@ export function ChatSettingsPanel() {
     <SettingsPageContainer>
       <SettingsSection id="composer" title="Composer">
         <SettingsRow
+          {...searchableSetting("legacy-context-window-indicator")}
+          description="Show context and token usage in the composer."
+          control={
+            <Switch
+              checked={settings.contextWindowMeterEnabled}
+              onCheckedChange={(checked) =>
+                updateSettings({ contextWindowMeterEnabled: Boolean(checked) })
+              }
+              aria-label="Context and Token Usage"
+            />
+          }
+        />
+        <SettingsRow
           {...searchableSetting("composer-rich-text")}
           description="Show formatted Markdown as you type."
           resetAction={
@@ -1477,9 +1490,11 @@ export function ThreadsSettingsPanel() {
   const hasServerTargets = connectedEnvironments.length > 0;
   const mixedProviderRetries = useScopedSettingsMixed(["providerErrorRetryLimit"]);
   const canWriteProviderRetries = useScopedSettingsWriteAllowed();
-  const supportsProviderRetries = connectedEnvironments.length > 0 && connectedEnvironments.every(
-    (target) => target.serverConfig?.environment.capabilities.providerErrorRecovery === true,
-  );
+  const supportsProviderRetries =
+    connectedEnvironments.length > 0 &&
+    connectedEnvironments.every(
+      (target) => target.serverConfig?.environment.capabilities.providerErrorRecovery === true,
+    );
   const mixedResponseStreamingMode = useScopedSettingsMixed(["responseStreamingMode"]);
   const providersByEnvironment = useEnvironmentProviders();
   const serverProviders =
@@ -1542,41 +1557,6 @@ export function ThreadsSettingsPanel() {
       <SettingsSection id="new-projects" title="New projects">
         <SettingsRow
           serverScoped
-          {...searchableSetting("provider-error-retries")}
-          description={
-            supportsProviderRetries
-              ? "Retry temporary capacity and provider failures up to this limit. Off disables automatic recovery."
-              : "Update the selected environments to configure automatic recovery."
-          }
-          settingKeys={["providerErrorRetryLimit"]}
-          control={
-            <Select
-              value={mixedProviderRetries ? null : String(settings.providerErrorRetryLimit)}
-              disabled={!canWriteProviderRetries || !supportsProviderRetries}
-              onValueChange={(value) => {
-                if (value !== null) updateSettings({ providerErrorRetryLimit: Number(value) });
-              }}
-            >
-              <SelectTrigger
-                size="sm"
-                className="w-full sm:w-44"
-                aria-label="Provider Error Retries"
-              >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectPopup align="end" alignItemWithTrigger={false}>
-                {[0, 1, 2, 3, 4, 5].map((limit) => (
-                  <SelectItem key={limit} value={String(limit)}>
-                    {limit === 0 ? "Off" : `${limit} ${limit === 1 ? "retry" : "retries"}`}
-                  </SelectItem>
-                ))}
-              </SelectPopup>
-            </Select>
-          }
-        />
-
-        <SettingsRow
-          serverScoped
           settingKeys={["addProjectBaseDirectory"]}
           {...searchableSetting("add-project-starts-in")}
           description='Leave empty to use "~/" when the Add Project browser opens.'
@@ -1610,6 +1590,40 @@ export function ThreadsSettingsPanel() {
       <ProjectDefaultsSettings category="general" />
 
       <SettingsSection id="usage-limits" title="Usage limits">
+        <SettingsRow
+          serverScoped
+          {...searchableSetting("provider-error-retries")}
+          description={
+            supportsProviderRetries
+              ? "Retry temporary capacity and provider failures up to this limit. Off disables automatic recovery."
+              : "Update the selected environments to configure automatic recovery."
+          }
+          settingKeys={["providerErrorRetryLimit"]}
+          control={
+            <Select
+              value={mixedProviderRetries ? null : String(settings.providerErrorRetryLimit)}
+              disabled={!canWriteProviderRetries || !supportsProviderRetries}
+              onValueChange={(value) => {
+                if (value !== null) updateSettings({ providerErrorRetryLimit: Number(value) });
+              }}
+            >
+              <SelectTrigger
+                size="sm"
+                className="w-full sm:w-44"
+                aria-label="Provider Error Retries"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectPopup align="end" alignItemWithTrigger={false}>
+                {[0, 1, 2, 3, 4, 5].map((limit) => (
+                  <SelectItem key={limit} value={String(limit)}>
+                    {limit === 0 ? "Off" : `${limit} ${limit === 1 ? "retry" : "retries"}`}
+                  </SelectItem>
+                ))}
+              </SelectPopup>
+            </Select>
+          }
+        />
         <SettingsRow
           serverScoped
           {...searchableSetting("auto-resume-limited-threads")}

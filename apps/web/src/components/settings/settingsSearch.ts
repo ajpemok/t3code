@@ -700,7 +700,7 @@ export const SETTINGS_SEARCH_ITEMS = [
   {
     id: "legacy-context-window-indicator",
     title: "Context and Token Usage",
-    to: "/settings/general",
+    to: "/settings/chat",
     searchTerms: ["composer meter usage tokens circle old"],
   },
   {
