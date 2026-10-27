@@ -18,6 +18,7 @@ import { CollapsibleSectionHeader } from "../ui/collapsible-section-header";
 import { RelativeTime } from "../RelativeTime";
 import { isSidebarSubagentThread } from "../Sidebar.logic";
 import type { RecentThreadEntry } from "./recentThreads.logic";
+import { ThreadModelIdentity } from "./ThreadModelDetails";
 
 function RecentRow({
   entry,
@@ -57,6 +58,7 @@ function RecentRow({
       >
         {thread.title}
       </Link>
+      <ThreadModelIdentity thread={thread} />
       <span className="shrink-0 text-3xs text-secondary-label">
         <RelativeTime timestamp={finishedAt} nowLabel="now" />
       </span>

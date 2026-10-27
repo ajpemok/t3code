@@ -16,6 +16,7 @@ import { buildThreadRouteParams } from "~/threadRoutes";
 import type { SidebarThreadSummary } from "~/types";
 import { subagentsByParent, resolveThreadStatusPill } from "../Sidebar.logic";
 import { ThreadActivityStatus } from "./ThreadSurfaceUseIndicator";
+import { ThreadModelIdentity } from "./ThreadModelDetails";
 import { RelativeTime } from "../RelativeTime";
 import { Button } from "../ui/button";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
@@ -251,6 +252,7 @@ export function ActiveSubagentThreads({
             >
               <GitForkIcon className="size-3 shrink-0 text-sidebar-muted-foreground" aria-hidden />
               <span className="min-w-0 flex-1 truncate">{child.title}</span>
+              <ThreadModelIdentity thread={child} />
               <span className="inline-flex shrink-0 flex-col items-end text-3xs leading-tight text-secondary-label">
                 <ThreadActivityStatus
                   thread={child}

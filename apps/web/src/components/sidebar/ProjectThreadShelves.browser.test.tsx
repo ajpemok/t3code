@@ -1,4 +1,4 @@
-import { AsyncResult } from "effect/reactivity";
+import { AsyncResult, Atom } from "effect/reactivity";
 import * as Cause from "effect/Cause";
 import { ThreadId } from "@t3tools/contracts";
 import { type ComponentProps, useSyncExternalStore } from "react";
@@ -7,6 +7,14 @@ import { act, fakeTimers, render } from "../../../test/render";
 import { makeThreadFixture } from "../../test-fixtures";
 import type { SidebarThreadSummary } from "../../types";
 import { ProjectThreadShelves } from "./ProjectThreadShelves";
+
+const testProvidersAtom = Atom.make([]);
+vi.mock("~/state/server", () => ({
+  providersIgnoringCheckedAtAtom: () => testProvidersAtom,
+}));
+vi.mock("~/state/threads", () => ({
+  environmentThreadDetails: { quietThreadAtom: () => Atom.make(null) },
+}));
 
 const state = vi.hoisted(() => ({
   threads: [] as SidebarThreadSummary[],

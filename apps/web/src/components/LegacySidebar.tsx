@@ -250,6 +250,7 @@ import { useProject } from "~/state/entities";
 import { projectTintColor } from "~/projectIdentity";
 import { useCloseInactiveProjectTabs } from "~/hooks/useCloseInactiveProjectTabs";
 import { ThreadActivityStatus } from "./sidebar/ThreadSurfaceUseIndicator";
+import { ThreadModelIdentity } from "./sidebar/ThreadModelDetails";
 import { primaryServerKeybindingsAtom } from "../state/server";
 import { appAtomRegistry } from "../rpc/atomRegistry";
 import { canShareWithGuestAtom } from "./chat/guestShareAvailability";
@@ -1002,6 +1003,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                     <TooltipPopup side="top">{threadEnvironmentLabel}</TooltipPopup>
                   </Tooltip>
                 )}
+                <ThreadModelIdentity thread={thread} trackRun={leaseLiveStatus} />
                 {jumpLabel ? (
                   <Tooltip>
                     <TooltipTrigger

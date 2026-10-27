@@ -83,10 +83,28 @@ export function sidebarModelDetails(
       options.push({ id: option.id, label: option.id, value: String(option.value) });
     }
   }
+  const speedOption =
+    options.find(
+      (option) =>
+        (option.id === "serviceTier" || option.id === "fastMode") &&
+        selection.options?.some((stated) => stated.id === option.id),
+    ) ?? options.find((option) => option.id === "serviceTier" || option.id === "fastMode");
+  const speedLabel = speedOption?.value.toLowerCase();
+  const speed =
+    speedLabel === "fast" || speedLabel === "true"
+      ? { label: "Fast", expedited: true }
+      : speedLabel === "priority"
+        ? { label: "Priority", expedited: true }
+        : speedLabel === "ultrafast"
+          ? { label: "Ultrafast", expedited: true }
+          : ["standard", "normal", "default", "false"].includes(speedLabel ?? "")
+            ? { label: "Standard", expedited: false }
+            : null;
   return {
     compactName: model ? getTriggerDisplayModelName(model, provider?.driver) : selection.model,
     modelName: model?.name ?? selection.model,
     providerName: provider?.displayName ?? provider?.driver ?? selection.instanceId,
+    speed,
     options,
   };
 }

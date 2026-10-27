@@ -1,4 +1,4 @@
-import { ThreadWorkingModel, ThreadModelSettings } from "./ThreadModelDetails";
+import { ThreadWorkingModel, ThreadModelSettings, ThreadModelIdentity } from "./ThreadModelDetails";
 import { projectTintColor } from "~/projectIdentity";
 import { ThreadHoverCard, ThreadHoverCardPopup } from "../ThreadHoverCard";
 import { ThreadTerminalStatusButton } from "../ThreadStatusIndicators";
@@ -176,11 +176,13 @@ function terminalProcessLabel(count: number): string {
 function SidebarProviderStack(props: {
   thread: SidebarThreadSummary;
   providerEntryByInstanceId: ReadonlyMap<string, SidebarProviderEntry>;
+  trackRun: boolean;
 }) {
   const stack = resolveThreadProviderStack(props.thread);
   const currentInstanceId = stack[stack.length - 1]!;
   const currentEntry = props.providerEntryByInstanceId.get(currentInstanceId) ?? null;
-  if (currentEntry === null) return null;
+  if (currentEntry === null)
+    return <ThreadModelIdentity thread={props.thread} trackRun={props.trackRun} />;
   const showInstanceBadge = shouldShowInstanceBadge(
     currentEntry,
     props.providerEntryByInstanceId.values(),
@@ -198,26 +200,32 @@ function SidebarProviderStack(props: {
     />
   );
   if (stack.length === 1) {
-    return <span className="inline-flex shrink-0 items-center">{current}</span>;
+    return (
+      <ThreadModelIdentity thread={props.thread} trackRun={props.trackRun}>
+        {current}
+      </ThreadModelIdentity>
+    );
   }
   return (
-    <span className="inline-flex shrink-0 items-center gap-1.5">
-      {stack.slice(0, -1).map((instanceId) => {
-        const entry = props.providerEntryByInstanceId.get(instanceId);
-        if (entry === undefined) return null;
-        return (
-          <ProviderInstanceIcon
-            key={instanceId}
-            driverKind={entry.driverKind}
-            displayName={entry.displayName}
-            acpRegistryAgentId={entry.acpRegistryAgentId}
-            acpRegistryIconUrl={entry.acpRegistryIconUrl}
-            iconClassName="size-3 opacity-35 grayscale"
-          />
-        );
-      })}
-      <span className="relative z-10 inline-flex items-center">{current}</span>
-    </span>
+    <ThreadModelIdentity thread={props.thread} trackRun={props.trackRun}>
+      <span className="inline-flex shrink-0 items-center gap-1.5">
+        {stack.slice(0, -1).map((instanceId) => {
+          const entry = props.providerEntryByInstanceId.get(instanceId);
+          if (entry === undefined) return null;
+          return (
+            <ProviderInstanceIcon
+              key={instanceId}
+              driverKind={entry.driverKind}
+              displayName={entry.displayName}
+              acpRegistryAgentId={entry.acpRegistryAgentId}
+              acpRegistryIconUrl={entry.acpRegistryIconUrl}
+              iconClassName="size-3 opacity-35 grayscale"
+            />
+          );
+        })}
+        <span className="relative z-10 inline-flex items-center">{current}</span>
+      </span>
+    </ThreadModelIdentity>
   );
 }
 
@@ -1110,6 +1118,11 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
             </span>
             {draftIndicator}
             {title}
+            <SidebarProviderStack
+              thread={thread}
+              providerEntryByInstanceId={props.providerEntryByInstanceId}
+              trackRun={leaseLiveStatus}
+            />
             {pinIndicator}
             {terminalStatusIcon}
             <ThreadSurfaceUseIndicator threadRef={threadRef} enabled={leaseLiveStatus} />
@@ -1462,10 +1475,11 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                 </span>
               ) : null}
               {metaLineEmpty ? (
-                <span aria-hidden className="inline-flex shrink-0">
+                <span className="inline-flex shrink-0">
                   <SidebarProviderStack
                     thread={thread}
                     providerEntryByInstanceId={props.providerEntryByInstanceId}
+                    trackRun={leaseLiveStatus}
                   />
                 </span>
               ) : null}
@@ -1503,10 +1517,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                     </span>
                   </span>
                 ) : null}
-                <span
-                  aria-hidden
-                  className="pointer-events-none ml-auto inline-flex shrink-0 items-center gap-1"
-                >
+                <span className="ml-auto inline-flex shrink-0 items-center gap-1">
                   {isRemote && !showsScratchMachine ? (
                     <span className="inline-flex shrink-0 items-center text-sidebar-muted-foreground/70">
                       <EnvironmentMachineIcon
@@ -1519,6 +1530,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                   <SidebarProviderStack
                     thread={thread}
                     providerEntryByInstanceId={props.providerEntryByInstanceId}
+                    trackRun={leaseLiveStatus}
                   />
                 </span>
               </div>

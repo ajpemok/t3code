@@ -30,6 +30,9 @@ Working statuses include the model's short name. Hover or focus the status for
 its full model, provider, reasoning and speed settings when available. These
 cards are read-only. A card labels saved thread settings separately when no run
 information is available.
+Thread and subagent icons identify the provider. A lightning bolt marks Fast,
+Priority or Ultrafast mode; hover or focus the icon to check Standard mode or
+whether speed has been reported.
 
 Use **Hide Inactive Threads and Projects** to focus both views on current work and
 input requests. An idle parent stays available while one of its subagents works.

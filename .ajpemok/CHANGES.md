@@ -235,6 +235,10 @@ thread settings are labelled when run information is unavailable. Unknown model
 or option values stay visible rather than being replaced by catalog defaults.
 Root rows reuse their visible detail lease; child rows load details only while
 the card is open. Grouped, flat and subagent rows share model presentation.
+Provider icons also appear on idle rows and Recent entries. Reuse existing flat
+row icons instead of duplicating them. Fast, Priority and Ultrafast modes show a
+lightning bolt; Standard and unreported speed remain distinct in the hover card.
+Idle icon rows must not acquire transcript leases before hover or focus.
 
 | Files                                                                 | Fork Responsibility                                                   |
 | --------------------------------------------------------------------- | --------------------------------------------------------------------- |

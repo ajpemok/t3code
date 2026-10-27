@@ -4,7 +4,7 @@ import { expect, it, vi } from "vite-plus/test";
 import { page } from "vite-plus/test/browser";
 import { render } from "../../../test/render";
 import { makeThreadFixture } from "~/test-fixtures";
-import { ThreadModelBadge } from "./ThreadModelDetails";
+import { ThreadModelBadge, ThreadModelIdentity } from "./ThreadModelDetails";
 
 const testProvidersAtom = Atom.make([
   {
@@ -72,4 +72,40 @@ it("shows model details on hover without editing settings or leasing an idle chi
   await expect.element(page.getByText("Fast", { exact: true })).toBeVisible();
   await expect.element(page.getByRole("combobox")).not.toBeInTheDocument();
   expect(state.detailReads).toBeGreaterThan(0);
+});
+
+it("shows the model identity and updates the lightning indicator when its mode changes", async () => {
+  state.detailReads = 0;
+  const registry = AtomRegistry.make();
+  using _registry = { [Symbol.dispose]: () => registry.dispose() };
+  const base = makeThreadFixture();
+  const thread = makeThreadFixture({
+    modelSelection: {
+      instanceId: base.modelSelection.instanceId,
+      model: "gpt-6.1-sol",
+      options: [{ id: "fastMode", value: true }],
+    },
+  });
+  await using screen = await render(
+    <RegistryContext.Provider value={registry}>
+      <ThreadModelIdentity thread={thread} />
+    </RegistryContext.Provider>,
+  );
+  await expect.element(screen.getByRole("img", { name: "Fast mode" })).toBeVisible();
+  await expect.element(screen.getByLabelText("GPT-6.1-Sol · Fast mode")).toBeVisible();
+  expect(state.detailReads).toBe(0);
+  await screen.rerender(
+    <RegistryContext.Provider value={registry}>
+      <ThreadModelIdentity
+        thread={{
+          ...thread,
+          modelSelection: { ...thread.modelSelection, options: [{ id: "fastMode", value: false }] },
+        }}
+      />
+    </RegistryContext.Provider>,
+  );
+  await expect.element(screen.getByRole("img", { name: "Fast mode" })).not.toBeInTheDocument();
+  await screen.getByLabelText("GPT-6.1-Sol · Standard mode").hover();
+  await expect.element(page.getByText("Standard", { exact: true })).toBeVisible();
+  await expect.element(page.getByRole("combobox")).not.toBeInTheDocument();
 });

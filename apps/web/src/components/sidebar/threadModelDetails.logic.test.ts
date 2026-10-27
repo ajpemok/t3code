@@ -52,6 +52,7 @@ it("uses catalog model names, reasoning and Standard/Fast labels", () => {
     compactName: "Sol",
     modelName: "GPT-6.1-Sol",
     providerName: "Codex Work",
+    speed: { label: "Standard", expedited: false },
     options: [
       { id: "reasoningEffort", value: "Extra High" },
       { id: "serviceTier", label: "Speed", value: "Standard" },
@@ -77,6 +78,7 @@ it("does not invent reasoning or speed when a remote catalog is unavailable", ()
     compactName: "private-model",
     modelName: "private-model",
     providerName: "codex",
+    speed: null,
     options: [],
   });
   expect(
@@ -85,6 +87,34 @@ it("does not invent reasoning or speed when a remote catalog is unavailable", ()
       undefined,
     ).options,
   ).toEqual([{ id: "variant", label: "variant", value: "deep" }]);
+});
+
+it.each([
+  { id: "fastMode", value: true, label: "Fast", expedited: true },
+  { id: "fastMode", value: false, label: "Standard", expedited: false },
+  { id: "serviceTier", value: "priority", label: "Priority", expedited: true },
+  { id: "serviceTier", value: "fast", label: "Fast", expedited: true },
+  { id: "serviceTier", value: "ultrafast", label: "Ultrafast", expedited: true },
+  { id: "serviceTier", value: "default", label: "Standard", expedited: false },
+])(
+  "recognises an explicit $label speed without a remote catalogue",
+  ({ id, value, label, expedited }) => {
+    expect(
+      sidebarModelDetails(
+        { instanceId, model: "private-model", options: [{ id, value }] },
+        undefined,
+      ).speed,
+    ).toEqual({ label, expedited });
+  },
+);
+
+it("does not mistake an unknown service tier for Standard or Fast", () => {
+  expect(
+    sidebarModelDetails(
+      { instanceId, model: "gpt-6.1-sol", options: [{ id: "serviceTier", value: "private-tier" }] },
+      provider,
+    ).speed,
+  ).toBeNull();
 });
 
 it("keeps the executing run's model when next-turn settings change", () => {

@@ -9,7 +9,12 @@ import type { SidebarThreadSummary } from "~/types";
 import { RecentThreadsShelf } from "./RecentThreadsShelf";
 
 const state = vi.hoisted(() => ({ threads: null as unknown }));
+const testProvidersAtom = Atom.make([]);
+vi.mock("~/state/server", () => ({
+  providersIgnoringCheckedAtAtom: () => testProvidersAtom,
+}));
 vi.mock("~/state/threads", () => ({
+  environmentThreadDetails: { quietThreadAtom: () => Atom.make(null) },
   environmentThreadShells: {
     get quietThreadShellsAtom() {
       return state.threads;
