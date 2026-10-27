@@ -141,20 +141,6 @@ the active run, in both shell readers, so completed or older work cannot keep it
 | `packages/contracts/src/orchestrationV2.ts`                | Optional compaction activity in the shared shell contract.           |
 | `apps/server/src/orchestration-v2/ProjectionStore.test.ts` | Memory and SQL compaction lifecycle and run isolation.               |
 
-## Thread Opening Position
-
-Open ordinary threads at their measured end, preserving disclosure choices.
-Search and citation navigation retain priority, and manual navigation cancels
-positioning. Re-enable live following on a thread switch without inheriting an
-earlier reading position. Keep the bounded settlement and late-layout maintenance.
-
-| Files                                                            | Fork Responsibility                                                 |
-| ---------------------------------------------------------------- | ------------------------------------------------------------------- |
-| `apps/web/src/components/chat/MessagesTimeline.tsx`              | End positioning on initial mount and thread changes.                |
-| `apps/web/src/components/chat/MessagesTimeline.browser.test.tsx` | Reopen, content growth, composer inset and manual-scroll behaviour. |
-| `apps/web/src/components/chat/useTimelinePositionRestore.ts`     | Measured initial settlement and explicit-navigation priority.       |
-| `apps/web/src/components/chat/useTimelineFollow.ts`              | Restore live following on thread switches.                          |
-
 ## Collapsible Project Sections
 
 - Reuse T3's existing legacy sidebar grouping and saved collapse state, exposed through the Project Sections setting.

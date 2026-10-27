@@ -121,16 +121,12 @@ import { useThreadFindPositionReader } from "./useThreadFindPositionReader";
 import { ThreadActivityAnnouncer } from "./ThreadActivityAnnouncer";
 import { useStableHandoffRuns, useIncrementalTimelineRows, useStableRows } from "./useTimelineRows";
 
-function timelineListStateFor(
-  identity: string,
-  restoreReadingPosition: boolean,
-): {
+function timelineListStateFor(identity: string): {
   readonly identity: string;
   readonly rememberedPosition: RememberedTimelinePosition | undefined;
   readonly workGroupViewState: WorkGroupViewState;
 } {
-  const saved = readTimelinePosition(identity);
-  const rememberedPosition = saved && !restoreReadingPosition ? { ...saved, atEnd: true } : saved;
+  const rememberedPosition = readTimelinePosition(identity);
   return {
     identity,
     rememberedPosition,
@@ -389,7 +385,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
   // Find open at the opening is part of the snapshot: opening find later
   // announces its own navigation (threadFindStore's announceOpening).
   const [listState, setListState] = useState(() => ({
-    ...timelineListStateFor(listIdentityKey, findOpen),
+    ...timelineListStateFor(listIdentityKey),
     findOpenAtOpening: findOpen,
   }));
   const [expandedRunIds, setExpandedRunIds] = useState<ReadonlySet<RunId>>(
@@ -401,7 +397,11 @@ const ConversationTimeline = memo(function ConversationTimeline({
   const [expandedAttemptIds, setExpandedAttemptIds] = useState<ReadonlySet<RunAttemptId>>(
     () => listState.rememberedPosition?.disclosures?.attempts ?? new Set(),
   );
-  const [positionedThreadKey, setPositionedThreadKey] = useState<string | null>(null);
+  // A list that opens on a thread with find open takes the opening step below,
+  // so the restore runs and releases follow once for find.
+  const [positionedThreadKey, setPositionedThreadKey] = useState<string | null>(() =>
+    listState.rememberedPosition?.atEnd === false || findOpen ? null : listIdentityKey,
+  );
   const restoringThreadPosition = positionedThreadKey !== listIdentityKey;
   const prefersReducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
   const [settlingListIdentity, setSettlingListIdentity] = useState<string | null>(listIdentityKey);
@@ -414,7 +414,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
   let paintedExpandedAttemptIds = expandedAttemptIds;
   const identityChanged = listState.identity !== listIdentityKey;
   const { rememberedPosition, workGroupViewState } = identityChanged
-    ? timelineListStateFor(listIdentityKey, findOpen)
+    ? timelineListStateFor(listIdentityKey)
     : listState;
   if (identityChanged) {
     setPlayingAudioRows(new Map());

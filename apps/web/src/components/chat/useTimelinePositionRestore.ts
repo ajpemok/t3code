@@ -43,7 +43,7 @@ export function settleListScroll(
 }
 
 export const measuredEndOffset = (element: HTMLElement) =>
-  Math.max(0, element.scrollHeight - element.clientHeight);
+  element.scrollHeight - element.clientHeight;
 
 /**
  * Scrolls a newly shown thread back to where the user left it, or to its end,
@@ -116,7 +116,7 @@ export function startTimelinePositionRestore({
         listOpenedOn === listIdentityKey
         ? undefined
         : list.scrollToEnd({ animated: false });
-  const settlesAtEnd = position?.atEnd !== false;
+  const settlesAtEnd = position?.atEnd !== false && scrolling !== undefined;
   void Promise.resolve(scrolling).then(async () => {
     if (cancelled) return;
     if (settlesAtEnd) {

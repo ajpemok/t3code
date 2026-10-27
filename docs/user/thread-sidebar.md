@@ -3,10 +3,6 @@
 Use a new thread for a separate task. Choose **New worktree** when its code changes
 need a separate branch and working directory.
 
-Opening a thread takes you to its latest message. Scroll up to read its history;
-new replies then leave your reading position alone. Search and citation links
-still take you to the requested passage.
-
 ## Project Sections and Header
 
 Turn on **Project Sections** in **Settings → Appearance** to group threads into

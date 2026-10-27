@@ -14,7 +14,8 @@ contracts and styles serve several features, so retire repairs by comparing
 the behaviour and affected hunks, rather than skipping a whole mixed commit.
 
 Upstream now owns Ctrl/Cmd+W protection after the final view closes. The fork's
-additional native-window confirmation has been removed. Keep the compaction,
+additional native-window confirmation has been removed. Thread opening and
+saved scroll positions also use upstream behaviour. Keep the compaction,
 child-activity and preview repairs until their exact regressions pass upstream.
 
 The earlier 3770 packages predate the pinned-only filter and model details.
