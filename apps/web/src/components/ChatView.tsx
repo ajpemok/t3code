@@ -1,5 +1,6 @@
 import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
 import { queuedRunEditBlockedReason } from "@t3tools/client-runtime/queued-run-edit";
+import { projectTintColor } from "~/projectIdentity";
 import { ScrollToEndButton, WorkspaceFileDropOverlay } from "./chat/TimelineOverlays";
 import { usePasteToFocusComposer } from "./chat/usePasteToFocusComposer";
 import { announcedRun, isDetailBehindShell } from "./chat/threadActivityAnnouncement";
@@ -30,6 +31,7 @@ import { ThreadFind, ThreadFindCanvas } from "./chat/ThreadFindProvider";
 import { closeThreadFind, openThreadFind, useThreadFindOpen } from "./chat/threadFindStore";
 import { THREAD_FIND_BAR_RESERVED_HEIGHT } from "./chat/ThreadFindBar";
 import { usageLimitRecoveryBannerItem } from "./chat/UsageLimitRecoveryBanner";
+import { providerErrorRecoveryBannerItem } from "./chat/ProviderErrorRecoveryBanner";
 import { resolveDraftHeroState } from "./ChatView.logic";
 import { useQueuedRunEdit } from "./chat/useQueuedRunEdit";
 import { recallCheckoutIsRepo, rememberCheckoutIsRepo } from "./ChatView.logic";
@@ -43,6 +45,7 @@ import { visibleThreadPullRequests } from "@t3tools/shared/threadPullRequests";
 import {
   latestExecutedRun,
   latestRootProviderFailure,
+  isRecoverableProviderFailure,
 } from "@t3tools/shared/orchestrationV2ThreadError";
 import type { UsageLimitSourceSnapshots } from "@t3tools/contracts";
 import { feedbackBannerItem } from "./chat/ComposerFeedback";
@@ -786,13 +789,17 @@ export default function ChatView(props: ChatViewProps) {
     isServerThread &&
     serverProjection?.runs.some((run) => run.status === "queued" && run.queueHeld === true) ===
       true;
+  const supportsProviderErrorRecovery =
+    environmentById.get(environmentId)?.serverConfig?.environment.capabilities
+      .providerErrorRecovery === true;
   const resumableRunId = (() => {
     if (!isServerThread || serverProjection === null) return null;
     const run = latestExecutedRun(serverProjection.runs);
     if (run?.status === "interrupted") return run.id;
+    const failure = latestRootProviderFailure(run, serverProjection.turnItems);
     return run?.status === "failed" &&
-      serverRuntime?.lastErrorClass === "usage_limit" &&
-      latestRootProviderFailure(run, serverProjection.turnItems)?.class === "usage_limit"
+      ((serverRuntime?.lastErrorClass === "usage_limit" && failure?.class === "usage_limit") ||
+        (supportsProviderErrorRecovery && isRecoverableProviderFailure(failure)))
       ? run.id
       : null;
   })();
@@ -2410,7 +2417,9 @@ export default function ChatView(props: ChatViewProps) {
         ? "Choose a project before compacting"
         : !manualCompactionProviderAvailable
           ? "Compaction is unavailable for this provider"
-          : "Compacting is unavailable right now"
+          : isWorking
+            ? "Wait for the current turn to finish"
+            : "Compacting is unavailable right now"
     : null;
   const resumeCompactionTokens =
     activeContextWindow &&
@@ -2487,8 +2496,50 @@ export default function ChatView(props: ChatViewProps) {
           },
         })
       : null;
+  const providerRetrySource = serverProjection ? latestExecutedRun(serverProjection.runs) : null;
+  const providerRetryBanner =
+    supportsProviderErrorRecovery &&
+    serverRuntime?.status === "failed" &&
+    providerRetrySource &&
+    serverProjection &&
+    activeThreadShell?.providerErrorRetryCancelledRunId !== providerRetrySource.id &&
+    !serverProjection.runs.some((run) => run.status === "queued") &&
+    !serverProjection.turnItems.some(
+      (item) => item.type === "run_interrupt_request" && item.runId === providerRetrySource.id,
+    )
+      ? providerErrorRecoveryBannerItem({
+          run: providerRetrySource,
+          failure: latestRootProviderFailure(providerRetrySource, serverProjection.turnItems),
+          candidate: {
+            thread: serverProjection.thread,
+            run: providerRetrySource,
+            failure: latestRootProviderFailure(providerRetrySource, serverProjection.turnItems),
+            blocked:
+              serverProjection.runtimeRequests.some((request) => request.status === "pending") ||
+              serverProjection.providerTurns.some(
+                (turn) =>
+                  turn.nodeId === providerRetrySource.rootNodeId &&
+                  (turn.status === "running" || turn.status === "pending"),
+              ),
+          },
+          limit: settings.providerErrorRetryLimit,
+          disabled: !canOperateThread,
+          onCancel: async () => {
+            const result = await updateThreadMetadata({
+              environmentId,
+              input: {
+                threadId: providerRetrySource.threadId,
+                providerErrorRetryCancelledRunId: providerRetrySource.id,
+              },
+            });
+            if (result._tag === "Failure") throw squashAtomCommandFailure(result);
+          },
+        })
+      : null;
   const composerBannerItems = (() => {
-    const limitRecoveryItems = limitRecoveryBanner === null ? [] : [limitRecoveryBanner];
+    const limitRecoveryItems = [limitRecoveryBanner, providerRetryBanner].filter(
+      (item) => item !== null,
+    );
     const usageLimitsItems = usageLimitsBanner === null ? [] : [usageLimitsBanner];
     const projectCloneItems = projectCloneBannerItem === null ? [] : [projectCloneBannerItem];
     if (!localCheckoutBranchMismatch || !showBranchMismatchBanner || !activeBranchMismatchKey) {
@@ -3124,17 +3175,20 @@ export default function ChatView(props: ChatViewProps) {
       {rightPanelControlsAtRoot ? panelLayoutControls : null}
       <div
         className={cn(
-          "flex min-h-0 min-w-0 flex-col overflow-x-hidden",
+          "project-tint-main flex min-h-0 min-w-0 flex-col overflow-x-hidden",
           rightPanelMaximized ? "w-0 flex-none" : "flex-1",
         )}
         data-chat-column-maximized-away={rightPanelMaximized ? "true" : "false"}
         data-chat-column
+        data-project-color={projectTintColor(activeProject)}
       >
         <header
           ref={threadPanelPopoverAnchorRef}
           data-chat-header
+          data-project-color={projectTintColor(activeProject)}
+          data-project-working={isWorking ? "true" : undefined}
           className={cn(
-            "relative bg-background [[data-panel-animations=true]_&]:motion-safe:transition-[padding-left] [[data-panel-animations=true]_&]:motion-safe:duration-(--panel-animation-duration) [[data-panel-animations=true]_&]:motion-safe:ease-out",
+            "project-tint-header relative bg-background [[data-panel-animations=true]_&]:motion-safe:transition-[padding-left] [[data-panel-animations=true]_&]:motion-safe:duration-(--panel-animation-duration) [[data-panel-animations=true]_&]:motion-safe:ease-out",
             isElectron
               ? cn(
                   "drag-region flex h-[var(--workspace-topbar-height)] min-h-[var(--workspace-topbar-height)] shrink-0 items-center px-3 sm:px-5",
@@ -3208,7 +3262,7 @@ export default function ChatView(props: ChatViewProps) {
               setThreadError={setThreadError}
               setThreadErrorBannerDismissTick={setThreadErrorBannerDismissTick}
             />
-            <div className="relative flex min-h-0 flex-1 flex-col bg-background">
+            <div className="relative flex min-h-0 flex-1 flex-col">
               <ThreadTimeline
                 threadDetailRef={routeThreadDetailRef}
                 entriesInput={timelineEntriesInput}
@@ -3479,6 +3533,9 @@ export default function ChatView(props: ChatViewProps) {
                               interactionMode={interactionMode}
                               lockedProvider={modelPickerLockedProvider}
                               providerStatuses={providerStatuses as ServerProvider[]}
+                              usageLimitSources={
+                                serverConfig?.usageLimitSources ?? EMPTY_USAGE_LIMIT_SOURCES
+                              }
                               providerCatalogKnown={serverConfig !== null}
                               activeProjectDefaultModelSelection={
                                 activeProjectDefaultModelSelection
@@ -3656,6 +3713,7 @@ export default function ChatView(props: ChatViewProps) {
             />
 
             <ThreadDetailsPanel
+              projectColor={projectTintColor(activeProject)}
               anchor={threadPanelPopoverAnchorRef}
               handle={threadPanelPopoverHandle}
               forceNewWorktree={multipleModelSelections !== null}
@@ -3743,6 +3801,7 @@ export default function ChatView(props: ChatViewProps) {
 
       {rightPanelPresent && activeThreadRef ? (
         <ChatRightPanel
+          projectColor={projectTintColor(activeProject)}
           sheet={shouldUsePlanSidebarSheet}
           workspaceLayoutElement={workspaceLayoutElement}
           widthStorageKey={`t3code:preview-panel-width:${activeThreadKey}`}
