@@ -83,9 +83,9 @@ and a precision ring; preserve custom PNG import, size, hotspot and halo setting
 
 ## Confirm Window Close
 
-After the final panel or terminal closes, Ctrl+W/Command+W asks before closing the
-desktop window. Cancel is the default. Coalesce repeated close requests and retain
-the updater/explicit quit teardown path.
+Upstream now makes Ctrl+W/Command+W a no-op after the final panel or terminal
+closes. Keep the fork confirmation for an explicit native window close, with
+Cancel as the default, coalesced requests and the updater/explicit quit teardown path.
 
 | Files                                           | Fork Responsibility                                                    |
 | ----------------------------------------------- | ---------------------------------------------------------------------- |

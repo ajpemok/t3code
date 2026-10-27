@@ -29,7 +29,6 @@ import {
 } from "react";
 
 import { ensureLocalApi } from "../../localApi";
-import { cn } from "../../lib/utils";
 import { ProviderInstanceIcon } from "../chat/ProviderInstanceIcon";
 import { providerClients } from "../settings/providerDriverMeta";
 import { Button } from "../ui/button";
