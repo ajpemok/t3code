@@ -14,6 +14,11 @@ import {
   orderItemsByPreferredIds,
   pinOrderKeyBetween,
   resolveProjectStatusIndicator,
+  projectThreadPinTargets,
+  filterProjectSectionThreads,
+  activeSubagentsByParent,
+  subagentsByParent,
+  sidebarActivityCounts,
   resolveSidebarSweepKeys,
   resolveSidebarThreadStatus,
   resolveSidebarV2TopStatus,
@@ -51,6 +56,266 @@ import {
 } from "./sidebar/routeReveal";
 
 const localEnvironmentId = EnvironmentId.make("environment-local");
+
+describe("project section visibility", () => {
+  it("keeps runless native children in the active set from their shell activity", () => {
+    const parentId = ThreadId.make("native-parent");
+    const base = makeThreadFixture();
+    for (const status of ["preparing", "running", "waiting"] as const) {
+      const source = {
+        ...base.source,
+        creationSource: "provider" as const,
+        lineage: {
+          rootThreadId: parentId,
+          parentThreadId: parentId,
+          relationshipToParent: "subagent" as const,
+        },
+        latestRunId: null,
+        activeProviderThreadId: null,
+        status,
+        activityRunStatus: status,
+        activityRunStartedAt: base.source.updatedAt,
+      };
+      const child = presentThreadShell(localEnvironmentId, source);
+      expect(activeSubagentsByParent([child]).get(`${localEnvironmentId}:${parentId}`)).toEqual([
+        child,
+      ]);
+      const finished = presentThreadShell(localEnvironmentId, {
+        ...source,
+        status: "completed",
+        activityRunStatus: null,
+        activityRunStartedAt: null,
+      });
+      expect(activeSubagentsByParent([finished]).size).toBe(0);
+    }
+  });
+
+  const now = "2026-10-25T12:00:00.000Z";
+  const capabilities = new Map([
+    ["environment-test", { threadSettlement: true, threadSnooze: true }],
+  ]);
+
+  it("retains a queued thread while its runtime projection is not yet available", () => {
+    const queued = makeThreadFixture({
+      latestRun: { ...makeLatestRun(), status: "queued" },
+      runtime: null,
+    });
+    expect(
+      filterProjectSectionThreads([queued], { now, capabilities, hideInactive: true }),
+    ).toEqual([queued]);
+    expect(sidebarActivityCounts([queued], now).threads).toEqual({ active: 1, inactive: 0 });
+  });
+
+  it("combines pinned-only and active-only filters without exposing unpinned working threads", () => {
+    const idlePin = makeThreadFixture({ id: ThreadId.make("idle-pin"), pinnedAt: now });
+    const activePin = makeThreadFixture({
+      id: ThreadId.make("active-pin"),
+      pinnedAt: now,
+      hasPendingUserInput: true,
+    });
+    const activeUnpinned = makeThreadFixture({
+      id: ThreadId.make("active-unpinned"),
+      hasPendingUserInput: true,
+    });
+    const threads = [idlePin, activePin, activeUnpinned];
+    expect(filterProjectSectionThreads(threads, { now, capabilities, pinnedOnly: true })).toEqual([
+      idlePin,
+      activePin,
+    ]);
+    expect(
+      filterProjectSectionThreads(threads, {
+        now,
+        capabilities,
+        pinnedOnly: true,
+        hideInactive: true,
+      }),
+    ).toEqual([activePin]);
+    expect(filterProjectSectionThreads(threads, { now, capabilities, pinnedOnly: false })).toEqual(
+      threads,
+    );
+  });
+
+  it("hides idle and completed tasks while retaining tasks awaiting input", () => {
+    const idle = makeThreadFixture({ id: ThreadId.make("idle") });
+    const question = makeThreadFixture({
+      id: ThreadId.make("question"),
+      hasPendingUserInput: true,
+    });
+    const approval = makeThreadFixture({
+      id: ThreadId.make("approval"),
+      hasPendingApprovals: true,
+    });
+    expect(
+      filterProjectSectionThreads([idle, question, approval], {
+        now,
+        capabilities,
+        hideInactive: true,
+      }),
+    ).toEqual([question, approval]);
+  });
+
+  it("keeps idle unsettled tasks and hides settled tasks even when pinned", () => {
+    const idle = makeThreadFixture({ id: ThreadId.make("idle") });
+    const settled = makeThreadFixture({ settledOverride: "settled" });
+    const pinnedSettled = makeThreadFixture({
+      pinnedAt: now,
+      settledOverride: "settled",
+    });
+    expect(
+      filterProjectSectionThreads([idle, settled, pinnedSettled], { now, capabilities }),
+    ).toEqual([idle]);
+  });
+
+  it("hides snoozed tasks, including pins, until the reset boundary", () => {
+    const snoozed = makeThreadFixture({
+      snoozedAt: "2026-10-25T11:00:00.000Z",
+      snoozedUntil: "2026-10-25T13:00:00.000Z",
+      pinnedAt: now,
+    });
+    expect(filterProjectSectionThreads([snoozed], { now, capabilities })).toEqual([]);
+    expect(
+      filterProjectSectionThreads([snoozed], {
+        now: "2026-10-25T13:00:00.000Z",
+        capabilities,
+      }),
+    ).toEqual([snoozed]);
+  });
+
+  it("lets a pending question wake a snoozed task", () => {
+    const question = makeThreadFixture({
+      snoozedAt: "2026-10-25T11:00:00.000Z",
+      snoozedUntil: "2026-10-25T13:00:00.000Z",
+      hasPendingUserInput: true,
+    });
+    expect(filterProjectSectionThreads([question], { now, capabilities })).toEqual([question]);
+  });
+
+  it("preserves tasks from servers without parking capabilities", () => {
+    const older = makeThreadFixture({
+      settledOverride: "settled",
+      snoozedUntil: "2099-01-01T00:00:00.000Z",
+    });
+    expect(filterProjectSectionThreads([older], { now, capabilities: new Map() })).toEqual([older]);
+  });
+
+  it("still excludes archived tasks and subagents from project roots", () => {
+    const archived = makeThreadFixture({ archivedAt: now });
+    const child = makeThreadFixture({
+      lineage: {
+        rootThreadId: ThreadId.make("parent"),
+        parentThreadId: ThreadId.make("parent"),
+        relationshipToParent: "subagent",
+      },
+    });
+    expect(filterProjectSectionThreads([archived, child], { now, capabilities })).toEqual([]);
+  });
+});
+
+describe("active subagent groups", () => {
+  const parentId = ThreadId.make("parent");
+  const runtime = {
+    status: "running" as const,
+    activeRunId: null,
+    providerInstanceId: ProviderInstanceId.make("codex"),
+    providerName: "Codex",
+    lastError: null,
+    updatedAt: "2026-10-25T12:00:00.000Z",
+  };
+  const lineage = {
+    rootThreadId: parentId,
+    parentThreadId: parentId,
+    relationshipToParent: "subagent" as const,
+  };
+
+  it("includes idle children in Show and keeps an idle parent reachable while a child works", () => {
+    const parent = makeThreadFixture({ id: parentId });
+    const active = makeThreadFixture({ id: ThreadId.make("working-child"), lineage, runtime });
+    const idle = makeThreadFixture({ id: ThreadId.make("idle-child"), lineage });
+    const all = [parent, active, idle];
+    expect(subagentsByParent(all, "show").get("environment-test:parent")).toEqual([active, idle]);
+    expect(subagentsByParent(all, "active").get("environment-test:parent")).toEqual([active]);
+    expect(
+      filterProjectSectionThreads(all, {
+        now: "2026-10-25T12:00:00Z",
+        capabilities: new Map(),
+        hideInactive: true,
+      }),
+    ).toEqual([parent]);
+    expect(sidebarActivityCounts(all)).toEqual({
+      threads: { active: 0, inactive: 1 },
+      subagents: { active: 1, inactive: 1 },
+    });
+  });
+
+  it("shows a running child and removes it when its runtime stops", () => {
+    const child = makeThreadFixture({ id: ThreadId.make("child"), lineage, runtime });
+    expect(activeSubagentsByParent([child]).get("environment-test:parent")).toEqual([child]);
+    expect(
+      activeSubagentsByParent([{ ...child, runtime: { ...runtime, status: "completed" } }]).size,
+    ).toBe(0);
+  });
+
+  it("hides idle, settled and archived children plus ordinary forks", () => {
+    const child = makeThreadFixture({ id: ThreadId.make("child"), lineage, runtime });
+    const idle = { ...child, runtime: { ...runtime, status: "idle" as const } };
+    const settled = { ...child, settledOverride: "settled" as const };
+    const archived = { ...child, archivedAt: runtime.updatedAt };
+    const fork = { ...child, lineage: { ...lineage, relationshipToParent: "fork" as const } };
+    expect(activeSubagentsByParent([idle, settled, archived, fork]).size).toBe(0);
+  });
+
+  it("keeps a child awaiting input visible until the question is resolved", () => {
+    const child = makeThreadFixture({ lineage, hasPendingUserInput: true });
+    expect(activeSubagentsByParent([child]).get("environment-test:parent")).toEqual([child]);
+    expect(activeSubagentsByParent([{ ...child, hasPendingUserInput: false }]).size).toBe(0);
+  });
+
+  it("keeps identical parent IDs in different environments separate", () => {
+    const first = makeThreadFixture({ lineage, runtime });
+    const second = { ...first, environmentId: EnvironmentId.make("other") };
+    const groups = activeSubagentsByParent([first, second]);
+    expect(groups.get("environment-test:parent")).toEqual([first]);
+    expect(groups.get("other:parent")).toEqual([second]);
+  });
+
+  it("refuses a self-parented child", () => {
+    expect(
+      activeSubagentsByParent([makeThreadFixture({ id: parentId, lineage, runtime })]).size,
+    ).toBe(0);
+  });
+});
+
+describe("projectThreadPinTargets", () => {
+  it("pins only visible unsettled threads that are not already pinned", () => {
+    const active = makeThreadFixture({ id: ThreadId.make("active") });
+    const pinned = makeThreadFixture({ pinnedAt: "2026-10-25T01:00:00.000Z" });
+    const settled = makeThreadFixture({ settledOverride: "settled" });
+    const archived = makeThreadFixture({ archivedAt: "2026-10-25T01:00:00.000Z" });
+    expect(projectThreadPinTargets([active, pinned, settled, archived], "pin")).toEqual([active]);
+  });
+
+  it("leaves settled and archived pins untouched when unpinning a project", () => {
+    const pinnedAt = "2026-10-25T01:00:00.000Z";
+    const active = makeThreadFixture({ pinnedAt });
+    const settled = makeThreadFixture({ pinnedAt, settledOverride: "settled" });
+    const archived = makeThreadFixture({ pinnedAt, archivedAt: pinnedAt });
+    const unpinned = makeThreadFixture();
+    expect(projectThreadPinTargets([active, settled, archived, unpinned], "unpin")).toEqual([
+      active,
+    ]);
+  });
+
+  it("rechecks settlement and pin state before a delayed action", () => {
+    const original = makeThreadFixture();
+    expect(projectThreadPinTargets([original], "pin")).toEqual([original]);
+    expect(projectThreadPinTargets([{ ...original, settledOverride: "settled" }], "pin")).toEqual(
+      [],
+    );
+    expect(
+      projectThreadPinTargets([{ ...original, pinnedAt: "2026-10-25T01:00:00.000Z" }], "pin"),
+    ).toEqual([]);
+  });
+});
 
 describe("deleteSelectedThreadEntries", () => {
   const entries = [{ threadKey: "one" }, { threadKey: "two" }, { threadKey: "three" }] as const;
@@ -441,6 +706,33 @@ describe("resolveThreadStatusPill", () => {
       updatedAt: "2026-03-09T10:00:00.000Z",
     },
   };
+
+  it("shows an unacknowledged wake in grouped rows and clears it after a visit", () => {
+    const now = "2026-10-26T08:00:00Z";
+    const thread = {
+      ...baseThread,
+      runtime: null,
+      snoozedUntil: "2026-10-26T07:00:00Z",
+      lastVisitedAt: "2026-10-26T06:00:00Z",
+    };
+    expect(resolveThreadStatusPill({ thread, now })?.label).toBe("Woke");
+    expect(resolveThreadStatusPill({ thread: { ...thread, lastVisitedAt: now }, now })).toBeNull();
+    expect(
+      resolveThreadStatusPill({ thread: { ...thread, settledOverride: "settled" }, now }),
+    ).toBeNull();
+  });
+
+  it("distinguishes active compaction from work and preserves input priority", () => {
+    const compacting = { ...baseThread, isCompacting: true };
+    expect(resolveThreadStatusPill({ thread: compacting })?.label).toBe("Compacting");
+    expect(
+      resolveThreadStatusPill({ thread: { ...compacting, hasPendingUserInput: true } })?.label,
+    ).toBe("Awaiting Input");
+    expect(resolveThreadStatusPill({ thread: { ...compacting, isCompacting: false } })?.label).toBe(
+      "Working",
+    );
+    expect(resolveThreadStatusPill({ thread: { ...compacting, runtime: null } })).toBeNull();
+  });
 
   it("shows an active thread wait without a pulse and resumes Working when it ends", () => {
     const blocked = { ...baseThread, blockedOnThreadWait: true };

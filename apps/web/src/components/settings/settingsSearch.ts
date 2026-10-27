@@ -404,6 +404,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["usage quota rate limit reset recover continue"],
   },
   {
+    id: "provider-error-retries",
+    title: "Provider Error Retries",
+    to: "/settings/threads",
+    searchTerms: ["capacity overloaded temporary failure automatic resume retry limit"],
+  },
+  {
     id: "working-shelf",
     title: "Working section",
     to: "/settings/general",
@@ -687,15 +693,39 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "legacy-context-window-indicator",
-    title: "Context window indicator (legacy)",
-    to: "/settings/labs",
+    title: "Context and Token Usage",
+    to: "/settings/chat",
     searchTerms: ["composer meter usage tokens circle old"],
   },
   {
     id: "legacy-sidebar",
-    title: "Sidebar (legacy)",
-    to: "/settings/labs",
-    searchTerms: ["project thread tree old flat list"],
+    title: "Project Sections",
+    to: "/settings/appearance",
+    searchTerms: ["project thread tree group collapse active inactive flat list legacy"],
+  },
+  {
+    id: "ajpemok-header-scene",
+    title: "Header Scene",
+    to: "/settings/appearance",
+    searchTerms: ["Sydney harbour copper skyline background image sidebar"],
+  },
+  {
+    id: "sidebar-pinned-only",
+    title: "Pinned Threads Only",
+    to: "/settings/appearance",
+    searchTerms: ["sidebar project sections pins filter hide unpinned active"],
+  },
+  {
+    id: "sidebar-active-subagents",
+    title: "Subagents",
+    to: "/settings/appearance",
+    searchTerms: ["sidebar children delegated running threads agents show active hide visible"],
+  },
+  {
+    id: "ajpemok-header-motion",
+    title: "Header Effects",
+    to: "/settings/appearance",
+    searchTerms: ["hover idle animation motion sweep sidebar"],
   },
   {
     id: "keybindings",
@@ -851,10 +881,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["browser preview keyboard shortcuts keystrokes overlay capture"],
   },
   {
-    id: "browser-recording-mouse-presses",
-    title: "Show mouse presses in recordings",
+    id: "browser-recording-pointer",
+    title: "Recording Pointer",
     to: "/settings/browser",
-    searchTerms: ["browser preview clicks buttons drag overlay capture"],
+    searchTerms: [
+      "custom cursor pointer image PNG SVG WebP hotspot click halo colour size tutorial video capture show mouse presses held buttons drag",
+    ],
   },
   {
     id: "browser-link-target",
@@ -1297,8 +1329,12 @@ export function searchSettings(
       if (!queryTokens.every((token) => fields.some((field) => field.includes(token)))) return [];
 
       const exactPhraseField = fields.findIndex((field) => field.includes(normalizedQuery));
-      const rank =
-        title === normalizedQuery
+      const exactCommand =
+        item.id.startsWith("keybinding-") &&
+        normalizeSearchText(item.searchTerms?.[0] ?? "") === normalizedQuery;
+      const rank = exactCommand
+        ? 6
+        : title === normalizedQuery
           ? 5
           : title.startsWith(normalizedQuery)
             ? 4

@@ -1,5 +1,5 @@
 import { useLayoutEffect, useState, type ReactNode, type RefObject } from "react";
-import type { ScopedThreadRef } from "@t3tools/contracts";
+import type { ProjectIconColor, ScopedThreadRef } from "@t3tools/contracts";
 import { ScrollArea } from "../ui/scroll-area";
 import { cn } from "../../lib/utils";
 import { Popover, PopoverPopup, PopoverCreateHandle } from "../ui/popover";
@@ -13,11 +13,13 @@ import { observeResize } from "../../lib/observeResize";
 
 export function ThreadDetailsCard({
   threadRef,
+  projectColor,
   anchor,
   handle,
   children,
 }: {
   threadRef: ScopedThreadRef;
+  projectColor?: ProjectIconColor | undefined;
   anchor: RefObject<Element | null>;
   handle: ReturnType<typeof PopoverCreateHandle>;
   children: (density: "full" | "compact" | "essential") => ReactNode;
@@ -99,12 +101,13 @@ export function ThreadDetailsCard({
   const card = (
     <div
       className={cn(
-        "dropdown-glass isolate contain-paint grid max-h-full grid-rows-[minmax(0,1fr)] overflow-hidden rounded-2xl",
+        "project-tint-details dropdown-glass isolate contain-paint grid max-h-full grid-rows-[minmax(0,1fr)] overflow-hidden rounded-2xl",
         mode === "popover" &&
           "max-h-[min(calc(100dvh-6.5rem),calc(var(--available-height,100dvh)-1rem))]",
       )}
       style={placement ? { maxHeight: height } : undefined}
       data-thread-details-card
+      data-project-color={projectColor}
     >
       <ScrollArea scrollFade className="min-h-0">
         <div ref={setContentElement}>{children(density)}</div>
