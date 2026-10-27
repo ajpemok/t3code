@@ -15,6 +15,7 @@ import { ExecutionEnvironmentDescriptor } from "./environment.ts";
 import { type ClientSettings, type QuitConfirmationMode, SnapShotShortcut } from "./settings.ts";
 import type { EditorId } from "./editor.ts";
 import type { PreviewForwardedShortcut } from "./keybindings.ts";
+import { PreviewViewportSize } from "./preview.ts";
 
 import type {
   DesktopAppActivationRequest,
@@ -943,6 +944,13 @@ export interface DesktopPreviewTabDefaults {
   readonly serverTab?: { readonly threadId: string; readonly tabId: string } | undefined;
 }
 
+export type DesktopPreviewViewport = PreviewViewportSize | null;
+
+export const DesktopPreviewSetViewportInputSchema = Schema.Struct({
+  tabId: DesktopPreviewTabIdSchema,
+  viewport: Schema.NullOr(PreviewViewportSize),
+});
+
 export const DesktopPreviewRegisterWebviewInputSchema = Schema.Struct({
   tabId: DesktopPreviewTabIdSchema,
   webContentsId: Schema.Int.check(Schema.isGreaterThan(0)),
@@ -1127,6 +1135,7 @@ export interface DesktopBridge {
 
 /** Renderer callback invoked by Electron with a fresh user gesture before display-media capture. */
 export const DESKTOP_PREVIEW_RECORDING_CAPTURE_TRIGGER = "__t3DesktopPreviewRecordingCapture";
+export const DESKTOP_PREVIEW_CAPTURE_ACTIVITY_TRIGGER = "__t3DesktopPreviewCaptureActivity";
 
 export interface DesktopPreviewBridge {
   setForwardedShortcuts?: (shortcuts: ReadonlyArray<PreviewForwardedShortcut>) => Promise<void>;
@@ -1141,6 +1150,8 @@ export interface DesktopPreviewBridge {
   zoomOut: (tabId: string) => Promise<void>;
   resetZoom: (tabId: string) => Promise<void>;
   setZoomFactor: (tabId: string, zoomFactor: number) => Promise<void>;
+  /** Fixed logical CSS size; null restores the guest's native viewport for Fill. */
+  setViewport: (tabId: string, viewport: DesktopPreviewViewport) => Promise<void>;
   hardReload: (tabId: string) => Promise<void>;
   setColorScheme: (tabId: string, colorScheme: DesktopPreviewColorScheme) => Promise<void>;
   setAudioMuted: (tabId: string, audioMuted: boolean) => Promise<void>;
