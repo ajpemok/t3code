@@ -37,6 +37,7 @@ import { projectThreadAwarenessV2 } from "@t3tools/shared/agentAwareness";
 import * as SqlitePersistence from "../persistence/Sqlite.ts";
 import { CodexProviderCapabilitiesV2 } from "./Adapters/CodexAdapterV2.ts";
 import * as ProjectionStore from "./ProjectionStore.ts";
+import { providerErrorRecoveryCommand } from "./ProviderErrorRecoveryWorker.ts";
 import {
   buildBoundedThreadProjection,
   decodeThreadHistoryCursor,
@@ -74,6 +75,98 @@ const traceSqlStatements = () => {
   });
   return { statements, tracer };
 };
+
+it.effect("tracks runless native subagent work in direct and listed shells", () =>
+  Effect.gen(function* () {
+    const store = yield* ProjectionStore.ProjectionStoreV2;
+    const now = yield* DateTime.now;
+    for (const creationSource of ["provider", "mcp"] as const) {
+      const threadId = ThreadId.make(`thread:runless-child:${creationSource}`);
+      const parentId = ThreadId.make("thread:runless-child:parent");
+      const nodeId = NodeId.make(`node:runless-child:${creationSource}`);
+      yield* store.apply({
+        id: EventId.make(`event:runless-child:${creationSource}:created`),
+        type: "thread.created",
+        threadId,
+        occurredAt: now,
+        payload: {
+          createdBy: "agent",
+          creationSource,
+          id: threadId,
+          projectId: ProjectId.make("project:runless-child"),
+          title: "Native child",
+          providerInstanceId,
+          modelSelection,
+          runtimeMode: "full-access",
+          interactionMode: "default",
+          branch: null,
+          worktreePath: null,
+          activeProviderThreadId: null,
+          lineage: {
+            parentThreadId: parentId,
+            relationshipToParent: "subagent",
+            rootThreadId: parentId,
+          },
+          forkedFrom: null,
+          createdAt: now,
+          updatedAt: now,
+          archivedAt: null,
+          settledOverride: null,
+          settledAt: null,
+          lastVisitedAt: null,
+          deletedAt: null,
+        },
+      });
+      for (const status of ["pending", "running", "waiting", "completed", "failed"] as const) {
+        const active = status === "pending" || status === "running" || status === "waiting";
+        yield* store.apply({
+          id: EventId.make(`event:runless-child:${creationSource}:${status}`),
+          type: "node.updated",
+          threadId,
+          nodeId,
+          driver,
+          occurredAt: now,
+          payload: {
+            id: nodeId,
+            threadId,
+            runId: null,
+            parentNodeId: null,
+            rootNodeId: nodeId,
+            kind: "root_turn",
+            status,
+            countsForRun: false,
+            providerThreadId: null,
+            providerTurnId: null,
+            nativeItemRef: null,
+            runtimeRequestId: null,
+            checkpointScopeId: null,
+            startedAt: status === "pending" ? null : now,
+            completedAt: active ? null : now,
+          },
+        });
+        const listed = (yield* store.getShellSnapshot()).threads.find((row) => row.id === threadId);
+        yield* store.getThread(threadId);
+        for (const shell of [listed, yield* store.getThreadShell(threadId)]) {
+          const expected =
+            creationSource === "provider" ? (status === "pending" ? "preparing" : status) : "idle";
+          assert.strictEqual(shell?.status, expected);
+          assert.strictEqual(shell?.latestRunId, null);
+          assert.strictEqual(shell?.activeRunId, null);
+          assert.strictEqual(
+            shell?.activityRunStatus,
+            creationSource === "provider" && active ? expected : null,
+          );
+          assert.strictEqual(
+            shell?.activityRunStartedAt ? DateTime.formatIso(shell.activityRunStartedAt) : null,
+            creationSource === "provider" && active && status !== "pending"
+              ? DateTime.formatIso(now)
+              : null,
+          );
+        }
+      }
+    }
+  }).pipe(Effect.provide(layerTest)),
+);
 
 const addRolledBackRecoveryCandidate = Effect.fn("addRolledBackRecoveryCandidate")(function* (
   suffix: string,
@@ -189,6 +282,139 @@ const addRolledBackRecoveryCandidate = Effect.fn("addRolledBackRecoveryCandidate
 it.effect.each([
   ["memory", ProjectionStore.layerMemory],
   ["SQL", layerTest],
+] as const)(
+  "%s reads only recent provider retry candidates and honours cancellation and Stop",
+  ([, layer]) =>
+    Effect.gen(function* () {
+      const store = yield* ProjectionStore.ProjectionStoreV2;
+      const threadId = yield* addRolledBackRecoveryCandidate("provider-retry");
+      const initial = yield* store.getThreadProjection(threadId);
+      const now = yield* DateTime.now;
+      const run = { ...initial.runs[0]!, status: "failed" as const, completedAt: now };
+      yield* store.apply({
+        id: EventId.make("retry:failed"),
+        type: "run.updated",
+        threadId,
+        occurredAt: now,
+        payload: run,
+      });
+      const error = {
+        id: TurnItemId.make("retry:error"),
+        threadId,
+        nodeId: run.rootNodeId,
+        runId: run.id,
+        providerThreadId: null,
+        providerTurnId: null,
+        nativeItemRef: null,
+        parentItemId: null,
+        ordinal: 2,
+        title: "Overloaded",
+        startedAt: now,
+        updatedAt: now,
+        type: "error" as const,
+        status: "failed" as const,
+        completedAt: now,
+        failure: {
+          class: "provider_error" as const,
+          code: "api_error_529",
+          message: "Overloaded",
+          retryable: true,
+        },
+      };
+      yield* store.apply({
+        id: EventId.make("retry:error"),
+        type: "turn-item.updated",
+        threadId,
+        occurredAt: now,
+        payload: error,
+      });
+      const candidates = yield* store.getProviderErrorRecoveryCandidates(now);
+      assert.lengthOf(candidates, 1);
+      const candidate = candidates[0]!;
+      assert.equal(candidate.run.id, run.id);
+      assert.equal(candidate.failure.code, "api_error_529");
+      assert.isFalse(candidate.blocked);
+      assert.isNull(providerErrorRecoveryCommand(candidate, 3, DateTime.toEpochMillis(now)));
+      assert.isNotNull(
+        providerErrorRecoveryCommand(candidate, 3, DateTime.toEpochMillis(now) + 10_000),
+      );
+      assert.lengthOf(
+        yield* store.getProviderErrorRecoveryCandidates(DateTime.add(now, { minutes: 11 })),
+        0,
+      );
+      yield* store.apply({
+        id: EventId.make("retry:cancel"),
+        type: "thread.metadata-updated",
+        threadId,
+        occurredAt: now,
+        payload: { ...initial.thread, providerErrorRetryCancelledRunId: run.id },
+      });
+      const cancelled = (yield* store.getProviderErrorRecoveryCandidates(now))[0]!;
+      assert.isNull(
+        providerErrorRecoveryCommand(cancelled, 3, DateTime.toEpochMillis(now) + 10_000),
+      );
+      const nativeTurn = {
+        id: ProviderTurnId.make("retry:native"),
+        providerThreadId: ProviderThreadId.make("retry:provider"),
+        nodeId: run.rootNodeId!,
+        runAttemptId: null,
+        nativeTurnRef: null,
+        ordinal: 1,
+        status: "running" as const,
+        startedAt: now,
+        completedAt: null,
+      };
+      yield* store.apply({
+        id: EventId.make("retry:native-running"),
+        type: "provider-turn.updated",
+        threadId,
+        occurredAt: now,
+        payload: nativeTurn,
+      });
+      assert.isTrue((yield* store.getProviderErrorRecoveryCandidates(now))[0]?.blocked);
+      yield* store.apply({
+        id: EventId.make("retry:native-ended"),
+        type: "provider-turn.updated",
+        threadId,
+        occurredAt: now,
+        payload: { ...nativeTurn, status: "completed", completedAt: now },
+      });
+      assert.isFalse((yield* store.getProviderErrorRecoveryCandidates(now))[0]?.blocked);
+      yield* store.apply({
+        id: EventId.make("retry:stop"),
+        type: "turn-item.updated",
+        threadId,
+        occurredAt: now,
+        payload: {
+          ...error,
+          id: TurnItemId.make("retry:stop"),
+          type: "run_interrupt_request",
+          providerThreadId: ProviderThreadId.make("retry:provider"),
+          status: "completed",
+          message: "Stopped",
+        },
+      });
+      assert.isTrue((yield* store.getProviderErrorRecoveryCandidates(now))[0]?.blocked);
+      yield* store.apply({
+        id: EventId.make("retry:replacement"),
+        type: "run.created",
+        threadId,
+        occurredAt: now,
+        payload: {
+          ...run,
+          id: RunId.make("retry:replacement"),
+          ordinal: 2,
+          status: "running",
+          completedAt: null,
+        },
+      });
+      assert.lengthOf(yield* store.getProviderErrorRecoveryCandidates(now), 0);
+    }).pipe(Effect.provide(layer)),
+);
+
+it.effect.each([
+  ["memory", ProjectionStore.layerMemory],
+  ["SQL", layerTest],
 ] as const)("%s shells flag only an active turn blocked solely on T3 thread waits", ([, layer]) =>
   Effect.gen(function* () {
     const store = yield* ProjectionStore.ProjectionStoreV2;
@@ -235,12 +461,13 @@ it.effect.each([
         occurredAt: at,
         payload,
       });
-    const assertBlocked = Effect.fnUntraced(function* (expected: boolean) {
+    const assertBlocked = Effect.fnUntraced(function* (expected: boolean, compacting = false) {
       const listed = (yield* store.getShellSnapshot()).threads.find((row) => row.id === threadId);
       for (const shell of [yield* store.getThreadShell(threadId), listed]) {
         assert.equal(shell?.activeRunId, run.id);
         assert.equal(shell?.status, "running");
         assert.equal(shell?.blockedOnThreadWait ?? false, expected);
+        assert.equal(shell?.isCompacting ?? false, compacting);
       }
     });
     const wait = {
@@ -334,8 +561,14 @@ it.effect.each([
       type: "compaction" as const,
       driver,
     };
+    yield* updateItem({
+      ...compaction,
+      id: TurnItemId.make("item:thread-wait:stale-compaction"),
+      runId: initial.runs[0]!.id,
+    });
+    yield* assertBlocked(true);
     yield* updateItem(compaction);
-    yield* assertBlocked(false);
+    yield* assertBlocked(false, true);
     yield* updateItem({ ...compaction, status: "completed", completedAt: at });
     yield* assertBlocked(true);
     yield* updateItem({ ...wait, status: "completed", completedAt: at });
