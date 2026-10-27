@@ -10,6 +10,7 @@ import type {
   EnvironmentId,
   PreviewSessionSnapshot,
   ProjectId,
+  ProjectIconColor,
   PullRequestState,
   ResolvedKeybindingsConfig,
 } from "@t3tools/contracts";
@@ -94,6 +95,7 @@ import { PullRequestGlyph } from "~/components/pullRequest/pullRequestIcons";
 import { observeResize } from "~/lib/observeResize";
 
 export interface RightPanelTabsProps {
+  projectColor?: ProjectIconColor | undefined;
   mode: PreviewPanelMode;
   maximized?: boolean;
   open?: boolean;
@@ -1223,6 +1225,7 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
 
   return (
     <PreviewPanelShell
+      projectColor={props.projectColor}
       mode={props.mode}
       {...(props.maximized !== undefined ? { maximized: props.maximized } : {})}
       {...(props.open !== undefined ? { open: props.open } : {})}
