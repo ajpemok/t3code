@@ -48,6 +48,7 @@ import {
   useScopedSettings,
   useScopedSettingsMixed,
   useUpdateScopedSettings,
+  useScopedSettingsWriteAllowed,
 } from "./useScopedSettings";
 import { useScopedModelDisabledReason } from "./useScopedModelAvailability";
 import { useOptionalSettingsScope, useSettingsScope } from "./SettingsScopeContext";
@@ -449,6 +450,9 @@ export function useSettingsRestore(onRestored?: () => void) {
     ...(settings.autoResumeLimitedThreads !== DEFAULT_UNIFIED_SETTINGS.autoResumeLimitedThreads
       ? ["Resume after usage limits"]
       : []),
+    ...(settings.providerErrorRetryLimit !== DEFAULT_UNIFIED_SETTINGS.providerErrorRetryLimit
+      ? ["Provider Error Retries"]
+      : []),
     ...(settings.snoozeLimitedThreads !== DEFAULT_UNIFIED_SETTINGS.snoozeLimitedThreads
       ? ["Snooze until limits reset"]
       : []),
@@ -607,6 +611,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       sidebarAutoSettleKeepPullRequests: DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleKeepPullRequests,
       sidebarAutoSettleOnMerge: DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleOnMerge,
       autoResumeLimitedThreads: DEFAULT_UNIFIED_SETTINGS.autoResumeLimitedThreads,
+      providerErrorRetryLimit: DEFAULT_UNIFIED_SETTINGS.providerErrorRetryLimit,
       snoozeLimitedThreads: DEFAULT_UNIFIED_SETTINGS.snoozeLimitedThreads,
       responseStreamingMode: DEFAULT_UNIFIED_SETTINGS.responseStreamingMode,
       enableProviderUpdateChecks: DEFAULT_UNIFIED_SETTINGS.enableProviderUpdateChecks,
@@ -711,32 +716,6 @@ export function LegacyFeaturesSection() {
               updateSettings({ planModeEnabled: Boolean(checked) });
             }}
             aria-label="Plan mode (legacy)"
-          />
-        }
-      />
-      <SettingsRow
-        {...searchableSetting("legacy-context-window-indicator")}
-        description="Shows context window usage as a circular indicator in the composer."
-        control={
-          <Switch
-            checked={settings.contextWindowMeterEnabled}
-            onCheckedChange={(checked) =>
-              updateSettings({ contextWindowMeterEnabled: Boolean(checked) })
-            }
-            aria-label="Context window indicator (legacy)"
-          />
-        }
-      />
-      <SettingsRow
-        {...searchableSetting("legacy-sidebar")}
-        description="Restore per-project thread trees instead of the default flat sidebar."
-        control={
-          <Switch
-            checked={settings.legacySidebarEnabled}
-            onCheckedChange={(checked) =>
-              updateSettings({ legacySidebarEnabled: Boolean(checked) })
-            }
-            aria-label="Sidebar (legacy)"
           />
         }
       />
@@ -1051,6 +1030,19 @@ export function ChatSettingsPanel() {
   return (
     <SettingsPageContainer>
       <SettingsSection id="composer" title="Composer">
+        <SettingsRow
+          {...searchableSetting("legacy-context-window-indicator")}
+          description="Show context and token usage in the composer."
+          control={
+            <Switch
+              checked={settings.contextWindowMeterEnabled}
+              onCheckedChange={(checked) =>
+                updateSettings({ contextWindowMeterEnabled: Boolean(checked) })
+              }
+              aria-label="Context and Token Usage"
+            />
+          }
+        />
         <SettingsRow
           {...searchableSetting("composer-rich-text")}
           description="Show formatted Markdown as you type."
@@ -1492,6 +1484,13 @@ export function ThreadsSettingsPanel() {
   const { environment, connectedEnvironments, target } = useSettingsScope();
   const environmentId = environment?.environmentId ?? null;
   const hasServerTargets = connectedEnvironments.length > 0;
+  const mixedProviderRetries = useScopedSettingsMixed(["providerErrorRetryLimit"]);
+  const canWriteProviderRetries = useScopedSettingsWriteAllowed();
+  const supportsProviderRetries =
+    connectedEnvironments.length > 0 &&
+    connectedEnvironments.every(
+      (target) => target.serverConfig?.environment.capabilities.providerErrorRecovery === true,
+    );
   const mixedResponseStreamingMode = useScopedSettingsMixed(["responseStreamingMode"]);
   const providersByEnvironment = useEnvironmentProviders();
   const serverProviders =
@@ -1587,6 +1586,40 @@ export function ThreadsSettingsPanel() {
       <ProjectDefaultsSettings category="general" />
 
       <SettingsSection id="usage-limits" title="Usage limits">
+        <SettingsRow
+          serverScoped
+          {...searchableSetting("provider-error-retries")}
+          description={
+            supportsProviderRetries
+              ? "Retry temporary capacity and provider failures up to this limit. Off disables automatic recovery."
+              : "Update the selected environments to configure automatic recovery."
+          }
+          settingKeys={["providerErrorRetryLimit"]}
+          control={
+            <Select
+              value={mixedProviderRetries ? null : String(settings.providerErrorRetryLimit)}
+              disabled={!canWriteProviderRetries || !supportsProviderRetries}
+              onValueChange={(value) => {
+                if (value !== null) updateSettings({ providerErrorRetryLimit: Number(value) });
+              }}
+            >
+              <SelectTrigger
+                size="sm"
+                className="w-full sm:w-44"
+                aria-label="Provider Error Retries"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectPopup align="end" alignItemWithTrigger={false}>
+                {[0, 1, 2, 3, 4, 5].map((limit) => (
+                  <SelectItem key={limit} value={String(limit)}>
+                    {limit === 0 ? "Off" : `${limit} ${limit === 1 ? "retry" : "retries"}`}
+                  </SelectItem>
+                ))}
+              </SelectPopup>
+            </Select>
+          }
+        />
         <SettingsRow
           serverScoped
           {...searchableSetting("auto-resume-limited-threads")}
