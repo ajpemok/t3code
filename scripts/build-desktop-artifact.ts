@@ -40,7 +40,7 @@ import {
   findInlinedExternalPackages,
   selectCliRuntimeExternalDependencies,
 } from "./lib/cli-external-packages.ts";
-import { loadRepoEnv } from "./lib/public-config.ts";
+import { loadRepoEnv, resolvePublicConfig, type T3CodePublicConfig } from "./lib/public-config.ts";
 import { selectDesktopRuntimeExternalDependencies } from "./lib/desktop-external-packages.ts";
 import { resolveCatalogDependencies } from "./lib/resolve-catalog.ts";
 
@@ -525,6 +525,15 @@ export class BundledClientAssetsMissingError extends Schema.TaggedError<BundledC
     const preview = this.missingFiles.slice(0, 6).join(", ");
     const suffix = this.missingFiles.length > 6 ? ` (+${this.missingFiles.length - 6} more)` : "";
     return `Bundled client references missing files in ${this.indexPath}: ${preview}${suffix}. Rebuild web/server artifacts.`;
+  }
+}
+
+export class DesktopConnectAssetsMissingError extends Schema.TaggedError<DesktopConnectAssetsMissingError>()(
+  "DesktopConnectAssetsMissingError",
+  { clientDir: Schema.String, missing: Schema.Array(Schema.String) },
+) {
+  override get message(): string {
+    return `T3 Connect is required but the client bundle lacks ${this.missing.join(", ")}. Configure the public identifiers and rebuild web/server artifacts.`;
   }
 }
 
@@ -2628,41 +2637,70 @@ const stageWindowsIcons = Effect.fn("build-desktop-artifact.stageWindowsIcons")(
   yield* fs.copyFile(sourceIco, iconPath);
 });
 
-const validateBundledClientAssets = Effect.fn("build-desktop-artifact.validateBundledClientAssets")(
-  function* (clientDir: string) {
-    const fs = yield* FileSystem.FileSystem;
-    const path = yield* Path.Path;
-    const indexPath = path.join(clientDir, "index.html");
-    const indexHtml = yield* fs.readFileString(indexPath);
-    const refs = [...indexHtml.matchAll(/\b(?:src|href)=["']([^"']+)["']/g)]
-      .map((match) => match[1])
-      .filter((value): value is string => value !== undefined);
-    const missing: string[] = [];
+export const validateBundledClientAssets = Effect.fn(
+  "build-desktop-artifact.validateBundledClientAssets",
+)(function* (
+  clientDir: string,
+  options: { readonly connectConfig?: T3CodePublicConfig | undefined } = {},
+) {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const indexPath = path.join(clientDir, "index.html");
+  const indexHtml = yield* fs.readFileString(indexPath);
+  const refs = [...indexHtml.matchAll(/\b(?:src|href)=["']([^"']+)["']/g)]
+    .map((match) => match[1])
+    .filter((value): value is string => value !== undefined);
+  const missing: string[] = [];
 
-    for (const ref of refs) {
-      const normalizedRef = ref.split("#")[0]?.split("?")[0] ?? "";
-      if (!normalizedRef) continue;
-      if (normalizedRef.startsWith("http://") || normalizedRef.startsWith("https://")) continue;
-      if (normalizedRef.startsWith("data:") || normalizedRef.startsWith("mailto:")) continue;
+  for (const ref of refs) {
+    const normalizedRef = ref.split("#")[0]?.split("?")[0] ?? "";
+    if (!normalizedRef) continue;
+    if (normalizedRef.startsWith("http://") || normalizedRef.startsWith("https://")) continue;
+    if (normalizedRef.startsWith("data:") || normalizedRef.startsWith("mailto:")) continue;
 
-      const ext = path.extname(normalizedRef);
-      if (!ext) continue;
+    const ext = path.extname(normalizedRef);
+    if (!ext) continue;
 
-      const relativePath = normalizedRef.replace(/^\/+/, "");
-      const assetPath = path.join(clientDir, relativePath);
-      if (!(yield* fs.exists(assetPath))) {
-        missing.push(normalizedRef);
+    const relativePath = normalizedRef.replace(/^\/+/, "");
+    const assetPath = path.join(clientDir, relativePath);
+    if (!(yield* fs.exists(assetPath))) {
+      missing.push(normalizedRef);
+    }
+  }
+
+  if (missing.length > 0) {
+    return yield* new BundledClientAssetsMissingError({
+      indexPath,
+      missingFiles: missing,
+    });
+  }
+  if (options.connectConfig !== undefined) {
+    const config = options.connectConfig;
+    const required = new Map([
+      ["Clerk publishable key", config.clerkPublishableKey],
+      ["Clerk JWT template", config.clerkJwtTemplate],
+      ["relay URL", config.relayUrl],
+    ]);
+    const missingConnect: string[] = [];
+    const assetDir = path.join(clientDir, "assets");
+    const files = yield* fs.readDirectory(assetDir);
+    if (!files.some((file) => /^ElectronManagedAuthShell-.*\.js$/.test(file))) {
+      missingConnect.push("Electron sign-in module");
+    }
+    for (const file of files) {
+      if (required.size === 0) break;
+      if (!file.endsWith(".js")) continue;
+      const source = yield* fs.readFileString(path.join(assetDir, file));
+      for (const [label, value] of required) {
+        if (value && source.includes(value)) required.delete(label);
       }
     }
-
-    if (missing.length > 0) {
-      return yield* new BundledClientAssetsMissingError({
-        indexPath,
-        missingFiles: missing,
-      });
+    missingConnect.push(...required.keys());
+    if (missingConnect.length > 0) {
+      return yield* new DesktopConnectAssetsMissingError({ clientDir, missing: missingConnect });
     }
-  },
-);
+  }
+});
 
 export function resolveDesktopRuntimeDependencies(
   dependencies: Record<string, string> | undefined,
@@ -3724,7 +3762,12 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
   const webAssetBrand = resolveDesktopWebAssetBrand(appVersion);
   yield* applyWebBrandAssets(webAssetBrand, "apps/server/dist/client");
   yield* Effect.log(`[desktop-artifact] Applied ${webAssetBrand} web client branding.`);
-  yield* validateBundledClientAssets(path.dirname(bundledClientEntry));
+  const requireConnect = yield* Config.Boolean("T3CODE_DESKTOP_REQUIRE_CONNECT").pipe(
+    Config.withDefault(false),
+  );
+  yield* validateBundledClientAssets(path.dirname(bundledClientEntry), {
+    connectConfig: requireConnect ? resolvePublicConfig(loadRepoEnv({ repoRoot })) : undefined,
+  });
 
   yield* fs.makeDirectory(path.join(stageAppDir, "apps/desktop"), { recursive: true });
   if (options.platform !== "win") {
