@@ -22,6 +22,39 @@ import { canSnooze, effectiveSnoozed } from "./threadSettled.ts";
 const environmentId = EnvironmentId.make("environment-v2");
 
 describe("V2 client presentation", () => {
+  it("presents native child activity without an app run or provider session", () => {
+    for (const status of ["preparing", "running", "waiting"] as const) {
+      const child = {
+        ...v2ThreadShell,
+        creationSource: "provider" as const,
+        lineage: {
+          rootThreadId: v2ThreadShell.id,
+          parentThreadId: v2ThreadShell.id,
+          relationshipToParent: "subagent" as const,
+        },
+        status,
+        activityRunStatus: status,
+        activityRunStartedAt: v2ThreadShell.updatedAt,
+      };
+      const active = presentThreadShell(environmentId, child);
+      expect(active.latestRun).toBeNull();
+      expect(active.runtime).toMatchObject({
+        status,
+        activeRunId: null,
+        activityStartedAt: DateTime.formatIso(v2ThreadShell.updatedAt),
+      });
+      expect(isThreadWorking(active)).toBe(true);
+      expect(
+        presentThreadShell(environmentId, {
+          ...child,
+          status: "completed",
+          activityRunStatus: null,
+          activityRunStartedAt: null,
+        }).runtime,
+      ).toBeNull();
+    }
+  });
+
   it("keeps async questions in Working until the run completes", () => {
     const runId = RunId.make("run-async-question");
     const running = {

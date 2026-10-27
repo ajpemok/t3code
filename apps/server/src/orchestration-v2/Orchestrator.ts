@@ -7,6 +7,8 @@ import type {
 import {
   latestExecutedRun,
   latestRootProviderFailure,
+  providerErrorRecoveryPlan,
+  isRecoverableProviderFailure,
   runRanAfter,
   usageLimitBlockedRun,
 } from "@t3tools/shared/orchestrationV2ThreadError";
@@ -97,6 +99,7 @@ import {
   CommandPolicyV2,
   goalCommandStopsActiveRun,
   isNativeMaintenanceCommand,
+  runIsExecutingNativeMaintenance,
   resolveMessageDispatchIntent,
 } from "./CommandPolicy.ts";
 import { CommandReceiptStoreV2 } from "./CommandReceiptStore.ts";
@@ -1121,7 +1124,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           "contextTransfers",
         ],
         {
-          turnItemTypes: ["user_message", "error"],
+          turnItemTypes: ["user_message", "error", "compaction"],
           messageRoles: ["user"],
           omitSettledLeafNodes: true,
         },
@@ -3370,6 +3373,9 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
             ...thread,
             ...(command.title === undefined ? {} : { title: command.title }),
             ...(command.limitRecovery === undefined ? {} : { limitRecovery }),
+            ...(command.providerErrorRetryCancelledRunId === undefined
+              ? {}
+              : { providerErrorRetryCancelledRunId: command.providerErrorRetryCancelledRunId }),
             ...(command.limitRecovery !== undefined &&
             limitRecovery?.snooze === true &&
             Date.parse(limitRecovery.resetAt) > DateTime.toEpochMillis(now)
@@ -4317,12 +4323,12 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
     const targetMessage = input.projection.messages.find(
       (message) => message.id === targetRun.userMessageId,
     );
-    if (targetMessage !== undefined && isNativeMaintenanceCommand(targetMessage)) {
+    if (runIsExecutingNativeMaintenance(input.projection, targetRun)) {
       return yield* new OrchestratorDispatchError({
         commandId: input.command.commandId,
         commandType: input.command.type,
         cause:
-          targetMessage.text.trim().toLowerCase() === "/compact"
+          targetMessage?.text.trim().toLowerCase() === "/compact"
             ? "Wait for context compaction to finish before steering the thread."
             : "Wait for sign-out to finish before steering the thread.",
       });
@@ -4988,6 +4994,50 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
     effects: Ref.Ref<Array<PendingOrchestrationEffectV2>>,
   ) {
     let projection = yield* getProjectionWithPendingEvents(command.threadId, events);
+    if (command.providerErrorContinuationOfRunId !== undefined) {
+      const now = yield* DateTime.now;
+      const preferences = yield* serverSettings.getSettings.pipe(Effect.orDie);
+      const source = latestExecutedRun(projection.runs);
+      const plan =
+        source === null
+          ? null
+          : providerErrorRecoveryPlan(
+              {
+                thread: projection.thread,
+                run: source,
+                failure: latestRootProviderFailure(source, projection.turnItems),
+                blocked:
+                  projection.runtimeRequests.some((request) => request.status === "pending") ||
+                  projection.runs.some((run) => run.status === "queued") ||
+                  projection.providerTurns.some(
+                    (turn) =>
+                      turn.nodeId === source.rootNodeId &&
+                      (turn.status === "running" || turn.status === "pending"),
+                  ) ||
+                  (yield* stopReachedRun(command, command.threadId, source.id)),
+              },
+              preferences.providerErrorRetryLimit,
+              DateTime.toEpochMillis(now),
+            );
+      if (
+        source?.id !== command.providerErrorContinuationOfRunId ||
+        !plan ||
+        plan.messageId !== command.messageId ||
+        plan.dueAt > DateTime.toEpochMillis(now) ||
+        command.dispatchMode.type !== "start_immediately"
+      ) {
+        yield* emit(
+          events,
+          command,
+        )({
+          type: "thread.metadata-updated",
+          threadId: command.threadId,
+          occurredAt: now,
+          payload: projection.thread,
+        });
+        return;
+      }
+    }
     if (command.manualContinuationOfRunId !== undefined) {
       const source = projection.runs.find((run) => run.id === command.manualContinuationOfRunId);
       const limited = latestRootProviderFailure(source ?? null, projection.turnItems);
@@ -4995,7 +5045,10 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         command.dispatchMode.type !== "start_immediately" ||
         source === undefined ||
         (source.status !== "interrupted" &&
-          !(source.status === "failed" && limited?.class === "usage_limit")) ||
+          !(
+            source.status === "failed" &&
+            (limited?.class === "usage_limit" || isRecoverableProviderFailure(limited))
+          )) ||
         latestExecutedRun(projection.runs)?.id !== source.id ||
         projection.thread.archivedAt !== null ||
         projection.thread.deletedAt !== null ||
@@ -5339,14 +5392,11 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       const activeTurn = projection.providerTurns.find(
         (turn) => turn.runAttemptId === active?.activeAttemptId && turn.status === "running",
       );
-      const activeMessage = projection.messages.find(
-        (message) => message.id === active?.userMessageId,
-      );
       if (
         active !== undefined &&
         activeTurn !== undefined &&
         providerThread?.providerSessionId != null &&
-        (activeMessage === undefined || !isNativeMaintenanceCommand(activeMessage))
+        !runIsExecutingNativeMaintenance(projection, active)
       ) {
         const session = yield* providerSessions
           .get(providerThread.providerSessionId)
@@ -8298,7 +8348,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           "runtimeRequests",
           "subagents",
         ],
-        { turnItemTypes: [], messageRoles: ["user"] },
+        { turnItemTypes: ["compaction"], messageRoles: ["user"] },
       )
       .pipe(Effect.mapError(() => new OrchestratorProjectionError({ threadId: command.threadId })));
     if (projection.thread.archivedAt !== null || projection.thread.deletedAt !== null) {
@@ -9637,6 +9687,18 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         })
         .pipe(mapDispatchError(input.command));
       const failure = latestRootProviderFailure(latest, turnItems);
+      if (
+        isRecoverableProviderFailure(failure) &&
+        thread.providerErrorRetryCancelledRunId !== latest.id
+      ) {
+        thread = { ...thread, providerErrorRetryCancelledRunId: latest.id };
+        yield* emitEvent({
+          type: "thread.metadata-updated",
+          threadId: thread.id,
+          occurredAt: input.now,
+          payload: thread,
+        });
+      }
       if (
         failure?.class === "usage_limit" &&
         failure.resetAt != null &&

@@ -552,6 +552,123 @@ const nextTurnSelectionHarness = Effect.fn("nextTurnSelectionHarness")(function*
   return { cwd, events, started, steered, layer, startFirstTurn };
 });
 
+it.effect.each(["direct", "queued"] as const)(
+  "delivers a %s steer to a goal continuation after manual compaction",
+  (delivery) =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const { started, steered, layer, startFirstTurn } = yield* nextTurnSelectionHarness(
+          `compact-continuation-${delivery}`,
+        );
+        yield* Effect.gen(function* () {
+          const orchestrator = yield* Orchestrator.OrchestratorV2;
+          const worker = yield* EffectWorker.OrchestrationEffectWorkerV2;
+          const sink = yield* EventSink.EventSinkV2;
+          const threadId = yield* startFirstTurn;
+          const before = yield* orchestrator.getThreadProjection(threadId);
+          const first = started[0]!;
+          const compactTurn = before.providerTurns[0]!;
+          const now = yield* DateTime.now;
+          const continuedTurnId = ProviderTurnId.make("provider-turn:goal-continuation");
+          yield* sink.write({
+            events: [
+              {
+                id: EventId.make("compact:request"),
+                type: "message.updated",
+                threadId,
+                runId: first.runId,
+                occurredAt: now,
+                payload: { ...before.messages[0]!, text: "/compact" },
+              },
+              {
+                id: EventId.make("compact:finished"),
+                type: "provider-turn.updated",
+                threadId,
+                runId: first.runId,
+                occurredAt: now,
+                payload: { ...compactTurn, status: "completed", completedAt: now },
+              },
+              {
+                id: EventId.make("compact:item"),
+                type: "turn-item.updated",
+                threadId,
+                runId: first.runId,
+                occurredAt: now,
+                payload: {
+                  id: TurnItemId.make("compact:completed-item"),
+                  threadId,
+                  runId: first.runId,
+                  nodeId: first.rootNodeId,
+                  providerThreadId: compactTurn.providerThreadId,
+                  providerTurnId: compactTurn.id,
+                  nativeItemRef: null,
+                  parentItemId: null,
+                  ordinal: 1,
+                  status: "completed",
+                  title: "Context compacted",
+                  type: "compaction",
+                  driver,
+                  startedAt: now,
+                  completedAt: now,
+                  updatedAt: now,
+                },
+              },
+              {
+                id: EventId.make("goal:continued"),
+                type: "provider-turn.updated",
+                threadId,
+                runId: first.runId,
+                occurredAt: now,
+                payload: {
+                  ...compactTurn,
+                  id: continuedTurnId,
+                  ordinal: compactTurn.ordinal + 1,
+                  status: "running",
+                  completedAt: null,
+                },
+              },
+            ],
+          });
+          yield* orchestrator.dispatch({
+            type: "message.dispatch",
+            commandId: CommandId.make("follow-up"),
+            threadId,
+            messageId: MessageId.make("message:follow-up"),
+            text: "Keep the privacy checks",
+            attachments: [],
+            dispatchMode:
+              delivery === "queued"
+                ? { type: "queue_after_active" }
+                : { type: "steer_active", targetRunId: first.runId },
+            createdBy: "user",
+            creationSource: "web",
+          });
+          if (delivery === "queued") {
+            const queued = (yield* orchestrator.getThreadProjection(threadId)).runs.find(
+              (run) => run.status === "queued",
+            )!;
+            yield* orchestrator.dispatch({
+              type: "queued-message.promote-to-steer",
+              commandId: CommandId.make("promote-follow-up"),
+              threadId,
+              queuedRunId: queued.id,
+              targetRunId: first.runId,
+            });
+          }
+          yield* worker.drain();
+          assert.deepEqual(steered, ["Keep the privacy checks"]);
+          assert.equal(started.length, 1);
+          const after = yield* orchestrator.getThreadProjection(threadId);
+          assert.equal(
+            after.providerTurns.find((turn) => turn.id === continuedTurnId)?.status,
+            "running",
+          );
+          assert.equal(after.runs.filter((run) => run.status === "queued").length, 0);
+        }).pipe(Effect.provide(layer));
+      }),
+    ),
+);
+
 it.effect("sends a selected held message once and preserves the remaining queue order", () =>
   Effect.scoped(
     Effect.gen(function* () {
