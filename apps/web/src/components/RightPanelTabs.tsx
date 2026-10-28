@@ -10,6 +10,7 @@ import type {
   EnvironmentId,
   PreviewSessionSnapshot,
   ProjectId,
+  ProjectIconColor,
   PullRequestState,
   ResolvedKeybindingsConfig,
 } from "@t3tools/contracts";
@@ -95,6 +96,7 @@ import { observeResize } from "~/lib/observeResize";
 import { surfaceShortcutKey } from "~/lib/surfaceShortcutKey";
 
 export interface RightPanelTabsProps {
+  projectColor?: ProjectIconColor | undefined;
   mode: PreviewPanelMode;
   maximized?: boolean;
   open?: boolean;
@@ -1231,6 +1233,7 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
           ? `Workspace panel: ${surfaceTitle(focusedSurface, props.previewSessions, props.terminalLabelsById)}`
           : "Workspace panel"
       }
+      projectColor={props.projectColor}
       mode={props.mode}
       {...(props.maximized !== undefined ? { maximized: props.maximized } : {})}
       {...(props.open !== undefined ? { open: props.open } : {})}

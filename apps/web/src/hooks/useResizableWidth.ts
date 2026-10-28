@@ -15,6 +15,7 @@ export interface UseResizableWidthOptions {
   readonly minWidth: number;
   readonly maxWidth: number;
   readonly edge: "left" | "right";
+  readonly viewportWidth?: number;
 }
 
 export interface ResizableWidthHandlers {
@@ -32,7 +33,7 @@ export function useResizableWidth(options: UseResizableWidthOptions): {
   readonly setWidth: (width: number) => void;
   readonly handlers: ResizableWidthHandlers;
 } {
-  const { storageKey, defaultWidth, minWidth, maxWidth, edge } = options;
+  const { storageKey, defaultWidth, minWidth, maxWidth, edge, viewportWidth } = options;
 
   const clamp = (value: number): number => {
     if (!Number.isFinite(value)) return defaultWidth;
@@ -49,16 +50,30 @@ export function useResizableWidth(options: UseResizableWidthOptions): {
       return defaultWidth;
     }
   };
-  const [widthState, setWidthState] = useState(() => ({ storageKey, width: readWidth() }));
+  const [widthState, setWidthState] = useState(() => ({
+    storageKey,
+    width: readWidth(),
+    viewportWidth,
+  }));
   if (widthState.storageKey !== storageKey) {
-    setWidthState({ storageKey, width: readWidth() });
+    setWidthState({ storageKey, width: readWidth(), viewportWidth });
+  } else if (widthState.viewportWidth !== viewportWidth) {
+    const delta =
+      viewportWidth === undefined || widthState.viewportWidth === undefined
+        ? 0
+        : viewportWidth - widthState.viewportWidth;
+    setWidthState({ storageKey, width: clamp(widthState.width + delta), viewportWidth });
   }
 
   const clampedWidth = clamp(widthState.width);
 
   const commitWidth = (nextStorageKey: string, nextWidth: number) => {
     // Resizing remains usable for this session when browser storage is unavailable.
-    setWidthState({ storageKey: nextStorageKey, width: nextWidth });
+    setWidthState((current) => ({
+      storageKey: nextStorageKey,
+      width: nextWidth,
+      viewportWidth: current.viewportWidth,
+    }));
     try {
       setLocalStorageItem(nextStorageKey, nextWidth, WidthSchema);
     } catch (error) {
