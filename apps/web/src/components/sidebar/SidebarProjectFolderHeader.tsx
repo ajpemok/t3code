@@ -1,6 +1,6 @@
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
 import { scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environment";
-import { ChevronDownIcon, PinIcon, PinOffIcon, SquarePenIcon } from "lucide-react";
+import { ChevronDownIcon, SquarePenIcon } from "lucide-react";
 import { memo } from "react";
 
 import { cn } from "~/lib/utils";
@@ -11,6 +11,7 @@ import { ProjectFavicon } from "../ProjectFavicon";
 import { Button } from "../ui/button";
 import { SidebarActivityCounts } from "./SidebarActivityCounts";
 import { projectTintColor } from "~/projectIdentity";
+import { SidebarPinButton } from "./SidebarPinButton";
 
 const FOLDER_DOT_CLASS_NAME = {
   attention: "bg-warning",
@@ -71,9 +72,10 @@ export const SidebarProjectFolderHeader = memo(function SidebarProjectFolderHead
           event.preventDefault();
           props.onContextMenu(group, { x: event.clientX, y: event.clientY });
         }}
-        className="project-tint-row flex h-9 w-full cursor-pointer items-center gap-2.5 px-(--sidebar-row-content-inset) text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+        className="project-tint-row flex h-9 w-full cursor-pointer items-center gap-1.5 px-(--sidebar-row-content-inset) text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
       >
         <ProjectFavicon project={group} className="size-4 shrink-0" />
+        <span aria-hidden className="size-6 shrink-0" />
         <span className="min-w-0 flex-1 truncate text-sm font-medium text-sidebar-foreground/90">
           {group.displayName}
         </span>
@@ -102,17 +104,17 @@ export const SidebarProjectFolderHeader = memo(function SidebarProjectFolderHead
           )}
         />
       </button>
+      <span className="absolute inset-y-0 left-[calc(var(--sidebar-row-content-inset)+1rem+0.375rem)] flex items-center">
+        <SidebarPinButton
+          actionFor={rowId}
+          pinned={props.pinned}
+          label={`${props.pinned ? "Unpin" : "Pin"} ${group.displayName} and its threads`}
+          accent={projectTintColor(group) ? "var(--project-accent)" : undefined}
+          onClick={() => props.onTogglePin(group)}
+        />
+      </span>
       {/* Sits over the count, which hides on hover, and left of the chevron. */}
       <span className="absolute inset-y-0 right-6 flex items-center opacity-0 focus-within:opacity-100 group-hover/project-folder:opacity-100 pointer-coarse:opacity-100">
-        <Button
-          data-sidebar-action-for={rowId}
-          size="icon-xs"
-          variant="ghost-muted"
-          aria-label={`${props.pinned ? "Unpin" : "Pin"} ${group.displayName} and its threads`}
-          onClick={() => props.onTogglePin(group)}
-        >
-          {props.pinned ? <PinOffIcon aria-hidden /> : <PinIcon aria-hidden />}
-        </Button>
         <Button
           data-sidebar-action-for={rowId}
           size="icon-xs"

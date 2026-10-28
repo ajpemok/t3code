@@ -151,17 +151,18 @@ export function ThreadModelIdentity({
           ) : (
             <CpuIcon aria-hidden className="size-3.5" />
           ))}
-        {details.speed?.expedited ? (
-          <span
-            role="img"
-            aria-label={`${details.speed.label} mode`}
-            className="inline-flex size-3.5 shrink-0 items-center justify-center"
-          >
+        <span
+          role={details.speed?.expedited ? "img" : undefined}
+          aria-hidden={!details.speed?.expedited}
+          aria-label={details.speed?.expedited ? `${details.speed.label} mode` : undefined}
+          className="inline-flex size-3.5 shrink-0 items-center justify-center"
+        >
+          {details.speed?.expedited ? (
             <ZapIcon aria-hidden className="size-3.5 fill-current" />
-          </span>
-        ) : null}
+          ) : null}
+        </span>
         {showName ? (
-          <span className="max-w-24 truncate text-3xs text-secondary-label">
+          <span className="w-(--sidebar-detail-width,5rem) truncate text-3xs text-secondary-label">
             {details.compactName}
           </span>
         ) : null}

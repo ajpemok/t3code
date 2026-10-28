@@ -164,7 +164,8 @@ the active run, in both shell readers, so completed or older work cannot keep it
 
 - Reuse upstream project folders, collapse state and keyboard navigation through the Project Sections setting. Retire the deleted legacy sidebar.
 - Show active/waiting/idle state with a coloured indicator; preserve the original thread status text.
-- Put the indicator at the far right and replace it with pin/new controls on hover or keyboard focus.
+- Keep the pin beside the project icon in folders, cards and shelves. Fill pinned icons with the project accent; leave unpinned icons outlined. Keep New Thread on hover or keyboard focus.
+- Reserve aligned provider, speed, action and time columns across normal, snoozed and settled rows. Keep snooze clocks fixed when labels differ and preserve positions on hover; reduce the detail column at compact widths.
 - Pin or unpin eligible project threads together. Explicit project pins retain empty headers; settled, effectively snoozed and archived tasks stay outside the project trees.
 - Keep the tree guide stable during expansion and use the project colour.
 - Offer New thread in empty project sections through the existing project/environment handler.
@@ -175,6 +176,7 @@ the active run, in both shell readers, so completed or older work cannot keep it
 | ---------------------------------------------------------------- | -------------------------------------------------------------------- |
 | `apps/web/src/components/Sidebar.tsx`                            | Shared flat/folder filters, project pinning and native shelves.      |
 | `apps/web/src/components/sidebar/SidebarProjectFolderHeader.tsx` | Project colour, pin control and activity counts on upstream folders. |
+| `apps/web/src/components/sidebar/SidebarPinButton.tsx`           | Shared, always-visible pin control and accent treatment.             |
 | `apps/web/src/components/Sidebar.logic.ts`                       | Project activity and eligible-thread derivation.                     |
 | `apps/web/src/components/Sidebar.logic.test.ts`                  | Activity and pin eligibility fixtures.                               |
 | `packages/contracts/src/settings.ts`                             | Header setting defaults/patch schema and context-meter default.      |
