@@ -61,11 +61,11 @@ function RecentRow({
       >
         {thread.title}
       </Link>
+      <RecentThreadDismissButton entry={entry} />
       <ThreadModelIdentity thread={thread} />
       <span className="shrink-0 text-3xs text-secondary-label">
         <RelativeTime timestamp={finishedAt} nowLabel="now" />
       </span>
-      <RecentThreadDismissButton entry={entry} />
     </li>
   );
 }
