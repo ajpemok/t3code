@@ -1368,8 +1368,6 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                   {props.project ? (
                     <ProjectFavicon project={props.project} className="size-3.5 shrink-0" />
                   ) : null}
-                  {/* Left of the status slot, the pin would slide when hover swaps the
-                label for the wider row controls. */}
                   {pinIndicator}
                   {props.projectDisplayName ? (
                     <span
@@ -1418,7 +1416,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                   {thread.branch ? (
                     <>
                       <ThreadWorktreeIndicator thread={thread} />
-                      <span className="flex min-w-0 flex-1">
+                      <span className="flex min-w-0">
                         <MiddleTruncate value={thread.branch} showTitle={false} />
                       </span>
                     </>
@@ -1429,11 +1427,9 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                         kind={props.environmentMachine}
                         className="size-3 shrink-0"
                       />
-                      <span className="min-w-0 flex-1 truncate">{props.scratchMachineLabel}</span>
+                      <span className="min-w-0 truncate">{props.scratchMachineLabel}</span>
                     </>
-                  ) : (
-                    <span className="flex-1" />
-                  )}
+                  ) : null}
                   {terminalStatusIcon}
                   {prBadge}
                   {diff ? (
@@ -1458,16 +1454,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                   props.sweepAction !== null && "hidden",
                 )}
               >
-                <span
-                  className={cn(
-                    isWokeStatus || status === "working"
-                      ? "pointer-events-auto"
-                      : "pointer-events-none group-has-[:focus-visible]/sidebar-status-slot:absolute group-has-[:focus-visible]/sidebar-status-slot:right-0 group-has-[:focus-visible]/sidebar-status-slot:opacity-0 group-any-hover/sidebar-row:absolute group-any-hover/sidebar-row:right-0 group-any-hover/sidebar-row:opacity-0",
-                    "flex flex-col items-end justify-center gap-0.5 self-center tabular-nums text-secondary-label",
-                    status === "working" && "order-last ml-1",
-                    snoozeMenuOpen && "pointer-events-none absolute right-0 opacity-0",
-                  )}
-                >
+                <span className="pointer-events-auto order-last ml-1 flex flex-col items-end justify-center gap-0.5 self-center tabular-nums text-secondary-label">
                   {topStatus ? (
                     isWokeStatus ? (
                       <ThreadModelBadge
@@ -1556,10 +1543,8 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                 {props.settlementSupported || showSnoozeButton || hasUnsentDraft ? (
                   <span
                     className={cn(
-                      // Mouse clicks leave Settle focused; focus-within would pin controls over
-                      // the status label after the pointer leaves. Use focus-visible instead.
-                      "pointer-events-none absolute inset-y-0 right-0 flex items-stretch opacity-0 has-[:focus-visible]:pointer-events-auto has-[:focus-visible]:static has-[:focus-visible]:opacity-100 group-any-hover/sidebar-row:pointer-events-auto group-any-hover/sidebar-row:static group-any-hover/sidebar-row:opacity-100",
-                      snoozeMenuOpen && "pointer-events-auto static opacity-100",
+                      "pointer-events-none order-first flex items-stretch opacity-0 has-[:focus-visible]:pointer-events-auto has-[:focus-visible]:opacity-100 group-any-hover/sidebar-row:pointer-events-auto group-any-hover/sidebar-row:opacity-100",
+                      snoozeMenuOpen && "pointer-events-auto opacity-100",
                     )}
                   >
                     {hasUnsentDraft ? (
