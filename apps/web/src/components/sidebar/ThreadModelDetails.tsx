@@ -14,6 +14,7 @@ import { ThreadHoverCard, ThreadHoverCardPopup } from "../ThreadHoverCard";
 import { Tooltip, TooltipTrigger } from "../ui/tooltip";
 import { sidebarExecutionModel, sidebarModelDetails } from "./threadModelDetails.logic";
 import { ProviderInstanceIcon } from "../chat/ProviderInstanceIcon";
+import { modelSelectionsEqual } from "@t3tools/shared/model";
 
 const projectionAtom = Atom.family((key: string | null) =>
   Atom.make((get) => {
@@ -30,18 +31,32 @@ function useModelDetails(thread: SidebarThreadSummary, readRun: boolean) {
     ),
   );
   const { selection, source } = sidebarExecutionModel(thread, projection);
-  const provider = providers.find((candidate) => candidate.instanceId === selection.instanceId);
+  const provider = providers.find(
+    (candidate) => candidate.instanceId === thread.modelSelection.instanceId,
+  );
   return {
-    ...sidebarModelDetails(selection, provider),
+    ...sidebarModelDetails(thread.modelSelection, provider),
     provider,
-    source,
+    running:
+      source === "run" && !modelSelectionsEqual(selection, thread.modelSelection)
+        ? sidebarModelDetails(
+            selection,
+            providers.find((candidate) => candidate.instanceId === selection.instanceId),
+          )
+        : null,
   };
 }
 
-function ModelFields({ details }: { readonly details: ReturnType<typeof useModelDetails> }) {
+function ModelFields({
+  details,
+  modelLabel = "Thread Model",
+}: {
+  readonly details: ReturnType<typeof sidebarModelDetails>;
+  readonly modelLabel?: string;
+}) {
   return (
     <dl className="grid grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-4 gap-y-1.5">
-      <dt>{details.source === "selected" ? "Thread Model" : "Run Model"}</dt>
+      <dt>{modelLabel}</dt>
       <dd className="min-w-0 wrap-break-word text-foreground">{details.modelName}</dd>
       <dt>Provider</dt>
       <dd className="min-w-0 wrap-break-word">{details.providerName}</dd>
@@ -58,6 +73,23 @@ function ModelFields({ details }: { readonly details: ReturnType<typeof useModel
         </>
       ) : null}
     </dl>
+  );
+}
+
+function ModelSettings({ details }: { readonly details: ReturnType<typeof useModelDetails> }) {
+  return (
+    <>
+      <ModelFields
+        details={details}
+        modelLabel={details.running ? "Selected Model" : "Thread Model"}
+      />
+      {details.running ? (
+        <div className="mt-3 border-t border-border pt-3">
+          <p className="mb-2 text-foreground">Running Turn</p>
+          <ModelFields details={details.running} modelLabel="Run Model" />
+        </div>
+      ) : null}
+    </>
   );
 }
 
@@ -129,7 +161,7 @@ export function ThreadModelIdentity({
       <ThreadHoverCardPopup side="right" align="start">
         <ThreadHoverCard title="Model Settings">
           {statusLabel ? <p className="mb-2 text-foreground">{statusLabel}</p> : null}
-          <ModelFields details={details} />
+          <ModelSettings details={details} />
         </ThreadHoverCard>
       </ThreadHoverCardPopup>
     </Tooltip>
@@ -137,7 +169,7 @@ export function ThreadModelIdentity({
 }
 
 export function ThreadModelSettings({ thread }: { readonly thread: SidebarThreadSummary }) {
-  return <ModelFields details={useModelDetails(thread, true)} />;
+  return <ModelSettings details={useModelDetails(thread, true)} />;
 }
 
 export function ThreadModelBadge({

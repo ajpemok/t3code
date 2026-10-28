@@ -245,9 +245,11 @@ a later completed turn can appear again. Keep the optional normal-list retention
 ## Read-Only Model Details
 
 Working and Goal statuses include a compact model name. The shared hover/focus
-card shows the full model, provider and available reasoning/speed options. It
-prefers the recorded run and provider report over next-turn settings. Saved
-thread settings are labelled when run information is unavailable. Unknown model
+card shows the full model, provider and available reasoning/speed options. The
+badge follows the thread's selected settings, matching the composer. If the
+active run uses different settings, the card shows them separately under Running
+Turn. Finished runs do not override the current selection. Speed uses the option
+value, so provider display labels cannot change its meaning. Unknown model
 or option values stay visible rather than being replaced by catalog defaults.
 Root rows reuse their visible detail lease; child rows load details only while
 the card is open. Grouped, flat and subagent rows share model presentation.

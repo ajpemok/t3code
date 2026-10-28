@@ -17,7 +17,11 @@ export function sidebarExecutionModel(
   projection: ThreadStructure | null,
 ): { selection: ModelSelection; source: "reported" | "run" | "selected" } {
   const runId = thread.runtime?.activeRunId ?? thread.latestRun?.runId;
-  const run = projection?.runs.find((candidate) => candidate.id === runId);
+  const run = projection?.runs.find(
+    (candidate) =>
+      candidate.id === runId &&
+      ["preparing", "queued", "starting", "running", "waiting"].includes(candidate.status),
+  );
   const providerThreadId = run?.providerThreadId ?? projection?.thread.activeProviderThreadId;
   const reported = projection?.providerThreads.find(
     (candidate) => candidate.id === providerThreadId,
@@ -92,13 +96,19 @@ export function sidebarModelDetails(
       options.push({ id: option.id, label: option.id, value: String(option.value) });
     }
   }
-  const speedOption =
-    options.find(
-      (option) =>
-        (option.id === "serviceTier" || option.id === "fastMode") &&
-        selection.options?.some((stated) => stated.id === option.id),
-    ) ?? options.find((option) => option.id === "serviceTier" || option.id === "fastMode");
-  const speedLabel = speedOption?.value.toLowerCase();
+  const statedSpeed =
+    selection.options?.find((option) => option.id === "serviceTier") ??
+    selection.options?.find((option) => option.id === "fastMode");
+  const speedDescriptor =
+    descriptors.find((descriptor) => descriptor.id === "serviceTier") ??
+    descriptors.find((descriptor) => descriptor.id === "fastMode");
+  const speedId = statedSpeed?.id ?? speedDescriptor?.id;
+  const speedValue =
+    statedSpeed?.value ??
+    (speedDescriptor?.id === "fastMode"
+      ? false
+      : getProviderOptionCurrentValue(speedDescriptor, selection));
+  const speedLabel = speedValue === undefined ? undefined : String(speedValue).toLowerCase();
   const speed =
     speedLabel === "fast" || speedLabel === "true"
       ? { label: "Fast", expedited: true }
@@ -114,6 +124,11 @@ export function sidebarModelDetails(
     modelName: model?.name ?? selection.model,
     providerName: provider?.displayName ?? provider?.driver ?? selection.instanceId,
     speed,
-    options,
+    options: options.flatMap((option) => {
+      if (option.id !== "serviceTier" && option.id !== "fastMode") return [option];
+      return option.id === speedId
+        ? [{ ...option, label: "Speed", value: speed?.label ?? option.value }]
+        : [];
+    }),
   };
 }
