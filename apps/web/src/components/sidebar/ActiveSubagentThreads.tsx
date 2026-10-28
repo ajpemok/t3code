@@ -101,7 +101,7 @@ export function ActiveSubagentsToggle() {
   );
 }
 
-export function VisibleSubagentsMenuGroup() {
+function VisibleSubagentsMenuGroup() {
   const count = useClientSettings((settings) => settings.sidebarSubagentPreviewCount);
   return (
     <MenuGroup>

@@ -94,7 +94,6 @@ export function resolveSidebarSubagentVisibility(settings: {
   if (mode !== undefined) return mode === "hide" ? "hide" : "show";
   return settings.sidebarActiveSubagentsEnabled ? "show" : "hide";
 }
-const DEFAULT_SIDEBAR_THREAD_PREVIEW_COUNT: SidebarThreadPreviewCount = 6;
 export const MIN_SIDEBAR_AUTO_SETTLE_AFTER_DAYS = 1;
 export const MAX_SIDEBAR_AUTO_SETTLE_AFTER_DAYS = 90;
 export const SidebarAutoSettleAfterDays = Schema.Number.check(

@@ -162,7 +162,7 @@ the active run, in both shell readers, so completed or older work cannot keep it
 
 ## Collapsible Project Sections
 
-- Reuse T3's existing legacy sidebar grouping and saved collapse state, exposed through the Project Sections setting.
+- Reuse upstream project folders, collapse state and keyboard navigation through the Project Sections setting. Retire the deleted legacy sidebar.
 - Show active/waiting/idle state with a coloured indicator; preserve the original thread status text.
 - Put the indicator at the far right and replace it with pin/new controls on hover or keyboard focus.
 - Pin or unpin eligible project threads together. Explicit project pins retain empty headers; settled, effectively snoozed and archived tasks stay outside the project trees.
@@ -171,14 +171,15 @@ the active run, in both shell readers, so completed or older work cannot keep it
 - Offer Pinned Threads Only in both views and Settings. Combine it with Hide Inactive, keep subagents under eligible parents and preserve the Snoozed/Settled shelves.
 - Hide empty project sections under Pinned Only; a project pin must not bypass the thread filters.
 
-| Files                                           | Fork Responsibility                                                      |
-| ----------------------------------------------- | ------------------------------------------------------------------------ |
-| `apps/web/src/components/LegacySidebar.tsx`     | Group headers, collapse, project pinning, empty action and cleanup menu. |
-| `apps/web/src/components/Sidebar.logic.ts`      | Project activity and eligible-thread derivation.                         |
-| `apps/web/src/components/Sidebar.logic.test.ts` | Activity and pin eligibility fixtures.                                   |
-| `packages/contracts/src/settings.ts`            | Header setting defaults/patch schema and context-meter default.          |
-| `docs/user/project-settings.md`                 | Current project controls.                                                |
-| `docs/user/thread-sidebar.md`                   | Sections, activity, cleanup and usage guidance.                          |
+| Files                                                            | Fork Responsibility                                                  |
+| ---------------------------------------------------------------- | -------------------------------------------------------------------- |
+| `apps/web/src/components/Sidebar.tsx`                            | Shared flat/folder filters, project pinning and native shelves.      |
+| `apps/web/src/components/sidebar/SidebarProjectFolderHeader.tsx` | Project colour, pin control and activity counts on upstream folders. |
+| `apps/web/src/components/Sidebar.logic.ts`                       | Project activity and eligible-thread derivation.                     |
+| `apps/web/src/components/Sidebar.logic.test.ts`                  | Activity and pin eligibility fixtures.                               |
+| `packages/contracts/src/settings.ts`                             | Header setting defaults/patch schema and context-meter default.      |
+| `docs/user/project-settings.md`                                  | Current project controls.                                            |
+| `docs/user/thread-sidebar.md`                                    | Sections, activity, cleanup and usage guidance.                      |
 
 Preserve upstream project/environment permissions, native thread commands, settled-state rules and saved settings.
 Keep project-header pin intent in client settings and task pins in the native thread commands.
@@ -443,7 +444,6 @@ adjustments at drag end rather than writing preferences on every window resize.
 | --------------------------------------------------------------- | ------------------------------------------------------------ |
 | `apps/web/src/components/Sidebar.logic.ts`                      | Shared Woke presentation and activity priority.              |
 | `apps/web/src/components/Sidebar.logic.test.ts`                 | Wake acknowledgement and settled-thread regression.          |
-| `apps/web/src/components/LegacySidebar.tsx`                     | Grouped wake dismissal through native visitation.            |
 | `apps/web/src/components/sidebar/SidebarThreadRow.tsx`          | Flat alarm presentation in both row layouts.                 |
 | `apps/web/src/components/sidebar/ThreadSurfaceUseIndicator.tsx` | Wake symbol and optional acknowledgement control.            |
 | `apps/web/src/index.css`                                        | Bounded wake animation and static reduced-motion state.      |
@@ -465,6 +465,7 @@ remain available without that opt-in. Account credentials stay outside builds.
 | ---------------------------------------- | ------------------------------------------------------------------------- |
 | `scripts/build-desktop-artifact.ts`      | Opt-in validation of emitted T3 Connect support and public configuration. |
 | `scripts/build-desktop-artifact.test.ts` | Offline, configured, missing-module and stale-configuration bundle cases. |
+| `scripts/lib/public-config.ts`           | Export the shared resolver for fork packaging validation.                 |
 
 ## Fork Maintenance Files
 

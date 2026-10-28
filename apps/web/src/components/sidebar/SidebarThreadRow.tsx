@@ -367,7 +367,7 @@ function SidebarThreadTooltip({
   );
 }
 
-export function SnoozeMenuButton(props: {
+function SnoozeMenuButton(props: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSnooze: (preset: Pick<SnoozePreset, "snoozedUntil">) => void;
@@ -518,8 +518,6 @@ const dropVerbBadge: Record<SidebarDropVerb, ReactNode> = {
 };
 
 const TOP_STATUS_ICONS = {
-  working: CircleDashedIcon,
-  waiting: CircleDotDashedIcon,
   input: MessageCircleQuestionIcon,
   request: UserRoundIcon,
   approval: ShieldQuestionIcon,
@@ -528,14 +526,18 @@ const TOP_STATUS_ICONS = {
   woke: AlarmClockIcon,
 } as const;
 
-function TopStatusIcon(props: { icon: keyof typeof TOP_STATUS_ICONS; className: string }) {
+function TopStatusIcon(props: {
+  icon: keyof typeof TOP_STATUS_ICONS | "working" | "waiting" | "compacting";
+  className: string;
+}) {
+  if (props.icon === "working" || props.icon === "waiting" || props.icon === "compacting")
+    return <TaskActivitySymbol kind={props.icon} />;
   const Icon = TOP_STATUS_ICONS[props.icon];
   return <Icon aria-hidden className={cn("shrink-0", props.className)} />;
 }
 
 type SidebarThreadRowProps = {
   thread: SidebarThreadSummary;
-  // "folder" is a one-line row inside a boring sidebar project folder.
   variant: "card" | "slim" | "folder";
   navigationParent?: string | undefined;
   variantAction: SidebarSweepAction;
@@ -1099,8 +1101,8 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     </span>
   ) : null;
 
-  if (variant !== "card") {
-    const inFolder = variant === "folder";
+  const inFolder = variant === "folder";
+  if (variant === "slim") {
     return (
       <li
         data-thread-item={threadKey}
@@ -1151,7 +1153,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                 className={cn(
                   "flex shrink-0 items-center transition-opacity",
                   status !== "working" &&
-                  (!props.isActive || variantAction === "unsettle") &&
+                    (!props.isActive || variantAction === "unsettle") &&
                     "opacity-40 grayscale group-focus-within/sidebar-row:opacity-100 group-focus-within/sidebar-row:grayscale-0 group-hover/sidebar-row:opacity-100 group-hover/sidebar-row:grayscale-0",
                 )}
               >
@@ -1325,6 +1327,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
       {...(fileDropHandlers ?? {})}
       className={cn(
         "list-none py-0.5 [content-visibility:auto] [contain-intrinsic-size:auto_78px]",
+        inFolder && "ms-3 [contain-intrinsic-size:auto_56px]",
         metaLineEmpty && "[contain-intrinsic-size:auto_58px]",
         sortable?.isDragging && "relative z-20",
       )}
@@ -1354,32 +1357,36 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
           <div
             className={cn(
               "relative z-10 grid h-[4.875rem] grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 px-(--sidebar-row-content-inset) py-(--sidebar-content-inset)",
+              inFolder && "h-14",
               metaLineEmpty && "h-auto",
             )}
           >
             <div className="min-w-0">
-              <div className="flex h-5 min-w-0 items-center gap-1.5">
-                {draftIndicator}
-                {props.project ? (
-                  <ProjectFavicon project={props.project} className="size-3.5 shrink-0" />
-                ) : null}
-                {/* Left of the status slot, the pin would slide when hover swaps the
+              {inFolder ? null : (
+                <div className="flex h-5 min-w-0 items-center gap-1.5">
+                  {draftIndicator}
+                  {props.project ? (
+                    <ProjectFavicon project={props.project} className="size-3.5 shrink-0" />
+                  ) : null}
+                  {/* Left of the status slot, the pin would slide when hover swaps the
                 label for the wider row controls. */}
-                {pinIndicator}
-                {props.projectDisplayName ? (
-                  <span
-                    className={cn(
-                      "min-w-0 flex-1 truncate font-normal text-secondary-label text-xs",
-                    )}
-                  >
-                    {props.projectDisplayName}
-                  </span>
-                ) : (
-                  <span className="flex-1" />
-                )}
-                {props.sweepAction !== null ? dragDestination : null}
-              </div>
-              <div className="mt-1 flex min-w-0 items-center gap-1.5">
+                  {pinIndicator}
+                  {props.projectDisplayName ? (
+                    <span
+                      className={cn(
+                        "min-w-0 flex-1 truncate font-normal text-secondary-label text-xs",
+                      )}
+                    >
+                      {props.projectDisplayName}
+                    </span>
+                  ) : (
+                    <span className="flex-1" />
+                  )}
+                  {props.sweepAction !== null ? dragDestination : null}
+                </div>
+              )}
+              <div className={cn("flex min-w-0 items-center gap-1.5", !inFolder && "mt-1")}>
+                {inFolder ? draftIndicator : null}
                 {title}
                 {isRegeneratingTitle ? (
                   <span role="status" className="sr-only">
@@ -1578,6 +1585,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                         onOpenChange={setSnoozeMenuOpen}
                         onSnooze={handleSnoozePreset}
                         timestampFormat={props.timestampFormat}
+                        environmentId={thread.environmentId}
                       />
                     ) : null}
                     {props.settlementSupported ? (

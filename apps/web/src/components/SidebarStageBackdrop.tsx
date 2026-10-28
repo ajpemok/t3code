@@ -49,10 +49,6 @@ export function useSidebarStageBackdropVariant(
   return resolveSidebarStageBackdropVariant(useEnvironmentStageLabel(), mode);
 }
 
-export function StageBackdropArt({ variant }: { variant: SidebarStageBackdropVariant }) {
-  return variant === "nightly" ? <NightlySkyArt /> : <DevBlueprintArt />;
-}
-
 export function StageBackdropButtonArt({ variant }: { variant: SidebarStageBackdropVariant }) {
   return variant === "nightly" ? <NightlySkyArt compact /> : <DevBlueprintArt compact />;
 }
