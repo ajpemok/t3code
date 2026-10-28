@@ -150,6 +150,7 @@ the active run, in both shell readers, so completed or older work cannot keep it
 - Keep the tree guide stable during expansion and use the project colour.
 - Offer New thread in empty project sections through the existing project/environment handler.
 - Offer Pinned Threads Only in both views and Settings. Combine it with Hide Inactive, keep subagents under eligible parents and preserve the Snoozed/Settled shelves.
+- Hide empty project sections under Pinned Only; a project pin must not bypass the thread filters.
 
 | Files                                                            | Fork Responsibility                                                          |
 | ---------------------------------------------------------------- | ---------------------------------------------------------------------------- |
@@ -212,6 +213,9 @@ Use completion metadata, including the native terminal shell status for runless
 children. A running or input-blocked thread leaves Recent and follows normal
 activity filtering. Share the bounded quiet-shell derivation across rows; no
 transcript subscription or server mutation is needed for this client view.
+Recent entries and retained subagents can be dismissed individually, with Undo
+and a restore action in Recent. Dismissal is local to the client and completion;
+a later completed turn can appear again. Keep the optional normal-list retention.
 
 | Files                                                                 | Fork Responsibility                                                           |
 | --------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
@@ -219,6 +223,7 @@ transcript subscription or server mutation is needed for this client view.
 | `apps/web/src/components/sidebar/recentThreads.logic.test.ts`         | Boundaries, parking, native children, environments and normal-list retention. |
 | `apps/web/src/hooks/useRecentThreads.ts`                              | Shared quiet-shell derivation, saved preferences and minute clock.            |
 | `apps/web/src/components/sidebar/RecentThreadsShelf.tsx`              | Shared Recent section, collapse, links and existing context actions.          |
+| `apps/web/src/components/sidebar/RecentThreadDismissButton.tsx`       | Shared dismissal action for Recent and retained child rows.                   |
 | `apps/web/src/components/sidebar/RecentThreadsShelf.browser.test.tsx` | Collapse, finished-thread display and removal on resume.                      |
 | `apps/web/src/components/settings/RecentThreadsSettings.tsx`          | Shelf, retention, subagent, count and age controls.                           |
 
@@ -290,6 +295,11 @@ The sidebar integration reads quiet current-run data only for visible running th
 Preserve that bounded subscription when upstream changes thread projections.
 An open tab or retained browser ownership alone does not mean a tool is running.
 Opaque wrappers can remain unclassified; avoid fabricating activity from missing metadata.
+Use the composer's Standard default and let an explicit speed choice override
+provider reports across the Fast and service-tier option names. Keep provider
+and speed glyphs immediately before the model name. Status words belong in the
+hover card; centre the icon/model/time column across the full row. Align remote
+and branch metadata beneath the title, with shared 14-pixel row glyphs.
 
 ## Close Inactive Panel Tabs
 

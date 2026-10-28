@@ -73,6 +73,26 @@ it("preserves a provider choice absent from the cached catalog", () => {
   ).toContainEqual({ id: "reasoningEffort", label: "Reasoning", value: "ultra" });
 });
 
+it("matches the composer's Standard default when the provider defaults to Fast", () => {
+  const fastDefaultProvider = {
+    ...provider,
+    models: provider.models.map((model) => ({
+      ...model,
+      capabilities: {
+        optionDescriptors: [
+          { id: "fastMode", label: "Fast Mode", type: "boolean" as const, currentValue: true },
+        ],
+      },
+    })),
+  };
+  expect(
+    sidebarModelDetails({ instanceId, model: "gpt-6.1-sol" }, fastDefaultProvider).speed,
+  ).toEqual({
+    label: "Standard",
+    expedited: false,
+  });
+});
+
 it("does not invent reasoning or speed when a remote catalog is unavailable", () => {
   expect(sidebarModelDetails({ instanceId, model: "private-model" }, undefined)).toEqual({
     compactName: "private-model",
@@ -202,6 +222,27 @@ it("fills missing options from a matching provider report without losing explici
     { id: "fastMode", value: true },
     { id: "reasoningEffort", value: "xhigh" },
   ]);
+  const standard = sidebarExecutionModel(
+    {
+      ...thread,
+      modelSelection: { ...selection, options: [{ id: "fastMode", value: false }] },
+    },
+    {
+      ...snapshot,
+      providerThreads: [
+        {
+          ...providerThread,
+          nativeMetadata: {
+            modelSelection: { ...reported, options: [{ id: "serviceTier", value: "fast" }] },
+          },
+        },
+      ],
+    },
+  );
+  expect(sidebarModelDetails(standard.selection, provider).speed).toEqual({
+    label: "Standard",
+    expedited: false,
+  });
   expect(
     sidebarExecutionModel(thread, {
       ...snapshot,

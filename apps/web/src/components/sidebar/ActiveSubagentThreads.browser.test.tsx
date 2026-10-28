@@ -9,6 +9,7 @@ import { act, fakeTimers, render } from "../../../test/render";
 import { makeThreadFixture } from "../../test-fixtures";
 import type { SidebarThreadSummary } from "../../types";
 import { ActiveSubagentThreads, ActiveSubagentsToggle } from "./ActiveSubagentThreads";
+import { restoreDismissedRecentThreads } from "~/hooks/useRecentThreads";
 
 const testProvidersAtom = Atom.make([]).pipe(Atom.keepAlive);
 
@@ -138,11 +139,13 @@ it("opts into active children, removes completed children and retains input requ
   await expect
     .element(screen.getByRole("link", { name: "Open active subagent: Inspect the Diff" }))
     .toBeVisible();
-  await expect.element(screen.getByText("Working", { exact: true })).toBeVisible();
+  await expect.element(screen.getByRole("img", { name: "Working", exact: true })).toBeVisible();
   await act(() => registry.set(threads, [{ ...child, runtime: null }]));
   await expect.element(screen.getByRole("link")).not.toBeInTheDocument();
   await act(() => registry.set(threads, [{ ...child, runtime: null, hasPendingUserInput: true }]));
-  await expect.element(screen.getByText("Awaiting Input", { exact: true })).toBeVisible();
+  await expect
+    .element(screen.getByRole("img", { name: "Awaiting Input", exact: true }))
+    .toBeVisible();
   await screen.getByRole("button", { name: "Subagents: Show" }).click();
   await expect.element(page.getByRole("menu")).toBeVisible();
   await page.getByRole("menuitemradio", { name: "Hide", exact: true }).click();
@@ -232,6 +235,7 @@ it("limits shown children, expands them and respects Hide Inactive without readi
 });
 
 it("keeps a recently finished subagent under Hide Inactive when retention is enabled", async () => {
+  localStorage.removeItem("t3code:sidebar:recent-dismissed");
   using _timers = fakeTimers({ now: Date.parse("2026-10-28T12:00:00Z") });
   const { registry, threads } = setup();
   using _registry = { [Symbol.dispose]: () => registry.dispose() };
@@ -258,6 +262,13 @@ it("keeps a recently finished subagent under Hide Inactive when retention is ena
       <ActiveSubagentThreads threadRef={scopeThreadRef(child.environmentId, parentId)} enabled />
     </RegistryContext.Provider>,
   );
+  await expect
+    .element(screen.getByRole("link", { name: "Open recent subagent: Finished Child" }))
+    .toBeVisible();
+  await screen.getByRole("link", { name: "Open recent subagent: Finished Child" }).hover();
+  await screen.getByRole("button", { name: "Dismiss Finished Child from Recent" }).click();
+  await expect.element(screen.getByRole("link")).not.toBeInTheDocument();
+  await act(() => restoreDismissedRecentThreads());
   await expect
     .element(screen.getByRole("link", { name: "Open recent subagent: Finished Child" }))
     .toBeVisible();
