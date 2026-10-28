@@ -40,6 +40,7 @@ vi.mock("~/hooks/useSettings", () => ({
 it("shows finished threads, supports collapse and removes a thread from Recent when it resumes", async () => {
   using _timers = fakeTimers({ now: Date.parse("2026-10-28T12:00:00Z") });
   localStorage.removeItem("t3code:sidebar:recent-expanded");
+  localStorage.removeItem("t3code:sidebar:recent-dismissed");
   const registry = AtomRegistry.make();
   using _registry = { [Symbol.dispose]: () => registry.dispose() };
   const threads = Atom.make<readonly SidebarThreadSummary[]>([]).pipe(Atom.keepAlive);
@@ -75,6 +76,11 @@ it("shows finished threads, supports collapse and removes a thread from Recent w
     ]),
   );
   expect(commits).not.toHaveBeenCalled();
+  await screen.getByRole("link", { name: "Finished Thread" }).hover();
+  await screen.getByRole("button", { name: "Dismiss Finished Thread from Recent" }).click();
+  await expect.element(screen.getByRole("button", { name: "Recent (0)" })).toBeVisible();
+  await screen.getByRole("button", { name: "Restore dismissed recent threads" }).click();
+  await expect.element(screen.getByRole("link", { name: "Finished Thread" })).toBeVisible();
   await screen.getByRole("button", { name: "Recent (1)" }).click();
   await expect.element(screen.getByRole("link")).not.toBeInTheDocument();
   await screen.getByRole("button", { name: "Recent (1)" }).click();
