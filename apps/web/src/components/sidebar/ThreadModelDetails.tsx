@@ -31,17 +31,18 @@ function useModelDetails(thread: SidebarThreadSummary, readRun: boolean) {
     ),
   );
   const { selection, source } = sidebarExecutionModel(thread, projection);
-  const provider = providers.find(
-    (candidate) => candidate.instanceId === thread.modelSelection.instanceId,
-  );
+  const provider = providers.find((candidate) => candidate.instanceId === selection.instanceId);
   return {
-    ...sidebarModelDetails(thread.modelSelection, provider),
+    ...sidebarModelDetails(selection, provider),
     provider,
-    running:
+    source,
+    nextTurn:
       source === "run" && !modelSelectionsEqual(selection, thread.modelSelection)
         ? sidebarModelDetails(
-            selection,
-            providers.find((candidate) => candidate.instanceId === selection.instanceId),
+            thread.modelSelection,
+            providers.find(
+              (candidate) => candidate.instanceId === thread.modelSelection.instanceId,
+            ),
           )
         : null,
   };
@@ -81,12 +82,12 @@ function ModelSettings({ details }: { readonly details: ReturnType<typeof useMod
     <>
       <ModelFields
         details={details}
-        modelLabel={details.running ? "Selected Model" : "Thread Model"}
+        modelLabel={details.source === "run" ? "Run Model" : "Thread Model"}
       />
-      {details.running ? (
+      {details.nextTurn ? (
         <div className="mt-3 border-t border-border pt-3">
-          <p className="mb-2 text-foreground">Running Turn</p>
-          <ModelFields details={details.running} modelLabel="Run Model" />
+          <p className="mb-2 text-foreground">Next Turn</p>
+          <ModelFields details={details.nextTurn} modelLabel="Selected Model" />
         </div>
       ) : null}
     </>

@@ -246,9 +246,9 @@ a later completed turn can appear again. Keep the optional normal-list retention
 
 Working and Goal statuses include a compact model name. The shared hover/focus
 card shows the full model, provider and available reasoning/speed options. The
-badge follows the thread's selected settings, matching the composer. If the
-active run uses different settings, the card shows them separately under Running
-Turn. Finished runs do not override the current selection. Speed uses the option
+badge follows the active run's settings. If the composer has different selected
+settings, the card shows them separately under Next Turn. Finished runs do not
+override the current selection. Speed uses the option
 value, so provider display labels cannot change its meaning. Unknown model
 or option values stay visible rather than being replaced by catalog defaults.
 Root rows reuse their visible detail lease; child rows load details only while
