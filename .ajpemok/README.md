@@ -14,8 +14,8 @@ Git records previous bases and patch revisions.
 
 ## Maintenance Branch
 
-`ajpemok/nightly-20261027.3796` groups the fork changes by feature on the recorded
-3796 base. Use this branch as the replay source for the next nightly. The published
+`ajpemok/nightly-20261028.3814` groups the fork changes by feature on the recorded
+3814 base. Use this branch as the replay source for the next nightly. The published
 3770 branches retain the earlier history. Shared
 contracts and styles serve several features, so retire repairs by comparing
 the behaviour and affected hunks, rather than skipping a whole mixed commit.
@@ -25,6 +25,11 @@ additional native-window confirmation has been removed. Thread opening and
 saved scroll positions also use upstream behaviour. Steering and native-child activity use upstream
 behaviour. Codex capacity recovery uses upstream's adapter with six extra retry delays;
 the fork's separate provider retry worker is retired. Keep the independent preview repairs until their regressions pass upstream.
+
+3814 also owns project-folder grouping, collapse state and keyboard navigation.
+The deleted legacy sidebar stays retired. A3 applies its filters, project pins,
+colours, activity counts and model details to the shared folder rows. Project
+Sections reads both saved opt-ins and writes the current upstream preference.
 
 The earlier 3770 packages predate the current maintenance changes. They remain
 historical qualification evidence; build the maintained source before the next

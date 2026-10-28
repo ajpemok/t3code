@@ -2,7 +2,11 @@ import { attachSidebarTree, SIDEBAR_TREE_PROPS } from "../lib/sidebarTree";
 import { useRecentThreads } from "~/hooks/useRecentThreads";
 import { RecentThreadsShelf } from "./sidebar/RecentThreadsShelf";
 import { projectTintColor } from "~/projectIdentity";
-import { sidebarMainThreadFilter } from "./Sidebar.logic";
+import {
+  sidebarMainThreadFilter,
+  filterProjectSections,
+  projectThreadPinTargets,
+} from "./Sidebar.logic";
 import { SidebarActivityCounts } from "./sidebar/SidebarActivityCounts";
 import { type EnvironmentId, type ScopedProjectRef } from "@t3tools/contracts";
 import type { EnvironmentServerConfig } from "@t3tools/client-runtime/connection";
@@ -127,7 +131,12 @@ import { useTerminalFocus } from "../hooks/useTerminalFocus";
 import { isCommandPaletteOpen, openCommandPalette } from "../commandPaletteBus";
 import { registerSettleAndAdvance } from "../settleAndAdvance";
 import { startNewThreadFromContext } from "../lib/chatThreadActions";
-import { useBoringSidebarEnabled, useClientSettings } from "../hooks/useSettings";
+import {
+  getClientSettings,
+  updateClientSettings,
+  useBoringSidebarEnabled,
+  useClientSettings,
+} from "../hooks/useSettings";
 import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
 import { useLocalStorage } from "../hooks/useLocalStorage";
 import { useNowMinute } from "../hooks/useNowMinute";
@@ -423,6 +432,7 @@ function useSidebarThreads(input: {
   } = input;
   const hideInactive = useClientSettings((settings) => settings.sidebarHideInactiveEnabled);
   const pinnedOnly = useClientSettings((settings) => settings.sidebarPinnedOnlyEnabled);
+  const pinnedProjectKeys = useClientSettings((settings) => settings.sidebarPinnedProjectKeys);
   const recent = useRecentThreads();
   const { retainedKeys } = recent;
   // Folders already separate the work, so boring mode has no Working shelf.
@@ -514,26 +524,58 @@ function useSidebarThreads(input: {
   const visibleWorkingThreads = workingShelfExpanded
     ? workingThreads
     : routeThreadOnly(workingThreads, routeRowThreadKey);
+  const groupedFolders =
+    folderGroups === null ? [] : groupSidebarThreadsByProject(folderGroups, activeThreads, true);
+  const populatedProjectKeys = new Set(
+    groupedFolders
+      .filter((folder) => folder.threads.length > 0)
+      .map((folder) => folder.group.projectKey),
+  );
+  const visibleProjectKeys = new Set(
+    filterProjectSections(folderGroups ?? [], {
+      populatedProjectKeys,
+      pinnedProjectKeys: new Set(
+        (folderGroups ?? [])
+          .filter((group) =>
+            [
+              group.projectKey,
+              ...group.memberProjects.map((member) => member.physicalProjectKey),
+            ].some((key) => pinnedProjectKeys.includes(key)),
+          )
+          .map((group) => group.projectKey),
+      ),
+      hideInactive,
+      pinnedOnly,
+    }).map((group) => group.projectKey),
+  );
+  const allThreadsByFolder = new Map(
+    (folderGroups === null ? [] : groupSidebarThreadsByProject(folderGroups, threads, true)).map(
+      (folder) => [folder.group.projectKey, folder.threads],
+    ),
+  );
   const projectFolders =
     folderGroups === null
       ? null
-      : groupSidebarThreadsByProject(folderGroups, activeThreads, keepEmpty).map((folder) => {
-          const collapsed = !resolveProjectExpanded(
-            projectExpandedById,
-            sidebarFolderExpansionKeys(folder.group),
-          );
-          return {
-            group: folder.group,
-            collapsed,
-            // A closed folder still shows the open thread, and hints at the rest.
-            threads: collapsed
-              ? routeThreadOnly(folder.threads, routeRowThreadKey)
-              : folder.threads,
-            hiddenThreads: collapsed
-              ? folder.threads.filter((thread) => threadShellKey(thread) !== routeRowThreadKey)
-              : EMPTY_THREADS,
-          };
-        });
+      : groupedFolders
+          .filter((folder) => visibleProjectKeys.has(folder.group.projectKey) || (keepEmpty && !hideInactive && !pinnedOnly))
+          .map((folder) => {
+            const collapsed = !resolveProjectExpanded(
+              projectExpandedById,
+              sidebarFolderExpansionKeys(folder.group),
+            );
+            return {
+              group: folder.group,
+              allThreads: allThreadsByFolder.get(folder.group.projectKey) ?? [],
+              collapsed,
+              // A closed folder still shows the open thread, and hints at the rest.
+              threads: collapsed
+                ? routeThreadOnly(folder.threads, routeRowThreadKey)
+                : folder.threads,
+              hiddenThreads: collapsed
+                ? folder.threads.filter((thread) => threadShellKey(thread) !== routeRowThreadKey)
+                : EMPTY_THREADS,
+            };
+          });
   const orderedThreads = [
     ...pinnedThreads,
     ...(projectFolders === null
@@ -989,6 +1031,9 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   });
   const boringSidebarEnabled = useBoringSidebarEnabled();
   const folderRowsMultiline = useClientSettings((settings) => settings.boringSidebarMultilineRows);
+  const pinnedProjectKeys = useClientSettings((settings) => settings.sidebarPinnedProjectKeys);
+  const confirmThreadUnpin = useClientSettings((settings) => settings.confirmThreadUnpin);
+  const projectPinsPending = useRef(new Set<string>());
   const newThreadContext = useHandleNewThread();
   // Row callbacks capture only the handler; the rest of the context changes with the route.
   const { handleNewThread } = newThreadContext;
@@ -1309,6 +1354,71 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
         : scopedProjectGroups
       : null,
     keepEmptyFolders: scopedProjectGroups.length > 0,
+  });
+
+  const toggleProjectPin = useStableCallback(async (group: SidebarProjectSnapshot) => {
+    if (projectPinsPending.current.has(group.projectKey)) return;
+    projectPinsPending.current.add(group.projectKey);
+    try {
+      const keys = [
+        group.projectKey,
+        ...group.memberProjects.map((member) => member.physicalProjectKey),
+      ];
+      const action = keys.some((key) => getClientSettings().sidebarPinnedProjectKeys.includes(key))
+        ? "unpin"
+        : "pin";
+      const candidates =
+        projectFolders?.find((folder) => folder.group.projectKey === group.projectKey)
+          ?.allThreads ?? [];
+      const targets = projectThreadPinTargets(
+        candidates.filter((thread) => !effectiveSnoozed(thread, { now: new Date().toISOString() })),
+        action,
+        delegatedUnderParent,
+      );
+      if (!canOperateThreads(targets)) return;
+      if (action === "unpin" && targets.length > 0 && confirmThreadUnpin) {
+        const api = readLocalApi();
+        if (
+          !api ||
+          !(await api.dialogs.confirm(
+            `Unpin ${targets.length} unsettled threads in ${group.displayName}?`,
+          ))
+        )
+          return;
+      }
+      for (const target of targets) {
+        const ref = scopeThreadRef(target.environmentId, target.id);
+        const current = readThreadShell(ref);
+        if (
+          !current ||
+          current.projectId !== target.projectId ||
+          projectThreadPinTargets([current], action, delegatedUnderParent).length === 0
+        )
+          continue;
+        if (!canOperateThreads([current])) return;
+        const result = await (action === "pin" ? pinThread(ref) : unpinThread(ref));
+        if (result._tag !== "Failure") continue;
+        if (!isAtomCommandInterrupted(result)) {
+          const error = squashAtomCommandFailure(result);
+          toastManager.add(
+            stackedThreadToast({
+              type: "error",
+              title: `Failed to ${action} project threads`,
+              description: error instanceof Error ? error.message : "An error occurred.",
+            }),
+          );
+        }
+        return;
+      }
+      const pinned = new Set(getClientSettings().sidebarPinnedProjectKeys);
+      for (const key of keys) {
+        if (action === "pin") pinned.add(key);
+        else pinned.delete(key);
+      }
+      await updateClientSettings({ sidebarPinnedProjectKeys: [...pinned] });
+    } finally {
+      projectPinsPending.current.delete(group.projectKey);
+    }
   });
 
   const inactiveTabs = useCloseInactiveProjectTabs({
@@ -3353,6 +3463,14 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                               <SidebarProjectFolderHeader
                                 key={`project-folder:${folder.group.projectKey}`}
                                 group={folder.group}
+                                threads={folder.allThreads}
+                                pinned={[
+                                  folder.group.projectKey,
+                                  ...folder.group.memberProjects.map(
+                                    (member) => member.physicalProjectKey,
+                                  ),
+                                ].some((key) => pinnedProjectKeys.includes(key))}
+                                onTogglePin={(group) => void toggleProjectPin(group)}
                                 collapsed={folder.collapsed}
                                 hiddenThreads={folder.hiddenThreads}
                                 onToggle={toggleProjectFolder}

@@ -3204,10 +3204,7 @@ export default function ChatView(props: ChatViewProps) {
               setThreadError={setThreadError}
               setThreadErrorBannerDismissTick={setThreadErrorBannerDismissTick}
             />
-            <div
-              {...conversationArea}
-              className="relative flex min-h-0 flex-1 flex-col"
-            >
+            <div {...conversationArea} className="relative flex min-h-0 flex-1 flex-col">
               <ThreadTimeline
                 pendingApprovals={pendingApprovals}
                 heldApprovalRequestIds={heldApprovalRequestIds}
