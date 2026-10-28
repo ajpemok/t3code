@@ -14,6 +14,7 @@ import {
   resolveIdleCompaction,
   resolveProjectProviderInstanceEnabled,
   resolveProviderInstanceEnabled,
+  resolveSidebarSubagentVisibility,
   ServerSettings,
   ServerSettingsPatch,
   withIdleCompaction,
@@ -27,6 +28,114 @@ const decodeServerSettingsPatch = Schema.decodeUnknownSync(ServerSettingsPatch);
 const encodeServerSettings = Schema.encodeSync(ServerSettings);
 const encodeServerSettingsPatch = Schema.encodeSync(ServerSettingsPatch);
 const decodeClaudeSettings = Schema.decodeUnknownSync(ClaudeSettings);
+
+describe("sidebar thread visibility settings", () => {
+  it("keeps subagents opt-in and preserves explicit project pins", () => {
+    const defaults = decodeClientSettings({});
+    expect(defaults.sidebarActiveSubagentsEnabled).toBe(false);
+    expect(defaults.sidebarPinnedProjectKeys).toEqual([]);
+    const patch = {
+      sidebarActiveSubagentsEnabled: true,
+      sidebarPinnedProjectKeys: ["physical-project"],
+    };
+    expect(decodeClientSettingsPatch(patch)).toEqual(patch);
+    const stored = decodeClientSettings({ ...defaults, ...patch });
+    expect(decodeClientSettings(encodeClientSettings(stored))).toMatchObject(patch);
+    expect(decodeClientSettingsPatch({})).not.toHaveProperty("sidebarPinnedProjectKeys");
+  });
+
+  it("defaults pinned-only off and persists the local filter without changing pins", () => {
+    expect(decodeClientSettings({}).sidebarPinnedOnlyEnabled).toBe(false);
+    const patch = { sidebarPinnedOnlyEnabled: true };
+    expect(decodeClientSettingsPatch(patch)).toEqual(patch);
+    expect(decodeClientSettings(encodeClientSettings(decodeClientSettings(patch)))).toMatchObject(
+      patch,
+    );
+    expect(decodeClientSettingsPatch({})).not.toHaveProperty("sidebarPinnedOnlyEnabled");
+  });
+
+  it("migrates the legacy subagent preference and preserves explicit modes and limits", () => {
+    expect(resolveSidebarSubagentVisibility(decodeClientSettings({}))).toBe("hide");
+    expect(
+      resolveSidebarSubagentVisibility(
+        decodeClientSettings({ sidebarActiveSubagentsEnabled: true }),
+      ),
+    ).toBe("show");
+    expect(
+      resolveSidebarSubagentVisibility(
+        decodeClientSettings({ sidebarSubagentVisibility: "active" }),
+      ),
+    ).toBe("show");
+    const patch = {
+      sidebarSubagentVisibility: "show",
+      sidebarSubagentPreviewCount: 5,
+      sidebarHideInactiveEnabled: true,
+    };
+    expect(decodeClientSettingsPatch(patch)).toEqual(patch);
+    const settings = decodeClientSettings(patch);
+    expect(resolveSidebarSubagentVisibility(settings)).toBe("show");
+    expect(decodeClientSettings(encodeClientSettings(settings))).toMatchObject(patch);
+    expect(() => decodeClientSettingsPatch({ sidebarSubagentPreviewCount: 0 })).toThrow();
+    expect(() => decodeClientSettingsPatch({ sidebarSubagentVisibility: "invalid" })).toThrow();
+  });
+});
+
+describe("recent thread preferences", () => {
+  it("defaults to five within an hour and supports count-only retention", () => {
+    expect(decodeClientSettings({})).toMatchObject({
+      sidebarRecentSectionEnabled: true,
+      sidebarKeepRecentThreadsVisible: true,
+      sidebarRecentIncludeSubagents: true,
+      sidebarRecentThreadCount: 5,
+      sidebarRecentThreadMaxAgeMinutes: 60,
+    });
+    const patch = {
+      sidebarRecentSectionEnabled: false,
+      sidebarKeepRecentThreadsVisible: true,
+      sidebarRecentIncludeSubagents: false,
+      sidebarRecentThreadCount: 12,
+      sidebarRecentThreadMaxAgeMinutes: 0,
+    };
+    expect(decodeClientSettingsPatch(patch)).toEqual(patch);
+    expect(decodeClientSettings(encodeClientSettings(decodeClientSettings(patch)))).toMatchObject(
+      patch,
+    );
+    for (const invalid of [
+      { sidebarRecentThreadCount: 0 },
+      { sidebarRecentThreadCount: 51 },
+      { sidebarRecentThreadMaxAgeMinutes: -1 },
+      { sidebarRecentThreadMaxAgeMinutes: 1441 },
+    ])
+      expect(() => decodeClientSettingsPatch(invalid)).toThrow();
+  });
+});
+
+describe("recording pointer settings", () => {
+  it("retains a custom image and hotspot while refusing remote images and out-of-range values", () => {
+    const pointer = {
+      ...decodeClientSettings({}).browserRecordingPointer,
+      imageDataUrl: "data:image/png;base64,aGVsbG8=",
+      size: 32,
+      hotspotX: 0.5,
+      haloDurationMs: 900,
+    };
+    const stored = decodeClientSettings({ browserRecordingPointer: pointer });
+    expect(decodeClientSettings(encodeClientSettings(stored)).browserRecordingPointer).toEqual(
+      pointer,
+    );
+    expect(() =>
+      decodeClientSettingsPatch({
+        browserRecordingPointer: { ...pointer, imageDataUrl: "https://example.com/pointer.png" },
+      }),
+    ).toThrow();
+    expect(() =>
+      decodeClientSettingsPatch({ browserRecordingPointer: { ...pointer, hotspotX: 2 } }),
+    ).toThrow();
+    expect(() =>
+      decodeClientSettingsPatch({ browserRecordingPointer: { ...pointer, haloDurationMs: 0 } }),
+    ).toThrow();
+  });
+});
 
 describe("storage cleanup settings", () => {
   it("keeps cleanup disabled for existing installations", () => {
