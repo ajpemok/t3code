@@ -78,7 +78,6 @@ and a precision ring; preserve custom PNG import, size, hotspot and halo setting
 | `packages/shared/package.json`                                               | Shared recording-pointer subpath.                                    |
 | `apps/web/src/components/settings/RecordingPointerSettings.tsx`              | Presets, image import, numeric controls and click preview.           |
 | `apps/web/src/components/settings/RecordingPointerSettings.browser.test.tsx` | Image import, numeric editing, preset selection and reset.           |
-| `apps/web/src/components/settings/IntegrationsSettings.tsx`                  | Recording configuration entry point.                                 |
 | `docs/user/browser-recordings.md`                                            | Recording and custom-pointer workflow.                               |
 
 ## Antigravity Quota Request Identity
@@ -91,6 +90,26 @@ and a precision ring; preserve custom PNG import, size, hotspot and halo setting
 Keep the current upstream request identity if it already includes or supersedes this repair.
 This fork does not include the earlier experimental quota-source merge, freshness changes or local quota exporter.
 Synthetic parsing/header checks do not establish live quota accuracy.
+
+## A3 Fork Settings
+
+Group custom controls under **Settings → A3 Fork**: sidebar layout and filters,
+subagent visibility/count, Recent threads, header, context usage and recording pointers.
+Keep saved preference keys, sidebar shortcuts and desktop-only recording restrictions.
+Search and old anchored links lead to the new page. Standard browser recording controls
+remain upstream-owned in Browser settings. List automatic improvements without adding
+switches to disable correctness repairs.
+
+| Files                                                        | Fork Responsibility                                           |
+| ------------------------------------------------------------ | ------------------------------------------------------------- |
+| `apps/web/src/components/settings/AjpemokSettingsPanel.tsx`  | Custom controls and included improvements.                    |
+| `apps/web/src/routes/_chat.settings.ajpemok.tsx`             | Dedicated settings route.                                     |
+| `apps/web/src/routeTree.gen.ts`                              | Generated route registration.                                 |
+| `apps/web/src/components/settings/SettingsSidebarNav.tsx`    | Fork navigation icon.                                         |
+| `apps/web/src/components/settings/SettingsScopeSentence.tsx` | Keep client preferences independent of environment selection. |
+| `apps/web/src/components/settings/SettingsPanels.tsx`        | Move fork controls out of the legacy group.                   |
+| `apps/web/src/components/settings/settingsSearch.ts`         | Search labels, destinations and old anchored links.           |
+| `apps/web/src/components/settings/settingsSearch.test.ts`    | Search routing and link relocation regressions.               |
 
 ## Project Colour and Activity
 
@@ -152,19 +171,14 @@ the active run, in both shell readers, so completed or older work cannot keep it
 - Offer Pinned Threads Only in both views and Settings. Combine it with Hide Inactive, keep subagents under eligible parents and preserve the Snoozed/Settled shelves.
 - Hide empty project sections under Pinned Only; a project pin must not bypass the thread filters.
 
-| Files                                                            | Fork Responsibility                                                          |
-| ---------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| `apps/web/src/components/LegacySidebar.tsx`                      | Group headers, collapse, project pinning, empty action and cleanup menu.     |
-| `apps/web/src/components/Sidebar.logic.ts`                       | Project activity and eligible-thread derivation.                             |
-| `apps/web/src/components/Sidebar.logic.test.ts`                  | Activity and pin eligibility fixtures.                                       |
-| `apps/web/src/components/settings/AjpemokAppearanceSettings.tsx` | Project Sections, scene and motion controls.                                 |
-| `apps/web/src/components/settings/AppearanceSettingsPanel.tsx`   | Appearance settings integration.                                             |
-| `apps/web/src/components/settings/SettingsPanels.tsx`            | Settings controls and context-usage integration.                             |
-| `apps/web/src/components/settings/settingsSearch.ts`             | Searchable setting labels and descriptions.                                  |
-| `apps/web/src/components/settings/settingsSearch.test.ts`        | Exact command searches remain distinct from newly added visibility commands. |
-| `packages/contracts/src/settings.ts`                             | Header setting defaults/patch schema and context-meter default.              |
-| `docs/user/project-settings.md`                                  | Current project controls.                                                    |
-| `docs/user/thread-sidebar.md`                                    | Sections, activity, cleanup and usage guidance.                              |
+| Files                                           | Fork Responsibility                                                      |
+| ----------------------------------------------- | ------------------------------------------------------------------------ |
+| `apps/web/src/components/LegacySidebar.tsx`     | Group headers, collapse, project pinning, empty action and cleanup menu. |
+| `apps/web/src/components/Sidebar.logic.ts`      | Project activity and eligible-thread derivation.                         |
+| `apps/web/src/components/Sidebar.logic.test.ts` | Activity and pin eligibility fixtures.                                   |
+| `packages/contracts/src/settings.ts`            | Header setting defaults/patch schema and context-meter default.          |
+| `docs/user/project-settings.md`                 | Current project controls.                                                |
+| `docs/user/thread-sidebar.md`                   | Sections, activity, cleanup and usage guidance.                          |
 
 Preserve upstream project/environment permissions, native thread commands, settled-state rules and saved settings.
 Keep project-header pin intent in client settings and task pins in the native thread commands.
@@ -248,16 +262,45 @@ Idle icon rows must not acquire transcript leases before hover or focus.
 | `apps/web/src/components/sidebar/threadModelDetails.logic.test.ts`    | Run settings, Standard/Fast and unavailable/stale catalog cases.      |
 | `apps/web/src/components/sidebar/ThreadModelDetails.browser.test.tsx` | Hover details and no child detail lease before opening.               |
 
+## A3 Fork Icon
+
+Use the selected pink/blue A3 monogram with an integrated fork for nightly desktop
+packages and web favicons. Keep the existing app ID, installation name, data home,
+version and update channel so official nightlies and fork builds replace one another.
+Native mobile and development icons retain their upstream assets.
+
+Display A3 Fork in desktop branding, window/About names, the web shell and web-app
+manifest. Retain channel labels, Electron's internal storage name and the token-safe
+native User-Agent format. macOS display metadata uses A3 Fork while the bundle name,
+path and ID stay stable.
+
+| Files                                             | Fork Responsibility                                              |
+| ------------------------------------------------- | ---------------------------------------------------------------- |
+| `scripts/lib/brand-assets.ts`                     | Select fork assets through the existing nightly packaging paths. |
+| `scripts/build-desktop-artifact.ts`               | macOS display metadata with stable package identity.             |
+| `apps/desktop/src/app/DesktopEnvironment.ts`      | Desktop display name and unchanged channel selection.            |
+| `apps/desktop/src/app/DesktopAppIdentity.ts`      | Stable Electron storage name alongside fork display branding.    |
+| `apps/desktop/src/app/DesktopAppIdentity.test.ts` | Runtime/About names, valid User-Agent token and stable app ID.   |
+| `apps/web/src/branding.ts`                        | Web branding fallback.                                           |
+| `apps/web/index.html`                             | Initial page and splash labels.                                  |
+| `apps/web/public/manifest.webmanifest`            | Installed web-app name with unchanged web identity.              |
+| `assets/a3-fork/icon-1024.png`                    | Selected artwork and shared macOS/Linux source.                  |
+| `assets/a3-fork/icon-windows.ico`                 | Windows renditions from 16 to 256 pixels.                        |
+| `assets/a3-fork/favicon.ico`                      | Web 16/32-pixel ICO.                                             |
+| `assets/a3-fork/favicon-16x16.png`                | Small browser favicon.                                           |
+| `assets/a3-fork/favicon-32x32.png`                | Browser favicon.                                                 |
+| `assets/a3-fork/apple-touch-180.png`              | Web touch icon.                                                  |
+
 ## Sydney Header and Wordmark
 
-- Replace the sidebar title with AJPEMOK, with A/MOK differentiated from JPE and no extra logo before it.
+- Replace the sidebar title with A3 Fork, with a stronger A3 and no extra logo before it.
 - Offer twelve Sydney scenes, defaulting to Copper Skyline.
 - Use brief hover/focus and idle light sweeps; pause effects for hidden/unfocused windows and honour reduced motion.
 
 | Files                                                              | Fork Responsibility                                             |
 | ------------------------------------------------------------------ | --------------------------------------------------------------- |
-| `apps/web/src/components/sidebar/SidebarChrome.tsx`                | AJPEMOK wordmark and header integration.                        |
-| `apps/web/src/components/sidebar/AjpemokBackdrop.tsx`              | Scene rendering and bounded motion.                             |
+| `apps/web/src/components/sidebar/SidebarChrome.tsx`                | Fork wordmark and header integration.                           |
+| `apps/web/src/components/sidebar/AjpemokBackdrop.tsx`              | A3 Fork wordmark, scene rendering and bounded motion.           |
 | `apps/web/src/components/sidebar/AjpemokBackdrop.browser.test.tsx` | Header rendering and motion fixtures.                           |
 | `apps/web/src/components/sidebar/ajpemokHeaderScenes.ts`           | Scene IDs, labels, imports and fallback.                        |
 | `apps/web/src/components/SidebarStageBackdrop.tsx`                 | Remove the unused wrapper; retain stage artwork used elsewhere. |

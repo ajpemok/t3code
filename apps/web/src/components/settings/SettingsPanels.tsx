@@ -1026,19 +1026,6 @@ export function ChatSettingsPanel() {
     <SettingsPageContainer>
       <SettingsSection id="composer" title="Composer">
         <SettingsRow
-          {...searchableSetting("legacy-context-window-indicator")}
-          description="Show context and token usage in the composer."
-          control={
-            <Switch
-              checked={settings.contextWindowMeterEnabled}
-              onCheckedChange={(checked) =>
-                updateSettings({ contextWindowMeterEnabled: Boolean(checked) })
-              }
-              aria-label="Context and Token Usage"
-            />
-          }
-        />
-        <SettingsRow
           {...searchableSetting("composer-rich-text")}
           description="Show formatted Markdown as you type."
           resetAction={
