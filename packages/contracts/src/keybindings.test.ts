@@ -50,3 +50,14 @@ it.effect("drops malformed resolved rule entries", () =>
     );
   }),
 );
+
+it.effect("accepts sidebar visibility commands as assignable keybindings", () =>
+  Effect.gen(function* () {
+    const rules = [
+      { command: "sidebar.toggleInactive", shortcut },
+      { command: "sidebar.togglePinnedOnly", shortcut },
+      { command: "sidebar.toggleSubagents", shortcut },
+    ] as const;
+    assert.deepEqual(yield* decode(ResolvedKeybindingsConfig, rules), rules);
+  }),
+);
