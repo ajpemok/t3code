@@ -634,6 +634,7 @@ export async function startBrowserRecording(
         {
           showKeyPresses: settings.browserRecordingShowKeyPresses,
           showMousePresses: settings.browserRecordingShowMousePresses,
+          pointer: settings.browserRecordingPointer,
           frameRate,
         },
         (listener) =>
