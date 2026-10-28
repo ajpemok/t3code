@@ -28,7 +28,7 @@ const GitActionsControl = memo(BaseGitActionsControl);
 
 export interface ThreadDetailsPanelProps extends Pick<
   ComponentProps<typeof ThreadDetailsCard>,
-  "anchor" | "handle"
+  "anchor" | "handle" | "projectColor"
 > {
   forceNewWorktree?: boolean;
   environmentId: EnvironmentId;
@@ -103,6 +103,7 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
 
   return (
     <ThreadDetailsCard
+      projectColor={props.projectColor}
       threadRef={{ environmentId: props.environmentId, threadId: props.threadId }}
       anchor={props.anchor}
       handle={props.handle}

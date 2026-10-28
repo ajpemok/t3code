@@ -357,6 +357,11 @@ export function buildKeybindingCommandOptions(
 }
 
 export function commandLabel(command: KeybindingCommand): string {
+  if (command === "sidebar.toggleInactive")
+    return "Sidebar: Hide/Show Inactive Threads and Projects";
+  if (command === "sidebar.togglePinnedOnly")
+    return "Sidebar: Show Pinned Threads Only/All Threads";
+  if (command === "sidebar.toggleSubagents") return "Sidebar: Show/Hide Subagents";
   if (command === "composer.sendAlternate") return "Composer: Opposite Queue or Steer Action";
   if (command === "composer.sendBackground") return "Composer: Start in Background";
   if (command === "composer.sendAndNewThread") return "Composer: Send and Start New Thread";
