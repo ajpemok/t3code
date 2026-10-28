@@ -162,7 +162,7 @@ export function ThreadModelIdentity({
           ) : null}
         </span>
         {showName ? (
-          <span className="w-(--sidebar-detail-width,5rem) truncate text-3xs text-secondary-label">
+          <span className="w-(--sidebar-detail-width,5rem) truncate text-right text-3xs text-secondary-label">
             {details.compactName}
           </span>
         ) : null}

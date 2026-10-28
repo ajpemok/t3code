@@ -75,8 +75,19 @@ describe("previewStateStore (single-tab)", () => {
     expect(readThreadPreviewState(ref).serverAgentControllers.size).toBe(1);
     const otherRef = scopeThreadRef("env-2" as EnvironmentId, ref.threadId);
     expect(readThreadPreviewState(otherRef).serverAgentControllers.size).toBe(0);
+    applyPreviewServerAgentControl(ref, second, snapshot.tabId, true, "control");
+    applyPreviewServerAgentControl(ref, second, snapshot.tabId, false, "viewer-detached");
+    expect(readThreadPreviewState(ref).serverAgentControlledTabs.has(snapshot.tabId)).toBe(true);
+    expect(readThreadPreviewState(ref).serverAgentControllers.size).toBe(0);
+    applyPreviewServerAgentControl(ref, first, snapshot.tabId, false, "control");
+    expect(readThreadPreviewState(ref).serverAgentControlledTabs.size).toBe(0);
+    applyPreviewServerAgentControl(ref, second, snapshot.tabId, true, "control");
+    applyPreviewServerAgentControl(ref, second, snapshot.tabId, false, "disconnect");
+    expect(readThreadPreviewState(ref).serverAgentControlledTabs.size).toBe(0);
+    applyPreviewServerAgentControl(ref, second, snapshot.tabId, true);
     beginPreviewSessionClose(ref, snapshot.tabId);
     expect(readThreadPreviewState(ref).serverAgentControllers.size).toBe(0);
+    expect(readThreadPreviewState(ref).serverAgentControlledTabs.size).toBe(0);
     applyPreviewServerAgentControl(ref, second, snapshot.tabId, true);
     expect(readThreadPreviewState(ref).serverAgentControllers.size).toBe(0);
     cancelPreviewSessionClose(ref, snapshot, snapshot.tabId);
@@ -87,6 +98,7 @@ describe("previewStateStore (single-tab)", () => {
       revision: 0,
     });
     expect(readThreadPreviewState(ref).serverAgentControllers.size).toBe(0);
+    expect(readThreadPreviewState(ref).serverAgentControlledTabs.size).toBe(0);
     reconcilePreviewServerSessions(ref, { sessions: [], serverEpoch: "replacement", revision: 1 });
     applyPreviewServerAgentControl(ref, second, snapshot.tabId, true);
     expect(readThreadPreviewState(ref).serverAgentControllers.size).toBe(0);

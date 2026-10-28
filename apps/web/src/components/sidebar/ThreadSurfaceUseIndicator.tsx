@@ -24,6 +24,7 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import type { SidebarThreadSummary } from "~/types";
 import { ThreadModelBadge } from "./ThreadModelDetails";
 import type { ThreadStatusPill } from "../Sidebar.logic";
+import { usePreviewSession } from "../preview/usePreviewSession";
 
 type TaskActivityKind =
   | "working"
@@ -174,7 +175,11 @@ export function ThreadActivityStatus({
   );
 }
 
-const EMPTY_SURFACE_USE = { activity: 0, recent: recentThreadSurfaceUse([], null, 0) };
+const EMPTY_SURFACE_USE = {
+  activity: 0,
+  recent: recentThreadSurfaceUse([], null, 0),
+  syncPreview: false,
+};
 
 const surfaceUseAtom = Atom.family((key: string | null) =>
   Atom.make((get) => {
@@ -184,6 +189,7 @@ const surfaceUseAtom = Atom.family((key: string | null) =>
     if (!thread || thread.runtime?.status !== "running") return EMPTY_SURFACE_USE;
     const preview = get(previewStateAtom(scopedThreadKey(ref)));
     const controlledT3Browser =
+      preview.serverAgentControlledTabs.size > 0 ||
       preview.serverAgentControllers.size > 0 ||
       Object.entries(preview.desktopByTabId).some(
         ([tabId, state]) => preview.sessions[tabId] && state.controller === "agent",
@@ -204,6 +210,7 @@ const surfaceUseAtom = Atom.family((key: string | null) =>
         )) ||
       false;
     return {
+      syncPreview: controlledT3Browser,
       activity: resolveThreadSurfaceUse(
         items,
         thread.runtime.activeRunId,
@@ -217,6 +224,7 @@ const surfaceUseAtom = Atom.family((key: string | null) =>
 
 function useSurfaceUse(key: string | null) {
   const state = useAtomValue(surfaceUseAtom(key));
+  usePreviewSession(state.syncPreview && key !== null ? parseScopedThreadKey(key) : null);
   const recent =
     useRecentSurface(state, SURFACE_USE.computer) |
     useRecentSurface(state, SURFACE_USE.browser) |
@@ -242,42 +250,42 @@ function useRecentSurface(state: typeof EMPTY_SURFACE_USE, bit: number) {
 export function ThreadSurfaceUseIndicator({
   threadRef,
   enabled,
+  workingFallback = false,
 }: {
   readonly threadRef: ScopedThreadRef;
   readonly enabled: boolean;
+  readonly workingFallback?: boolean;
 }) {
-  const { activity, recentOnly, recent } = useSurfaceUse(
+  const { primaryActivity, recentOnly, recent } = useSurfaceUse(
     enabled ? scopedThreadKey(threadRef) : null,
   );
-  if (activity === 0) return null;
+  const surface = [
+    { bit: SURFACE_USE.t3Browser, kind: "t3-browser" as const, label: "Using T3 browser" },
+    { bit: SURFACE_USE.device, kind: "device" as const, label: "Using device" },
+    { bit: SURFACE_USE.browser, kind: "browser" as const, label: "Using browser" },
+    { bit: SURFACE_USE.computer, kind: "computer" as const, label: "Using computer" },
+  ].find(({ bit }) => primaryActivity & bit);
+  if (!surface) return workingFallback ? <TaskActivitySymbol kind="working" /> : null;
+  const { bit, kind, label } = surface;
+  const endsAt =
+    recentOnly & bit ? recent.find((item) => item.surface === bit)?.expiresAt : undefined;
   return (
-    <span data-thread-surface-use className="inline-flex shrink-0 items-center gap-1 text-info">
-      {[
-        { bit: SURFACE_USE.computer, kind: "computer" as const, label: "Using computer" },
-        { bit: SURFACE_USE.browser, kind: "browser" as const, label: "Using browser" },
-        { bit: SURFACE_USE.t3Browser, kind: "t3-browser" as const, label: "Using T3 browser" },
-        { bit: SURFACE_USE.device, kind: "device" as const, label: "Using device" },
-      ].map(({ bit, kind, label }) => {
-        const endsAt =
-          recentOnly & bit ? recent.find((item) => item.surface === bit)?.expiresAt : undefined;
-        return activity & bit ? (
-          <Tooltip key={`${bit}:${endsAt ?? "active"}`}>
-            <TooltipTrigger
-              render={
-                <span
-                  aria-label={recentOnly & bit ? label.replace("Using", "Recently used") : label}
-                  className="inline-flex"
-                />
-              }
-            >
-              <SurfaceUseSymbol kind={kind} endsAt={endsAt} />
-            </TooltipTrigger>
-            <TooltipPopup>
-              {recentOnly & bit ? label.replace("Using", "Recently used") : label}
-            </TooltipPopup>
-          </Tooltip>
-        ) : null;
-      })}
+    <span data-thread-surface-use className="inline-flex size-3.5 shrink-0 items-center text-info">
+      <Tooltip key={`${bit}:${endsAt ?? "active"}`}>
+        <TooltipTrigger
+          render={
+            <span
+              aria-label={recentOnly & bit ? label.replace("Using", "Recently used") : label}
+              className="inline-flex"
+            />
+          }
+        >
+          <SurfaceUseSymbol kind={kind} endsAt={endsAt} />
+        </TooltipTrigger>
+        <TooltipPopup>
+          {recentOnly & bit ? label.replace("Using", "Recently used") : label}
+        </TooltipPopup>
+      </Tooltip>
     </span>
   );
 }

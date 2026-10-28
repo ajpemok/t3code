@@ -925,7 +925,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
   };
 
   const rowSurfaceClassName = cn(
-    "group/sidebar-row @container/sidebar-row [--sidebar-detail-width:clamp(2.75rem,calc(100cqi-20rem),5rem)] relative w-full cursor-pointer overflow-hidden rounded-md text-left outline-none select-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+    "group/sidebar-row [--sidebar-detail-width:clamp(2.75rem,calc(100cqi-20rem),5rem)] relative w-full cursor-pointer overflow-hidden rounded-md text-left outline-none select-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
     variantAction === "unsettle" &&
       !props.isActive &&
       status !== "working" &&
@@ -1096,7 +1096,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
         {...sortableRootProps}
         {...(fileDropHandlers ?? {})}
         className={cn(
-          "list-none [content-visibility:auto] [contain-intrinsic-size:auto_36px]",
+          "@container/sidebar-thread list-none [content-visibility:auto] [contain-intrinsic-size:auto_36px]",
           sortable?.isDragging && "relative z-20",
         )}
       >
@@ -1295,7 +1295,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
       {...sortableRootProps}
       {...(fileDropHandlers ?? {})}
       className={cn(
-        "list-none py-0.5 [content-visibility:auto] [contain-intrinsic-size:auto_78px]",
+        "@container/sidebar-thread list-none py-0.5 [content-visibility:auto] [contain-intrinsic-size:auto_78px]",
         inFolder && "ms-3 [contain-intrinsic-size:auto_56px]",
         metaLineEmpty && "[contain-intrinsic-size:auto_58px]",
         sortable?.isDragging && "relative z-20",
@@ -1462,12 +1462,18 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                           aria-label={topStatus.label}
                           data-thread-activity={topStatus.icon}
                           className={cn(
-                            "inline-flex items-center gap-1 font-medium [&:has([data-thread-surface-use])>.task-activity-symbol]:hidden",
+                            "inline-flex items-center gap-1 font-medium",
                             topStatus.className,
                           )}
                         >
-                          {topStatus.icon === "working" || topStatus.icon === "compacting" ? (
-                            <TaskActivitySymbol kind={topStatus.icon} />
+                          {topStatus.icon === "working" ? (
+                            <ThreadSurfaceUseIndicator
+                              threadRef={threadRef}
+                              enabled={leaseLiveStatus}
+                              workingFallback
+                            />
+                          ) : topStatus.icon === "compacting" ? (
+                            <TaskActivitySymbol kind="compacting" />
                           ) : topStatus.icon === "waiting" ? (
                             <TaskActivitySymbol kind="waiting" />
                           ) : topStatus.icon === "input" ? (
@@ -1484,12 +1490,6 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                           {/* Not a live region: a collapsed sidebar is inert, so
                             BackgroundThreadAnnouncer and the open thread's
                             timeline speak status changes instead. */}
-                          {topStatus.icon === "working" ? (
-                            <ThreadSurfaceUseIndicator
-                              threadRef={threadRef}
-                              enabled={leaseLiveStatus}
-                            />
-                          ) : null}
                           <span className="sr-only">{topStatus.label}</span>
                         </span>
                       </ThreadModelBadge>

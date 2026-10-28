@@ -36,6 +36,7 @@ export interface ThreadPreviewState {
   desktopOverlay: DesktopPreviewOverlay | null;
   desktopByTabId: Record<string, DesktopPreviewOverlay>;
   serverAgentControllers: ReadonlyMap<symbol, string>;
+  serverAgentControlledTabs: ReadonlySet<string>;
   recentlySeenUrls: string[];
   listLoaded: boolean;
   serverEpoch: string | null;
@@ -50,6 +51,7 @@ const EMPTY_THREAD_PREVIEW_STATE: ThreadPreviewState = Object.freeze({
   desktopOverlay: null,
   desktopByTabId: {},
   serverAgentControllers: new Map<symbol, string>(),
+  serverAgentControlledTabs: new Set<string>(),
   recentlySeenUrls: [] as string[],
   listLoaded: false,
   serverEpoch: null,
@@ -153,6 +155,8 @@ const removeSession = (current: ThreadPreviewState, tabId: string): ThreadPrevie
   const serverAgentControllers = new Map(
     [...current.serverAgentControllers].filter(([, controlledTabId]) => controlledTabId !== tabId),
   );
+  const serverAgentControlledTabs = new Set(current.serverAgentControlledTabs);
+  serverAgentControlledTabs.delete(tabId);
   const nextSnapshot = latestSnapshot(sessions);
   const activeTabId =
     current.activeTabId === tabId ? (nextSnapshot?.tabId ?? null) : current.activeTabId;
@@ -162,6 +166,7 @@ const removeSession = (current: ThreadPreviewState, tabId: string): ThreadPrevie
     sessions,
     desktopByTabId,
     serverAgentControllers,
+    serverAgentControlledTabs,
     activeTabId: snapshot?.tabId ?? null,
     snapshot,
     desktopOverlay: snapshot ? (desktopByTabId[snapshot.tabId] ?? null) : null,
@@ -267,6 +272,8 @@ export function applyPreviewServerSnapshot(
         activeTabId: null,
         desktopOverlay: null,
         desktopByTabId: {},
+        serverAgentControllers: new Map(),
+        serverAgentControlledTabs: new Set(),
       };
     }
     if (current.suppressedTabIds.has(snapshot.tabId)) return current;
@@ -351,6 +358,11 @@ export function reconcilePreviewServerSessions(
         ([, tabId]) => (current.serverEpoch === null || sameServer) && sessions[tabId],
       ),
     );
+    const serverAgentControlledTabs = new Set(
+      [...current.serverAgentControlledTabs].filter(
+        (tabId) => (current.serverEpoch === null || sameServer) && sessions[tabId],
+      ),
+    );
     if (
       sameServer &&
       current.listLoaded &&
@@ -362,7 +374,8 @@ export function reconcilePreviewServerSessions(
       haveSameValues(current.sessions, sessions) &&
       haveSameValues(current.desktopByTabId, desktopByTabId) &&
       current.suppressedTabIds.size === suppressedTabIds.size &&
-      current.serverAgentControllers.size === serverAgentControllers.size
+      current.serverAgentControllers.size === serverAgentControllers.size &&
+      current.serverAgentControlledTabs.size === serverAgentControlledTabs.size
     ) {
       return current;
     }
@@ -374,6 +387,7 @@ export function reconcilePreviewServerSessions(
       snapshot,
       desktopByTabId,
       serverAgentControllers,
+      serverAgentControlledTabs,
       desktopOverlay,
       recentlySeenUrls,
       listLoaded: true,
@@ -437,6 +451,7 @@ export function applyPreviewServerAgentControl(
   owner: symbol,
   tabId: string,
   controlled: boolean,
+  reason: "control" | "disconnect" | "viewer-detached" = "disconnect",
 ): void {
   updateThreadPreviewState(ref, (current) => {
     if (
@@ -444,16 +459,32 @@ export function applyPreviewServerAgentControl(
       (current.suppressedTabIds.has(tabId) || (current.listLoaded && !current.sessions[tabId]))
     )
       return current;
-    if (
-      controlled
-        ? current.serverAgentControllers.get(owner) === tabId
-        : !current.serverAgentControllers.has(owner)
-    )
-      return current;
     const serverAgentControllers = new Map(current.serverAgentControllers);
     if (controlled) serverAgentControllers.set(owner, tabId);
     else serverAgentControllers.delete(owner);
-    return { ...current, serverAgentControllers };
+    const serverAgentControlledTabs = new Set(current.serverAgentControlledTabs);
+    if (controlled) serverAgentControlledTabs.add(tabId);
+    else if (
+      reason === "control" ||
+      (reason === "disconnect" && ![...serverAgentControllers.values()].includes(tabId))
+    ) {
+      serverAgentControlledTabs.delete(tabId);
+      if (reason === "control") {
+        for (const [viewer, controlledTabId] of serverAgentControllers) {
+          if (controlledTabId === tabId) serverAgentControllers.delete(viewer);
+        }
+      }
+    }
+    if (
+      serverAgentControllers.size === current.serverAgentControllers.size &&
+      [...serverAgentControllers].every(
+        ([viewer, tab]) => current.serverAgentControllers.get(viewer) === tab,
+      ) &&
+      serverAgentControlledTabs.size === current.serverAgentControlledTabs.size &&
+      serverAgentControlledTabs.has(tabId) === current.serverAgentControlledTabs.has(tabId)
+    )
+      return current;
+    return { ...current, serverAgentControllers, serverAgentControlledTabs };
   });
 }
 

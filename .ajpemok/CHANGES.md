@@ -166,6 +166,7 @@ the active run, in both shell readers, so completed or older work cannot keep it
 - Show active/waiting/idle state with a coloured indicator; preserve the original thread status text.
 - Keep the pin beside the project icon in folders, cards and shelves. Fill pinned icons with the project accent; leave unpinned icons outlined. Keep New Thread on hover or keyboard focus.
 - Reserve aligned provider, speed, action and time columns across normal, snoozed and settled rows. Keep snooze clocks fixed when labels differ and preserve positions on hover; reduce the detail column at compact widths.
+- Right-align model names with timestamps. Nested subagents share the row inset and responsive detail columns; their titles and dismiss buttons shrink separately.
 - Pin or unpin eligible project threads together. Explicit project pins retain empty headers; settled, effectively snoozed and archived tasks stay outside the project trees.
 - Keep the tree guide stable during expansion and use the project colour.
 - Offer New thread in empty project sections through the existing project/environment handler.
@@ -340,11 +341,13 @@ Keep effects intermittent and avoid continuous repainting.
 | `apps/web/src/lib/threadSurfaceUse.test.ts`                     | Surface, completion, ownership and recent-activity regressions.                                                        |
 | `apps/web/src/components/sidebar/ThreadSurfaceUseIndicator.tsx` | Shared live/recent indicators, native control state and one-shot ending effects.                                       |
 | `apps/web/src/browser/ServerBrowserSurface.tsx`                 | Report existing stream control and disconnect events to the client preview state.                                      |
-| `apps/web/src/previewStateStore.ts`                             | Per-viewer agent control, cleared on takeover, close, disconnect and server replacement.                               |
+| `apps/web/src/previewStateStore.ts`                             | Retain known agent control when a viewer detaches; clear it on takeover, close, disconnect and server replacement.     |
+| `apps/web/src/components/preview/usePreviewSession.ts`          | Keep known active browser sessions subscribed while their visible sidebar row is in the background.                    |
 | `apps/web/src/previewStateStore.test.ts`                        | Multiple viewers, environment isolation, close and replacement regressions.                                            |
 
 The sidebar integration reads quiet current-run data only for visible running threads and releases unused leases.
 Preserve that bounded subscription when upstream changes thread projections.
+Specific browser, computer or device activity replaces the generic Working glyph in one fixed slot. Viewer cleanup on task selection must not clear session ownership.
 An agent-controlled T3 browser or open device session keeps its surface visible
 only while that thread is running. Other completed surface calls remain for five
 seconds with a Recent label and one short ending effect; a newer action resets
