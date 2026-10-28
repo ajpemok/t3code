@@ -24,12 +24,18 @@ export function sidebarExecutionModel(
   )?.nativeMetadata?.modelSelection;
   const selection = run?.modelSelection ?? thread.modelSelection;
   if (reported?.instanceId === selection.instanceId && reported.model === selection.model) {
+    const hasSelectedSpeed = selection.options?.some(
+      (option) => option.id === "fastMode" || option.id === "serviceTier",
+    );
     const options = [
       ...new Map(
-        [...(reported.options ?? []), ...(selection.options ?? [])].map((option) => [
-          option.id,
-          option,
-        ]),
+        [
+          ...(reported.options ?? []).filter(
+            (option) =>
+              !hasSelectedSpeed || (option.id !== "fastMode" && option.id !== "serviceTier"),
+          ),
+          ...(selection.options ?? []),
+        ].map((option) => [option.id, option]),
       ).values(),
     ];
     return {
@@ -53,7 +59,10 @@ export function sidebarModelDetails(
   });
   const options = descriptors.flatMap((descriptor) => {
     const stated = selection.options?.find((option) => option.id === descriptor.id)?.value;
-    const value = getProviderOptionCurrentValue(descriptor, selection);
+    const value =
+      descriptor.id === "fastMode" && stated === undefined
+        ? false
+        : getProviderOptionCurrentValue(descriptor, selection);
     const label =
       descriptor.type === "select" &&
       typeof stated === "string" &&

@@ -17,6 +17,7 @@ import {
   resolveProjectStatusIndicator,
   projectThreadPinTargets,
   filterProjectSectionThreads,
+  filterProjectSections,
   activeSubagentsByParent,
   subagentsByParent,
   sidebarActivityCounts,
@@ -66,6 +67,44 @@ describe("project section visibility", () => {
   const capabilities = new Map([
     ["environment-test", { threadSettlement: true, threadSnooze: true }],
   ]);
+
+  it("combines pin and activity filters before deciding which project sections remain", () => {
+    const activePin = makeThreadFixture({
+      id: ThreadId.make("active-pin"),
+      projectId: ProjectId.make("active"),
+      pinnedAt: now,
+      hasPendingUserInput: true,
+    });
+    const idlePin = makeThreadFixture({
+      id: ThreadId.make("idle-pin"),
+      projectId: ProjectId.make("idle"),
+      pinnedAt: now,
+    });
+    const unpinned = makeThreadFixture({
+      id: ThreadId.make("unpinned"),
+      projectId: ProjectId.make("unpinned"),
+      hasPendingUserInput: true,
+    });
+    const projects = ["active", "idle", "unpinned", "empty"].map((projectKey) => ({ projectKey }));
+    const visible = (hideInactive: boolean, pinnedOnly: boolean) => {
+      const threads = filterProjectSectionThreads([activePin, idlePin, unpinned], {
+        now,
+        capabilities,
+        hideInactive,
+        pinnedOnly,
+      });
+      return filterProjectSections(projects, {
+        populatedProjectKeys: new Set(threads.map((thread) => thread.projectId)),
+        pinnedProjectKeys: new Set(["empty"]),
+        hideInactive,
+        pinnedOnly,
+      }).map((project) => project.projectKey);
+    };
+    expect(visible(false, true)).toEqual(["active", "idle"]);
+    expect(visible(true, true)).toEqual(["active"]);
+    expect(visible(true, false)).toEqual(["active", "unpinned"]);
+    expect(visible(false, false)).toEqual(["active", "idle", "unpinned", "empty"]);
+  });
 
   it("preserves upstream delegated-thread placement in grouped filters and project pinning", () => {
     const parent = makeThreadFixture({ id: ThreadId.make("parent") });

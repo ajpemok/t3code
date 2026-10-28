@@ -16,8 +16,8 @@ import { buildThreadRouteParams } from "~/threadRoutes";
 import type { SidebarThreadSummary } from "~/types";
 import { subagentsByParent, resolveThreadStatusPill } from "../Sidebar.logic";
 import { ThreadActivityStatus } from "./ThreadSurfaceUseIndicator";
-import { ThreadModelIdentity } from "./ThreadModelDetails";
 import { RelativeTime } from "../RelativeTime";
+import { RecentThreadDismissButton } from "./RecentThreadDismissButton";
 import { Button } from "../ui/button";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import {
@@ -197,7 +197,7 @@ export function ActiveSubagentThreads({
   const count = useClientSettings((settings) => settings.sidebarSubagentPreviewCount) ?? 3;
   const key = mode !== "hide" && enabled ? `${mode}:${scopedThreadKey(threadRef)}` : null;
   const minute = useNowMinute();
-  const { retainedKeys } = useRecentThreads(enabled && mode !== "hide");
+  const { retainedKeys, entries: recentEntries } = useRecentThreads(enabled && mode !== "hide");
   const candidates = useAtomValue(activeChildrenAtom(key));
   const children =
     subagentsByParent(candidates, mode === "active" ? "active" : "show", {
@@ -231,29 +231,39 @@ export function ActiveSubagentThreads({
         const ref = scopeThreadRef(child.environmentId, child.id);
         const childKey = scopedThreadKey(ref);
         const status = resolveThreadStatusPill({ thread: child });
+        const recentEntry = recentEntries.find(
+          (entry) =>
+            entry.thread.environmentId === child.environmentId && entry.thread.id === child.id,
+        );
         return (
           <li key={childKey}>
-            <Link
-              to="/$environmentId/$threadId"
-              params={buildThreadRouteParams(ref)}
+            <div
               className={cn(
-                "project-tint-row project-tint-subagent relative flex min-h-7 min-w-0 items-center gap-1.5 px-2 text-xs text-sidebar-foreground/85 focus-visible:outline-1 focus-visible:outline-ring",
+                "project-tint-row project-tint-subagent group/recent relative flex min-h-7 min-w-0 items-center gap-1.5 px-2 text-xs text-sidebar-foreground/85",
                 selected?.environmentId === ref.environmentId &&
                   selected.threadId === ref.threadId &&
                   "project-tint-selected",
               )}
-              aria-label={`Open ${retainedKeys.has(childKey) ? "recent " : mode === "active" ? "active " : ""}subagent: ${child.title}`}
-              title={child.title}
               onContextMenu={(event) => {
                 event.preventDefault();
                 event.stopPropagation();
                 void inactiveTabs.showTaskContextMenu(ref, { x: event.clientX, y: event.clientY });
               }}
             >
-              <GitForkIcon className="size-3 shrink-0 text-sidebar-muted-foreground" aria-hidden />
-              <span className="min-w-0 flex-1 truncate">{child.title}</span>
-              <ThreadModelIdentity thread={child} />
-              <span className="inline-flex shrink-0 flex-col items-end text-3xs leading-tight text-secondary-label">
+              <Link
+                to="/$environmentId/$threadId"
+                params={buildThreadRouteParams(ref)}
+                aria-label={`Open ${retainedKeys.has(childKey) ? "recent " : mode === "active" ? "active " : ""}subagent: ${child.title}`}
+                title={child.title}
+                className="flex min-w-0 flex-1 items-center gap-1.5 rounded-sm py-1 outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring"
+              >
+                <GitForkIcon
+                  className="size-3.5 shrink-0 text-sidebar-muted-foreground"
+                  aria-hidden
+                />
+                <span className="min-w-0 flex-1 truncate">{child.title}</span>
+              </Link>
+              <span className="inline-flex shrink-0 flex-col items-end justify-center gap-0.5 text-3xs leading-tight text-secondary-label">
                 <ThreadActivityStatus
                   thread={child}
                   threadRef={ref}
@@ -266,7 +276,8 @@ export function ActiveSubagentThreads({
                   nowLabel="now"
                 />
               </span>
-            </Link>
+              {recentEntry ? <RecentThreadDismissButton entry={recentEntry} /> : null}
+            </div>
           </li>
         );
       })}

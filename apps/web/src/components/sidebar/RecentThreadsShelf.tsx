@@ -5,8 +5,8 @@ import {
   scopedThreadKey,
 } from "@t3tools/client-runtime/environment";
 import * as Schema from "effect/Schema";
-import { GitForkIcon } from "lucide-react";
-import { useRecentThreads } from "~/hooks/useRecentThreads";
+import { GitForkIcon, Undo2Icon } from "lucide-react";
+import { useRecentThreads, restoreDismissedRecentThreads } from "~/hooks/useRecentThreads";
 import { useLocalStorage } from "~/hooks/useLocalStorage";
 import { useCloseInactiveProjectTabs } from "~/hooks/useCloseInactiveProjectTabs";
 import { useThreadRouteRef } from "~/hooks/useThreadRouteTarget";
@@ -19,6 +19,9 @@ import { RelativeTime } from "../RelativeTime";
 import { isSidebarSubagentThread } from "../Sidebar.logic";
 import type { RecentThreadEntry } from "./recentThreads.logic";
 import { ThreadModelIdentity } from "./ThreadModelDetails";
+import { RecentThreadDismissButton } from "./RecentThreadDismissButton";
+import { Button } from "../ui/button";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 
 function RecentRow({
   entry,
@@ -35,14 +38,14 @@ function RecentRow({
     <li
       data-project-color={projectTintColor(project)}
       className={cn(
-        "project-tint-row flex min-h-8 min-w-0 items-center gap-2 px-2 text-xs",
+        "project-tint-row group/recent flex min-h-8 min-w-0 items-center gap-2 px-2 text-xs",
         subagent && "project-tint-subagent",
       )}
     >
       {subagent ? (
         <GitForkIcon
           aria-label="Subagent"
-          className="size-3 shrink-0 text-sidebar-muted-foreground"
+          className="size-3.5 shrink-0 text-sidebar-muted-foreground"
         />
       ) : null}
       <Link
@@ -62,6 +65,7 @@ function RecentRow({
       <span className="shrink-0 text-3xs text-secondary-label">
         <RelativeTime timestamp={finishedAt} nowLabel="now" />
       </span>
+      <RecentThreadDismissButton entry={entry} />
     </li>
   );
 }
@@ -93,13 +97,34 @@ export function RecentThreadsShelf({
   if (!recent.showSection) return null;
   return (
     <section aria-label="Recent" className={className}>
-      <CollapsibleSectionHeader
-        expanded={expanded}
-        onClick={() => setExpanded(!expanded)}
-        tone="muted"
-      >
-        Recent ({entries.length})
-      </CollapsibleSectionHeader>
+      <div className="flex items-center">
+        <div className="min-w-0 flex-1">
+          <CollapsibleSectionHeader
+            expanded={expanded}
+            onClick={() => setExpanded(!expanded)}
+            tone="muted"
+          >
+            Recent ({entries.length})
+          </CollapsibleSectionHeader>
+        </div>
+        {recent.dismissedCount > 0 ? (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  size="icon-xs"
+                  variant="ghost-muted"
+                  aria-label="Restore dismissed recent threads"
+                  onClick={restoreDismissedRecentThreads}
+                />
+              }
+            >
+              <Undo2Icon className="size-3.5" />
+            </TooltipTrigger>
+            <TooltipPopup>Restore dismissed recent threads</TooltipPopup>
+          </Tooltip>
+        ) : null}
+      </div>
       {expanded ? (
         <ul>
           {entries.map((entry) => (

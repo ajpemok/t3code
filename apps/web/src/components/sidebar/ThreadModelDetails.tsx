@@ -65,10 +65,16 @@ export function ThreadModelIdentity({
   thread,
   trackRun = false,
   children,
+  leading,
+  showName = false,
+  statusLabel,
 }: {
   readonly thread: SidebarThreadSummary;
   readonly trackRun?: boolean;
   readonly children?: ReactNode;
+  readonly leading?: ReactNode;
+  readonly showName?: boolean;
+  readonly statusLabel?: string | undefined;
 }) {
   const [open, setOpen] = useState(false);
   const details = useModelDetails(
@@ -81,29 +87,48 @@ export function ThreadModelIdentity({
         render={
           <span
             tabIndex={0}
-            aria-label={`${details.modelName} · ${details.speed ? `${details.speed.label} mode` : "Speed not reported"}`}
-            className="inline-flex shrink-0 items-center gap-0.5 rounded-sm text-sidebar-foreground outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+            aria-label={[
+              statusLabel,
+              details.modelName,
+              details.speed ? `${details.speed.label} mode` : "Speed not reported",
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+            className="inline-flex min-w-0 shrink-0 items-center gap-1 rounded-sm text-sidebar-foreground leading-none outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
           />
         }
       >
+        {leading}
         {children ??
           (details.provider ? (
-            <ProviderInstanceIcon
-              driverKind={details.provider.driver}
-              displayName={details.providerName}
-              size="compact"
-            />
+            <span className="inline-flex size-3.5 shrink-0 items-center justify-center">
+              <ProviderInstanceIcon
+                driverKind={details.provider.driver}
+                displayName={details.providerName}
+                size="compact"
+              />
+            </span>
           ) : (
             <CpuIcon aria-hidden className="size-3.5" />
           ))}
         {details.speed?.expedited ? (
-          <span role="img" aria-label={`${details.speed.label} mode`} className="inline-flex">
-            <ZapIcon aria-hidden className="size-3 fill-current" />
+          <span
+            role="img"
+            aria-label={`${details.speed.label} mode`}
+            className="inline-flex size-3.5 shrink-0 items-center justify-center"
+          >
+            <ZapIcon aria-hidden className="size-3.5 fill-current" />
+          </span>
+        ) : null}
+        {showName ? (
+          <span className="max-w-24 truncate text-3xs text-secondary-label">
+            {details.compactName}
           </span>
         ) : null}
       </TooltipTrigger>
       <ThreadHoverCardPopup side="right" align="start">
         <ThreadHoverCard title="Model Settings">
+          {statusLabel ? <p className="mb-2 text-foreground">{statusLabel}</p> : null}
           <ModelFields details={details} />
         </ThreadHoverCard>
       </ThreadHoverCardPopup>
@@ -119,54 +144,20 @@ export function ThreadModelBadge({
   thread,
   trackRun = false,
   children,
+  statusLabel,
 }: {
   readonly thread: SidebarThreadSummary;
   readonly trackRun?: boolean;
   readonly children: ReactNode;
+  readonly statusLabel?: string | undefined;
 }) {
-  const [open, setOpen] = useState(false);
-  const details = useModelDetails(thread, trackRun || open);
   return (
-    <Tooltip open={open} onOpenChange={setOpen}>
-      <TooltipTrigger
-        render={
-          <span
-            tabIndex={0}
-            className="inline-flex min-w-0 items-center gap-1 rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-          />
-        }
-      >
-        {children}
-        <span aria-hidden className="opacity-60">
-          ·
-        </span>
-        <span className="max-w-24 truncate opacity-80">{details.compactName}</span>
-      </TooltipTrigger>
-      <ThreadHoverCardPopup side="right" align="start">
-        <ThreadHoverCard title="Model Settings">
-          <ModelFields details={details} />
-        </ThreadHoverCard>
-      </ThreadHoverCardPopup>
-    </Tooltip>
-  );
-}
-
-export function ThreadWorkingModel({
-  thread,
-  working,
-  trackRun,
-  children,
-}: {
-  readonly thread: SidebarThreadSummary;
-  readonly working: boolean;
-  readonly trackRun: boolean;
-  readonly children: ReactNode;
-}) {
-  return working ? (
-    <ThreadModelBadge thread={thread} trackRun={trackRun}>
-      {children}
-    </ThreadModelBadge>
-  ) : (
-    children
+    <ThreadModelIdentity
+      thread={thread}
+      trackRun={trackRun}
+      showName
+      leading={children}
+      statusLabel={statusLabel}
+    />
   );
 }
