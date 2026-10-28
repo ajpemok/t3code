@@ -15,8 +15,9 @@ the behaviour and affected hunks, rather than skipping a whole mixed commit.
 
 Upstream now owns Ctrl/Cmd+W protection after the final view closes. The fork's
 additional native-window confirmation has been removed. Thread opening and
-saved scroll positions also use upstream behaviour. Steering, automatic provider retries and native-child activity use upstream
-behaviour. Keep the independent preview repairs until their regressions pass upstream.
+saved scroll positions also use upstream behaviour. Steering and native-child activity use upstream
+behaviour. Codex capacity recovery uses upstream's adapter with six extra retry delays;
+the fork's separate provider retry worker is retired. Keep the independent preview repairs until their regressions pass upstream.
 
 The earlier 3770 packages predate the current maintenance changes. They remain
 historical qualification evidence; build the maintained source before the next

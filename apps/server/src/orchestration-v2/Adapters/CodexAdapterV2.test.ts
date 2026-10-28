@@ -2446,7 +2446,10 @@ describe("CodexAdapterV2 post-settle continuation", () => {
           ...(outcome === "completion-only" ? failureEntries(0).slice(1) : failureEntries(0)),
         );
         if (outcome === "completion-only") entries.push(...failureEntries(0).slice(1));
-        const retries = outcome === "exhaust" ? 5 : outcome === "stop" ? 0 : 1;
+        const retryDelays = [
+          2_000, 4_000, 8_000, 16_000, 30_000, 60_000, 120_000, 180_000, 240_000, 480_000, 960_000,
+        ];
+        const retries = outcome === "exhaust" ? retryDelays.length : outcome === "stop" ? 0 : 1;
         const steeredText = "Use the smaller change.";
         for (let attempt = 1; attempt <= retries; attempt++) {
           const start = codexReplayPreamble({
@@ -2625,6 +2628,7 @@ describe("CodexAdapterV2 post-settle continuation", () => {
         });
         yield* harness.runtime.startTurn(turnInput);
         for (let attempt = 1; attempt <= Math.max(retries, 1); attempt++) {
+          const retryDelayMs = retryDelays[attempt - 1]!;
           const milestone = yield* Queue.take(milestones);
           assert.equal(milestone.type, "turn_item.updated");
           if (milestone.type !== "turn_item.updated" || milestone.turnItem.type !== "error") return;
@@ -2633,8 +2637,8 @@ describe("CodexAdapterV2 post-settle continuation", () => {
           if (providerTurnId === null) return;
           assert.deepEqual(milestone.turnItem.retry, {
             attempt,
-            maxAttempts: 5,
-            retryDelayMs: Math.min(2_000 * 2 ** (attempt - 1), 30_000),
+            maxAttempts: retryDelays.length,
+            retryDelayMs,
           });
           assert.isEmpty(harness.terminalEvents());
           if (outcome === "stop") {
@@ -2653,7 +2657,7 @@ describe("CodexAdapterV2 post-settle continuation", () => {
                   })
                   .pipe(Effect.forkScoped)
               : undefined;
-          yield* TestClock.adjust(Math.min(2_000 * 2 ** (attempt - 1), 30_000));
+          yield* TestClock.adjust(retryDelayMs);
           if (outcome === "stop-starting") {
             yield* Deferred.await(retryStarted);
             const stopping = yield* harness.runtime
