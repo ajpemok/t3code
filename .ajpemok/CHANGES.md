@@ -332,15 +332,23 @@ Keep effects intermittent and avoid continuous repainting.
 
 ## Computer and Browser Use Indicators
 
-| Files                                                           | Fork Responsibility                                                     |
-| --------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| `apps/web/src/lib/threadSurfaceUse.ts`                          | Classify current running tool activity, including both T3 MCP prefixes. |
-| `apps/web/src/lib/threadSurfaceUse.test.ts`                     | Classifier regressions.                                                 |
-| `apps/web/src/components/sidebar/ThreadSurfaceUseIndicator.tsx` | Compact tool indicator.                                                 |
+| Files                                                           | Fork Responsibility                                                                                                    |
+| --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `apps/web/src/lib/threadSurfaceUse.ts`                          | Classify current tools, controlled sessions and five-second recent activity across computer, browser and device calls. |
+| `apps/web/src/lib/threadSurfaceUse.test.ts`                     | Surface, completion, ownership and recent-activity regressions.                                                        |
+| `apps/web/src/components/sidebar/ThreadSurfaceUseIndicator.tsx` | Shared live/recent indicators, native control state and one-shot ending effects.                                       |
+| `apps/web/src/browser/ServerBrowserSurface.tsx`                 | Report existing stream control and disconnect events to the client preview state.                                      |
+| `apps/web/src/previewStateStore.ts`                             | Per-viewer agent control, cleared on takeover, close, disconnect and server replacement.                               |
+| `apps/web/src/previewStateStore.test.ts`                        | Multiple viewers, environment isolation, close and replacement regressions.                                            |
 
 The sidebar integration reads quiet current-run data only for visible running threads and releases unused leases.
 Preserve that bounded subscription when upstream changes thread projections.
-An open tab or retained browser ownership alone does not mean a tool is running.
+An agent-controlled T3 browser or open device session keeps its surface visible
+only while that thread is running. Other completed surface calls remain for five
+seconds with a Recent label and one short ending effect; a newer action resets
+that deadline. Use the existing deadline store, control events and device
+subscription. Do not add polling or treat arbitrary open tabs as agent activity.
+Reduced motion disables the ending effect; hidden and offscreen effects pause.
 Opaque wrappers can remain unclassified; avoid fabricating activity from missing metadata.
 Use the composer's Standard default and let an explicit speed choice override
 provider reports across the Fast and service-tier option names. Keep provider

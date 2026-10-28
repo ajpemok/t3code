@@ -10,6 +10,7 @@ import { beforeEach, describe, expect, it } from "vite-plus/test";
 import {
   __testing,
   applyPreviewDesktopState,
+  applyPreviewServerAgentControl,
   applyPreviewServerEvent as applyPreviewServerEventImpl,
   applyPreviewServerSnapshot,
   beginPreviewSessionClose,
@@ -58,6 +59,38 @@ beforeEach(() => {
 });
 
 describe("previewStateStore (single-tab)", () => {
+  it("retains agent control across viewers and clears it on takeover, close and server replacement", () => {
+    const snapshot = makeSnapshot();
+    applyPreviewServerSnapshot(ref, snapshot);
+    const first = Symbol();
+    const second = Symbol();
+    applyPreviewServerAgentControl(ref, first, snapshot.tabId, true);
+    applyPreviewServerAgentControl(ref, second, snapshot.tabId, true);
+    const before = readThreadPreviewState(ref);
+    applyPreviewServerAgentControl(ref, second, snapshot.tabId, true);
+    expect(readThreadPreviewState(ref)).toBe(before);
+    applyPreviewServerAgentControl(ref, first, snapshot.tabId, false);
+    expect([...readThreadPreviewState(ref).serverAgentControllers.keys()]).toEqual([second]);
+    reconcilePreviewServerSessions(ref, { sessions: [snapshot], serverEpoch, revision: 1 });
+    expect(readThreadPreviewState(ref).serverAgentControllers.size).toBe(1);
+    const otherRef = scopeThreadRef("env-2" as EnvironmentId, ref.threadId);
+    expect(readThreadPreviewState(otherRef).serverAgentControllers.size).toBe(0);
+    beginPreviewSessionClose(ref, snapshot.tabId);
+    expect(readThreadPreviewState(ref).serverAgentControllers.size).toBe(0);
+    applyPreviewServerAgentControl(ref, second, snapshot.tabId, true);
+    expect(readThreadPreviewState(ref).serverAgentControllers.size).toBe(0);
+    cancelPreviewSessionClose(ref, snapshot, snapshot.tabId);
+    applyPreviewServerAgentControl(ref, second, snapshot.tabId, true);
+    reconcilePreviewServerSessions(ref, {
+      sessions: [snapshot],
+      serverEpoch: "replacement",
+      revision: 0,
+    });
+    expect(readThreadPreviewState(ref).serverAgentControllers.size).toBe(0);
+    reconcilePreviewServerSessions(ref, { sessions: [], serverEpoch: "replacement", revision: 1 });
+    applyPreviewServerAgentControl(ref, second, snapshot.tabId, true);
+    expect(readThreadPreviewState(ref).serverAgentControllers.size).toBe(0);
+  });
   it("resized event updates tab viewport without changing the active tab", () => {
     const active = makeSnapshot({ tabId: "tab_a" });
     const background = makeSnapshot({ tabId: "tab_b" });

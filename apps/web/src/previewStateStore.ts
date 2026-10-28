@@ -35,6 +35,7 @@ export interface ThreadPreviewState {
   activeTabId: string | null;
   desktopOverlay: DesktopPreviewOverlay | null;
   desktopByTabId: Record<string, DesktopPreviewOverlay>;
+  serverAgentControllers: ReadonlyMap<symbol, string>;
   recentlySeenUrls: string[];
   listLoaded: boolean;
   serverEpoch: string | null;
@@ -48,6 +49,7 @@ const EMPTY_THREAD_PREVIEW_STATE: ThreadPreviewState = Object.freeze({
   activeTabId: null,
   desktopOverlay: null,
   desktopByTabId: {},
+  serverAgentControllers: new Map<symbol, string>(),
   recentlySeenUrls: [] as string[],
   listLoaded: false,
   serverEpoch: null,
@@ -148,6 +150,9 @@ const removeSession = (current: ThreadPreviewState, tabId: string): ThreadPrevie
   if (!current.sessions[tabId]) return current;
   const { [tabId]: _closed, ...sessions } = current.sessions;
   const { [tabId]: _desktop, ...desktopByTabId } = current.desktopByTabId;
+  const serverAgentControllers = new Map(
+    [...current.serverAgentControllers].filter(([, controlledTabId]) => controlledTabId !== tabId),
+  );
   const nextSnapshot = latestSnapshot(sessions);
   const activeTabId =
     current.activeTabId === tabId ? (nextSnapshot?.tabId ?? null) : current.activeTabId;
@@ -156,6 +161,7 @@ const removeSession = (current: ThreadPreviewState, tabId: string): ThreadPrevie
     ...current,
     sessions,
     desktopByTabId,
+    serverAgentControllers,
     activeTabId: snapshot?.tabId ?? null,
     snapshot,
     desktopOverlay: snapshot ? (desktopByTabId[snapshot.tabId] ?? null) : null,
@@ -340,6 +346,11 @@ export function reconcilePreviewServerSessions(
       ),
     );
     const desktopOverlay = activeTabId ? (desktopByTabId[activeTabId] ?? null) : null;
+    const serverAgentControllers = new Map(
+      [...current.serverAgentControllers].filter(
+        ([, tabId]) => (current.serverEpoch === null || sameServer) && sessions[tabId],
+      ),
+    );
     if (
       sameServer &&
       current.listLoaded &&
@@ -350,7 +361,8 @@ export function reconcilePreviewServerSessions(
       current.recentlySeenUrls === recentlySeenUrls &&
       haveSameValues(current.sessions, sessions) &&
       haveSameValues(current.desktopByTabId, desktopByTabId) &&
-      current.suppressedTabIds.size === suppressedTabIds.size
+      current.suppressedTabIds.size === suppressedTabIds.size &&
+      current.serverAgentControllers.size === serverAgentControllers.size
     ) {
       return current;
     }
@@ -361,6 +373,7 @@ export function reconcilePreviewServerSessions(
       activeTabId,
       snapshot,
       desktopByTabId,
+      serverAgentControllers,
       desktopOverlay,
       recentlySeenUrls,
       listLoaded: true,
@@ -416,6 +429,31 @@ export function applyPreviewDesktopState(
       desktopByTabId,
       desktopOverlay: current.activeTabId === tabId ? overlay : current.desktopOverlay,
     };
+  });
+}
+
+export function applyPreviewServerAgentControl(
+  ref: ScopedThreadRef,
+  owner: symbol,
+  tabId: string,
+  controlled: boolean,
+): void {
+  updateThreadPreviewState(ref, (current) => {
+    if (
+      controlled &&
+      (current.suppressedTabIds.has(tabId) || (current.listLoaded && !current.sessions[tabId]))
+    )
+      return current;
+    if (
+      controlled
+        ? current.serverAgentControllers.get(owner) === tabId
+        : !current.serverAgentControllers.has(owner)
+    )
+      return current;
+    const serverAgentControllers = new Map(current.serverAgentControllers);
+    if (controlled) serverAgentControllers.set(owner, tabId);
+    else serverAgentControllers.delete(owner);
+    return { ...current, serverAgentControllers };
   });
 }
 
