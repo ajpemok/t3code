@@ -5,6 +5,7 @@ import {
   BUILT_IN_BROWSER_PROFILES,
   DEFAULT_BROWSER_PROFILE_ID,
   DEFAULT_BROWSER_RECORDING_FRAME_RATE,
+  DEFAULT_BROWSER_RECORDING_POINTER,
   FILL_PREVIEW_VIEWPORT,
   findBrowserProfile,
   INCOGNITO_BROWSER_PROFILE_ID,
@@ -640,7 +641,10 @@ const make = Effect.gen(function* () {
   const applySetting = async (tab: ServerTab, setting: PreviewViewportSetting) => {
     tab.setting = setting;
 
-    if (tab.desktop) return;
+    if (tab.desktop) {
+      await ServerBrowserPage.setDesktopViewport(tab.cdp, fixedViewportSize(setting));
+      return;
+    }
     const size =
       fixedViewportSize(setting) ??
       [...tab.viewers]
@@ -801,6 +805,8 @@ const make = Effect.gen(function* () {
     };
     if (!desktop) {
       await page.setViewportSize(fixedViewportSize(tab.setting) ?? UNATTACHED_FILL_VIEWPORT);
+    } else {
+      await applySetting(tab, tab.setting);
     }
     await applyRendering(tab, snapshot);
     const isMainNavigation = (request: { isNavigationRequest(): boolean; frame(): unknown }) =>
@@ -1327,10 +1333,15 @@ const make = Effect.gen(function* () {
   // Agent recordings encode here, so they need the client's Browser recording frame rate. The
   // last report outlives the client, which lets agents record while no client is connected.
   let recordingFrameRate = DEFAULT_BROWSER_RECORDING_FRAME_RATE;
+  let recordingPointer = DEFAULT_BROWSER_RECORDING_POINTER;
+  let recordingShowMousePresses = true;
 
   const reportProfiles: ServerBrowser["Service"]["reportProfiles"] = (input) =>
     Effect.sync(() => {
       if (input.recordingFrameRate !== undefined) recordingFrameRate = input.recordingFrameRate;
+      if (input.recordingPointer !== undefined) recordingPointer = input.recordingPointer;
+      if (input.recordingShowMousePresses !== undefined)
+        recordingShowMousePresses = input.recordingShowMousePresses;
       const profiles = resolveBrowserProfiles(input.profiles);
       reportedProfiles = {
         profiles,
@@ -1472,8 +1483,34 @@ const make = Effect.gen(function* () {
     });
   };
 
-  const withCaptureLock = <A>(tab: ServerTab, operation: () => Promise<A>): Promise<A> => {
+  const awaitCapture = <A>(signal: AbortSignal, pending: Promise<A>): Promise<A> =>
+    new Promise((resolve, reject) => {
+      const aborted = () => {
+        signal.removeEventListener("abort", aborted);
+        reject(signal.reason);
+      };
+      signal.addEventListener("abort", aborted, { once: true });
+      pending.then(
+        (value) => {
+          signal.removeEventListener("abort", aborted);
+          if (signal.aborted) reject(signal.reason);
+          else resolve(value);
+        },
+        (cause: unknown) => {
+          signal.removeEventListener("abort", aborted);
+          reject(cause);
+        },
+      );
+      if (signal.aborted) aborted();
+    });
+
+  const withCaptureLock = <A>(
+    tab: ServerTab,
+    operation: () => Promise<A>,
+    signal?: AbortSignal,
+  ): Promise<A> => {
     const run = tab.captureLock.then(() => {
+      signal?.throwIfAborted();
       if (tab.closing) throw new Error("The preview tab closed.");
       return operation();
     });
@@ -1481,89 +1518,154 @@ const make = Effect.gen(function* () {
     return run;
   };
 
-  const startRecording = (tab: ServerTab): Promise<Recording> => {
-    const started = withCaptureLock(tab, async () => {
-      if (tab.recording) return tab.recording;
-      const encoder = await contexts.scratchPage();
-      let session: CDPSession | null = null;
-      try {
-        await encoder.evaluate(ServerBrowserPage.recordingEncoderScript(recordingFrameRate));
-        // Seed idle pages before returning so an immediate stop has a frame to encode.
-        const firstFrame = await ServerBrowserPage.captureViewport(tab.cdp, {
-          format: "jpeg",
-          quality: RECORDING_SCREENCAST.quality,
-        });
-        await encoder.evaluate(
-          ([data, width]) =>
-            (globalThis as unknown as EncoderWindow).__t3Recorder.frame(data, width),
-          [firstFrame, tab.page.viewportSize()?.width ?? UNATTACHED_FILL_VIEWPORT.width] as const,
+  const startRecording = (tab: ServerTab, signal: AbortSignal): Promise<Recording> => {
+    const started = withCaptureLock(
+      tab,
+      async () => {
+        if (tab.recording) return tab.recording;
+        const encoder = await awaitCapture(
+          signal,
+          contexts.scratchPage().then((page) => {
+            if (signal.aborted) void page.close().catch(constVoid);
+            signal.throwIfAborted();
+            return page;
+          }),
         );
-        const opened = await tab.page.context().newCDPSession(tab.page);
-        session = opened;
-        const framesInFlight = new Set<Promise<void>>();
-        opened.on("Page.screencastFrame", (frame) => {
-          const cssWidth = tab.page.viewportSize()?.width ?? frame.metadata.deviceWidth;
-          const delivered: Promise<void> = encoder
-            .evaluate(
+        let session: CDPSession | null = null;
+        try {
+          await awaitCapture(
+            signal,
+            encoder.evaluate(
+              ServerBrowserPage.recordingEncoderScript(
+                recordingFrameRate,
+                recordingPointer,
+                recordingShowMousePresses,
+              ),
+            ),
+          );
+          // Seed idle pages before returning so an immediate stop has a frame to encode.
+          const seedCssWidth = tab.desktop
+            ? (await awaitCapture(signal, ServerBrowserPage.readPageMetrics(tab.cdp))).width
+            : (tab.page.viewportSize()?.width ?? UNATTACHED_FILL_VIEWPORT.width);
+          const firstFrame = await awaitCapture(
+            signal,
+            ServerBrowserPage.captureViewport(tab.cdp, {
+              format: "jpeg",
+              quality: RECORDING_SCREENCAST.quality,
+            }),
+          );
+          await awaitCapture(
+            signal,
+            encoder.evaluate(
               ([data, width]) =>
                 (globalThis as unknown as EncoderWindow).__t3Recorder.frame(data, width),
-              [frame.data, cssWidth] as const,
-            )
-            .then(async (accepted) => {
-              if (!accepted) await opened.send("Page.stopScreencast");
-            })
-            .catch(constVoid)
-            .finally(() => {
-              framesInFlight.delete(delivered);
-              void opened
-                .send("Page.screencastFrameAck", { sessionId: frame.sessionId })
-                .catch(constVoid);
-            });
-          framesInFlight.add(delivered);
-        });
-        await opened.send("Page.startScreencast", RECORDING_SCREENCAST);
-        if (tab.closing) throw new Error("The tab closed while the recording started.");
-        const recording: Recording = {
-          encoder,
-          session: opened,
-          startedAt: new Date().toISOString(),
-          framesInFlight,
-        };
-        tab.recording = recording;
-        return recording;
-      } catch (cause) {
-        await encoder.close().catch(constVoid);
-        await session?.detach().catch(constVoid);
-        throw cause;
-      }
-    }).finally(() => {
+              [firstFrame, seedCssWidth] as const,
+            ),
+          );
+          const opened = await awaitCapture(
+            signal,
+            tab.page
+              .context()
+              .newCDPSession(tab.page)
+              .then((opened) => {
+                if (signal.aborted) void opened.detach().catch(constVoid);
+                signal.throwIfAborted();
+                return opened;
+              }),
+          );
+          session = opened;
+          const framesInFlight = new Set<Promise<void>>();
+          opened.on("Page.screencastFrame", (frame) => {
+            const nativeWidth = (
+              frame.metadata as typeof frame.metadata & { readonly t3CssViewportWidth?: number }
+            ).t3CssViewportWidth;
+            const cssWidth = tab.desktop
+              ? typeof nativeWidth === "number" && Number.isFinite(nativeWidth) && nativeWidth > 0
+                ? nativeWidth
+                : seedCssWidth
+              : (tab.page.viewportSize()?.width ?? frame.metadata.deviceWidth);
+            const delivered: Promise<void> = encoder
+              .evaluate(
+                ([data, width]) =>
+                  (globalThis as unknown as EncoderWindow).__t3Recorder.frame(data, width),
+                [frame.data, cssWidth] as const,
+              )
+              .then(async (accepted) => {
+                if (!accepted) await opened.send("Page.stopScreencast");
+              })
+              .catch(constVoid)
+              .finally(() => {
+                framesInFlight.delete(delivered);
+                void opened
+                  .send("Page.screencastFrameAck", { sessionId: frame.sessionId })
+                  .catch(constVoid);
+              });
+            framesInFlight.add(delivered);
+          });
+          await awaitCapture(signal, opened.send("Page.startScreencast", RECORDING_SCREENCAST));
+          if (tab.closing) throw new Error("The tab closed while the recording started.");
+          const recording: Recording = {
+            encoder,
+            session: opened,
+            startedAt: new Date().toISOString(),
+            framesInFlight,
+          };
+          tab.recording = recording;
+          return recording;
+        } catch (cause) {
+          await awaitCapture(
+            signal,
+            Promise.all([encoder.close().catch(constVoid), session?.detach().catch(constVoid)]),
+          ).catch(constVoid);
+          throw cause;
+        }
+      },
+      signal,
+    ).finally(() => {
       if (tab.recordingStart === started) tab.recordingStart = null;
     });
     tab.recordingStart = started;
     return started;
   };
 
-  const withScreencastsPaused = <A>(tab: ServerTab, capture: () => Promise<A>): Promise<A> =>
-    withCaptureLock(tab, async () => {
-      tab.capturing += 1;
-      const recording = tab.recording;
-      try {
-        await Promise.all([
-          ...[...tab.viewers].map((viewer) => viewer.pause()),
-          recording?.session.send("Page.stopScreencast").catch(constVoid),
-        ]);
-        return await capture();
-      } finally {
-        tab.capturing -= 1;
+  const withScreencastsPaused = <A>(
+    tab: ServerTab,
+    signal: AbortSignal,
+    capture: () => Promise<A>,
+  ): Promise<A> =>
+    withCaptureLock(
+      tab,
+      async () => {
+        tab.capturing += 1;
+        const recording = tab.recording;
+        try {
+          await awaitCapture(
+            signal,
+            Promise.all([
+              ...[...tab.viewers].map((viewer) => viewer.pause()),
+              recording?.session.send("Page.stopScreencast").catch(constVoid),
+            ]),
+          );
+          signal.throwIfAborted();
+          return await awaitCapture(signal, capture());
+        } finally {
+          tab.capturing -= 1;
 
-        await Promise.all([
-          ...[...tab.viewers].map((viewer) => viewer.resume()),
-          recording && tab.recording === recording
-            ? recording.session.send("Page.startScreencast", RECORDING_SCREENCAST).catch(constVoid)
-            : undefined,
-        ]);
-      }
-    });
+          await awaitCapture(
+            signal,
+            Promise.all([
+              ...[...tab.viewers].map((viewer) => viewer.resume()),
+              recording && tab.recording === recording
+                ? recording.session
+                    .send("Page.startScreencast", RECORDING_SCREENCAST)
+                    .catch(constVoid)
+                : undefined,
+            ]),
+          ).catch(constVoid);
+        }
+      },
+      signal,
+    );
 
   const stopRecording = (tab: ServerTab) =>
     withCaptureLock(tab, async () => {
@@ -1729,6 +1831,7 @@ const make = Effect.gen(function* () {
   const runOperation = async (
     request: PreviewAutomationRequest,
     deadlineMs: number,
+    signal: AbortSignal,
   ): Promise<unknown> => {
     const input = request.input;
     switch (request.operation) {
@@ -1917,7 +2020,7 @@ const make = Effect.gen(function* () {
             "A browser dialog is pending. Read preview_status.",
             "dialogPending",
           );
-        return executeTabOperation(tab, request);
+        return executeTabOperation(tab, request, signal);
       });
     }
     return tab.control.agent(
@@ -1932,7 +2035,7 @@ const make = Effect.gen(function* () {
         tab.agentOperating = !READ_OPERATIONS.has(request.operation);
         updateFileChooserInterception(tab);
         try {
-          return await executeTabOperation(tab, request);
+          return await executeTabOperation(tab, request, signal);
         } finally {
           tab.agentOperating = false;
           updateFileChooserInterception(tab);
@@ -1943,7 +2046,11 @@ const make = Effect.gen(function* () {
     );
   };
 
-  const executeTabOperation = async (tab: ServerTab, request: PreviewAutomationRequest) => {
+  const executeTabOperation = async (
+    tab: ServerTab,
+    request: PreviewAutomationRequest,
+    signal: AbortSignal,
+  ) => {
     const input = request.input;
     switch (request.operation) {
       case "navigate": {
@@ -1964,10 +2071,23 @@ const make = Effect.gen(function* () {
           manager.resize({ threadId: tab.threadId, tabId: tab.tabId, viewport: setting }),
         );
         await applySetting(tab, setting);
+        const measured = tab.desktop
+          ? await ServerBrowserPage.readPageMetrics(tab.cdp)
+          : (tab.page.viewportSize() ?? UNATTACHED_FILL_VIEWPORT);
+        const expected = fixedViewportSize(setting);
+        if (
+          tab.desktop &&
+          expected &&
+          (measured.width !== expected.width || measured.height !== expected.height)
+        ) {
+          throw new Error(
+            "The desktop browser has not reached the requested viewport. Retry the resize.",
+          );
+        }
         return {
           tabId: tab.tabId,
           setting,
-          viewport: tab.page.viewportSize() ?? UNATTACHED_FILL_VIEWPORT,
+          viewport: { width: measured.width, height: measured.height },
         };
       }
       case "setColorScheme": {
@@ -1979,9 +2099,10 @@ const make = Effect.gen(function* () {
         return { tabId: tab.tabId, colorScheme };
       }
       case "snapshot": {
-        return withScreencastsPaused(tab, () =>
+        return withScreencastsPaused(tab, signal, () =>
           ServerBrowserPage.snapshot({
             ...tab,
+            signal,
             renderScale: tab.desktop ? "display" : RENDER_SCALE,
           }),
         );
@@ -2030,7 +2151,7 @@ const make = Effect.gen(function* () {
       case "waitFor":
         return ServerBrowserPage.waitFor(tab.page, input as PreviewAutomationWaitForInput);
       case "recordingStart": {
-        const recording = await startRecording(tab);
+        const recording = await startRecording(tab, signal);
         return { tabId: tab.tabId, recording: true, startedAt: recording.startedAt };
       }
     }
@@ -2038,12 +2159,23 @@ const make = Effect.gen(function* () {
 
   const handleRequest = (connectionId: string, request: PreviewAutomationRequest) =>
     Effect.tryPromise({
-      try: () =>
-        runOperation(request, performance.now() + request.timeoutMs).finally(() =>
+      try: (signal) =>
+        runOperation(request, performance.now() + request.timeoutMs, signal).finally(() =>
           markUsed(request),
         ),
       catch: ServerBrowserPage.toOperationError,
     }).pipe(
+      // A stalled tab must not make the broker evict the shared browser host.
+      Effect.timeoutOrElse({
+        duration: request.timeoutMs,
+        orElse: () =>
+          Effect.fail(
+            new ServerBrowserPage.ServerBrowserOperationError(
+              "PreviewAutomationTimeoutError",
+              "The browser request exceeded its deadline. It may still complete; check the tab before retrying an action.",
+            ),
+          ),
+      }),
       Effect.match({
         onSuccess: (result) => ({ ok: true as const, result }),
         onFailure: (error) => ({

@@ -1,5 +1,5 @@
 import type { EnvironmentServerConfig } from "@t3tools/client-runtime/connection";
-import { EnvironmentId } from "@t3tools/contracts";
+import { DEFAULT_BROWSER_RECORDING_POINTER, EnvironmentId } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
@@ -50,6 +50,29 @@ describe("takeDueProfileReports", () => {
     takeDueProfileReports(reported, targets, input(10));
 
     expect(takeDueProfileReports(reported, targets, input(30))).toEqual([first, second]);
+  });
+
+  it("reports pointer appearance and click visibility changes without a profile change", () => {
+    const reported: ReportedProfiles = new Map();
+    const targets = new Map([
+      [first, config("a")],
+      [second, config("b")],
+    ]);
+    const settings = {
+      ...input(10),
+      recordingPointer: DEFAULT_BROWSER_RECORDING_POINTER,
+      recordingShowMousePresses: true,
+    };
+    takeDueProfileReports(reported, targets, settings);
+    const recoloured = {
+      ...settings,
+      recordingPointer: { ...settings.recordingPointer, haloColor: "#d97706" },
+    };
+    expect(takeDueProfileReports(reported, targets, recoloured)).toEqual([first, second]);
+    expect(takeDueProfileReports(reported, targets, recoloured)).toEqual([]);
+    const hiddenClicks = { ...recoloured, recordingShowMousePresses: false };
+    expect(takeDueProfileReports(reported, targets, hiddenClicks)).toEqual([first, second]);
+    expect(takeDueProfileReports(reported, targets, hiddenClicks)).toEqual([]);
   });
 
   it("reports an environment again once it becomes operable again", () => {
