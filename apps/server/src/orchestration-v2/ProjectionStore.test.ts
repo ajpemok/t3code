@@ -293,12 +293,13 @@ it.effect("SQL shells flag only an active turn blocked solely on T3 thread waits
         occurredAt: at,
         payload,
       });
-    const assertBlocked = Effect.fnUntraced(function* (expected: boolean) {
+    const assertBlocked = Effect.fnUntraced(function* (expected: boolean, compacting = false) {
       const listed = (yield* store.getShellSnapshot()).threads.find((row) => row.id === threadId);
       for (const shell of [yield* store.getThreadShell(threadId), listed]) {
         assert.equal(shell?.activeRunId, run.id);
         assert.equal(shell?.status, "running");
         assert.equal(shell?.blockedOnThreadWait ?? false, expected);
+        assert.equal(shell?.isCompacting ?? false, compacting);
       }
       yield* assertShellIndexCoversShells();
     });
@@ -394,7 +395,7 @@ it.effect("SQL shells flag only an active turn blocked solely on T3 thread waits
       driver,
     };
     yield* updateItem(compaction);
-    yield* assertBlocked(false);
+    yield* assertBlocked(false, true);
     yield* updateItem({ ...compaction, status: "completed", completedAt: at });
     yield* assertBlocked(true);
     yield* updateItem({ ...wait, status: "completed", completedAt: at });
