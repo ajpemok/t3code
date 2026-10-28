@@ -198,6 +198,30 @@ describe("searchSettings", () => {
 });
 
 describe("settings search targets", () => {
+  it("finds fork controls together in the A3 Fork section", () => {
+    expect(SETTINGS_NAV_GROUPS.flatMap((group) => group.paths)).toContain("/settings/ajpemok");
+    for (const id of [
+      "legacy-sidebar",
+      "sidebar-pinned-only",
+      "sidebar-hide-inactive",
+      "sidebar-active-subagents",
+      "sidebar-visible-subagents",
+      "sidebar-recent-section",
+      "sidebar-keep-recent",
+      "sidebar-recent-subagents",
+      "sidebar-recent-count",
+      "sidebar-recent-age",
+      "ajpemok-header-scene",
+      "ajpemok-header-motion",
+      "legacy-context-window-indicator",
+      "browser-recording-pointer",
+    ]) {
+      expect(SETTINGS_SEARCH_ITEMS.find((item) => item.id === id)?.to).toBe("/settings/ajpemok");
+      expect(getSettingsSearchTargetScope(id)?.scope).toBeNull();
+    }
+    expect(searchSettings("A3 context")[0]?.id).toBe("legacy-context-window-indicator");
+  });
+
   it("requires an environment for the resolved telemetry export destination", () => {
     const result = searchSettings("OpenTelemetry export").find(
       (item) => item.id === "telemetry-export",
@@ -324,6 +348,24 @@ describe("source control host search items", () => {
 });
 
 describe("movedSettingsPath", () => {
+  it("keeps old fork links working after their controls move", () => {
+    for (const [path, anchor] of [
+      ["/settings/appearance", "legacy-sidebar"],
+      ["/settings/appearance", "ajpemok-header-scene"],
+      ["/settings/appearance", "sidebar-recent-count"],
+      ["/settings/appearance", "recent-threads"],
+      ["/settings/chat", "legacy-context-window-indicator"],
+      ["/settings/labs", "legacy-context-window-indicator"],
+      ["/settings/browser", "browser-recording-pointer"],
+    ] as const) {
+      expect(movedSettingsPath(path, anchor)).toBe("/settings/ajpemok");
+    }
+    expect(movedSettingsPath("/settings/ajpemok", "legacy-sidebar")).toBeNull();
+    expect(movedSettingsPath("/settings/chat", "composer-rich-text")).toBeNull();
+    expect(movedSettingsPath("/settings/browser", "browser-recording-key-presses")).toBeNull();
+    expect(movedSettingsPath("/settings/labs", "legacy-plan-mode")).toBeNull();
+  });
+
   it("sends old links to the page their row moved to", () => {
     expect(movedSettingsPath("/settings/general", "text-generation-model")).toBe(
       "/settings/threads",
