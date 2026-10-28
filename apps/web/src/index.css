@@ -2,6 +2,539 @@
 @layer theme, base, clerk, components, utilities;
 @import "tailwindcss";
 
+@keyframes recording-pointer-preview-halo {
+  from {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0.9;
+  }
+  to {
+    transform: translate(-50%, -50%) scale(1.5);
+    opacity: 0;
+  }
+}
+.recording-pointer-preview-halo {
+  animation: recording-pointer-preview-halo ease-out both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .recording-pointer-preview-halo {
+    animation-timing-function: steps(1, end);
+  }
+}
+
+[data-project-color="gray"] {
+  --project-accent: var(--color-gray-500);
+}
+[data-project-color="red"] {
+  --project-accent: var(--color-red-500);
+}
+[data-project-color="orange"] {
+  --project-accent: var(--color-orange-500);
+}
+[data-project-color="amber"] {
+  --project-accent: var(--color-amber-500);
+}
+[data-project-color="yellow"] {
+  --project-accent: var(--color-yellow-500);
+}
+[data-project-color="lime"] {
+  --project-accent: var(--color-lime-500);
+}
+[data-project-color="green"] {
+  --project-accent: var(--color-green-500);
+}
+[data-project-color="emerald"] {
+  --project-accent: var(--color-emerald-500);
+}
+[data-project-color="teal"] {
+  --project-accent: var(--color-teal-500);
+}
+[data-project-color="cyan"] {
+  --project-accent: var(--color-cyan-500);
+}
+[data-project-color="sky"] {
+  --project-accent: var(--color-sky-500);
+}
+[data-project-color="blue"] {
+  --project-accent: var(--color-blue-500);
+}
+[data-project-color="indigo"] {
+  --project-accent: var(--color-indigo-500);
+}
+[data-project-color="violet"] {
+  --project-accent: var(--color-violet-500);
+}
+[data-project-color="purple"] {
+  --project-accent: var(--color-purple-500);
+}
+[data-project-color="fuchsia"] {
+  --project-accent: var(--color-fuchsia-500);
+}
+[data-project-color="pink"] {
+  --project-accent: var(--color-pink-500);
+}
+[data-project-color="rose"] {
+  --project-accent: var(--color-rose-500);
+}
+
+.project-tint-header[data-project-color] {
+  background-color: color-mix(
+    in srgb,
+    var(--project-accent) var(--project-header-tint, 9%),
+    var(--background)
+  );
+}
+
+.project-tint-panel[data-project-color] {
+  background-color: color-mix(
+    in srgb,
+    var(--project-accent) var(--project-panel-tint, 5%),
+    var(--background)
+  );
+}
+
+.project-tint-main[data-project-color] {
+  background-color: color-mix(in srgb, var(--project-accent) 2%, var(--background));
+}
+.project-tint-details[data-project-color] {
+  background-color: color-mix(in srgb, var(--project-accent) 10%, var(--background));
+}
+.dark .project-tint-main[data-project-color] {
+  background-color: color-mix(in srgb, var(--project-accent) 3%, var(--background));
+}
+.dark .project-tint-details[data-project-color] {
+  background-color: color-mix(in srgb, var(--project-accent) 18%, var(--background));
+}
+
+.project-tint-row {
+  isolation: isolate;
+  border-radius: 0;
+  border-width: 0;
+  transition: background-color 320ms cubic-bezier(0.16, 1, 0.3, 1);
+  --contrast-sidebar-muted-foreground: color-mix(
+    in srgb,
+    var(--contrast-sidebar-foreground) 84%,
+    var(--sidebar)
+  );
+  background-color: color-mix(
+    in srgb,
+    var(--project-tint-accent, var(--project-accent)) var(--project-row-tint, 5%),
+    var(--sidebar)
+  );
+}
+
+.project-tint-row:hover,
+.project-tint-row:focus-within,
+.project-tint-row[data-highlighted] {
+  outline: 1px solid var(--ring);
+  outline-offset: -1px;
+}
+
+.project-tint-row.project-tint-selected {
+  background-color: color-mix(
+    in srgb,
+    var(--project-tint-accent, var(--project-accent)) var(--project-row-selected-tint, 14%),
+    var(--sidebar)
+  );
+}
+
+.dark .project-tint-header {
+  --project-header-tint: 7%;
+}
+.dark .project-tint-panel {
+  --project-panel-tint: 4%;
+}
+.dark .project-tint-row {
+  --project-row-tint: 10%;
+  --project-row-hover-tint: 13%;
+  --project-row-selected-tint: 17%;
+}
+.project-tint-section {
+  --project-row-tint: 10%;
+  --project-row-hover-tint: 14%;
+}
+
+.dark .project-tint-section {
+  --project-row-tint: 18%;
+  --project-row-hover-tint: 22%;
+}
+
+.project-tint-row[data-project-inactive="true"],
+[data-project-inactive="true"] > .project-tint-row {
+  --project-tint-accent: color-mix(
+    in srgb,
+    var(--project-accent) 25%,
+    var(--sidebar-muted-foreground)
+  );
+  --project-row-tint: 4%;
+  --project-row-hover-tint: 7%;
+  --project-row-selected-tint: 10%;
+}
+
+.project-tint-section[data-project-inactive="true"] {
+  --project-row-tint: 9%;
+  --project-row-hover-tint: 12%;
+}
+
+.project-thread-guide {
+  position: relative;
+}
+
+.project-subagent-list {
+  margin: 2px 0 4px 12px;
+  border-inline-start: 1px solid
+    color-mix(in srgb, var(--project-accent, var(--sidebar-foreground)) 45%, transparent);
+}
+
+.project-tint-row.project-tint-subagent {
+  --project-row-tint: 3%;
+  --project-row-selected-tint: 8%;
+}
+
+.dark .project-tint-row.project-tint-subagent {
+  --project-row-tint: 6%;
+  --project-row-selected-tint: 11%;
+}
+
+[data-thread-activity="working"],
+[data-thread-activity="snoozed"] {
+  color: var(--project-accent, var(--app-theme-accent, var(--primary)));
+}
+
+.project-tint-subagent [data-thread-activity="working"],
+.project-tint-subagent [data-thread-activity="snoozed"] {
+  color: color-mix(
+    in oklab,
+    var(--project-accent, var(--app-theme-accent, var(--primary))) 40%,
+    var(--sidebar-foreground)
+  );
+}
+
+.project-thread-guide::before {
+  content: "";
+  position: absolute;
+  inset-block: 2px;
+  inset-inline-start: 0;
+  width: 1px;
+  pointer-events: none;
+  background-color: color-mix(in srgb, var(--project-accent) 55%, var(--sidebar));
+}
+
+.project-thread-guide > [data-sidebar="menu-sub"] {
+  border-inline-start-color: transparent;
+}
+.project-tint-row:has([data-thread-surface-use])::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border: 1px solid color-mix(in srgb, var(--color-info) 65%, transparent);
+  border-radius: inherit;
+}
+
+[data-chat-composer-footer-compact="true"] [data-composer-usage-figure] {
+  display: none;
+}
+
+@container composer (max-width: 48.75rem) {
+  .composer-context-total {
+    display: none;
+  }
+}
+
+@container composer (max-width: 38.75rem) {
+  [data-composer-usage-figure] {
+    display: none;
+  }
+}
+
+.weekly-reset-counter {
+  align-self: flex-start;
+  margin-inline-start: -2px;
+  padding-block-start: 1px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.weekly-reset-counter[data-attention="important"] {
+  padding-inline: 2px;
+  border-radius: 3px;
+  background-color: color-mix(in oklab, var(--color-warning) 16%, transparent);
+  font-weight: 700;
+  animation: weekly-reset-attention 10s ease-in-out infinite;
+  animation-play-state: var(--visible-animation-state, paused);
+}
+
+@keyframes weekly-reset-attention {
+  0%,
+  18%,
+  100% {
+    opacity: 1;
+  }
+  9% {
+    opacity: 0.72;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .weekly-reset-counter[data-attention="important"] {
+    animation: none;
+  }
+}
+
+.task-activity-symbol {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  width: 13px;
+  height: 13px;
+  align-items: center;
+  justify-content: center;
+  color: currentColor;
+}
+
+.task-activity-symbol > svg {
+  width: 13px;
+  height: 13px;
+  stroke-width: 1.6;
+}
+
+.task-activity-symbol::before,
+.task-activity-symbol::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.task-activity-symbol::before,
+.task-activity-symbol::after,
+.task-activity-symbol .task-activity-cursor {
+  animation-play-state: var(--visible-animation-state, paused);
+  will-change: var(--visible-animation-will-change, auto);
+}
+
+.task-activity-symbol[data-task-activity="working"]::before {
+  inset: 3px 0;
+  border-radius: 2px;
+  background: currentColor;
+  opacity: 0.18;
+}
+
+.task-activity-symbol[data-task-activity="working"]::after {
+  width: 3px;
+  height: 7px;
+  left: 0;
+  border-radius: 2px;
+  background: currentColor;
+  animation-name: task-working-travel;
+  animation-duration: 3.8s;
+  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  animation-iteration-count: infinite;
+}
+
+.task-activity-symbol[data-task-activity="waiting"]::before {
+  inset: 1px;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  opacity: 0.3;
+}
+
+.task-activity-symbol[data-task-activity="compacting"]::before {
+  inset: 2px;
+  border: 1px solid currentColor;
+  border-radius: 3px;
+  opacity: 0.25;
+}
+
+.task-activity-symbol[data-task-activity="compacting"]::after {
+  inset: 1px;
+  border: 2px solid transparent;
+  border-top-color: currentColor;
+  border-bottom-color: currentColor;
+  border-radius: 3px;
+  animation-name: task-waiting-orbit;
+  animation-duration: 3s;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+}
+
+.task-activity-symbol[data-task-activity="waiting"]::after {
+  inset: 0;
+  border: 2px solid transparent;
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation-name: task-waiting-orbit;
+  animation-duration: 5.4s;
+  animation-timing-function: cubic-bezier(0.65, 0, 0.35, 1);
+  animation-iteration-count: infinite;
+}
+
+.task-activity-symbol .task-activity-cursor {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  right: -2px;
+  bottom: -1px;
+  fill: var(--sidebar);
+  animation-name: task-computer-click;
+  animation-duration: 4.6s;
+  animation-iteration-count: infinite;
+}
+
+.task-activity-symbol[data-task-activity="computer"]::after {
+  inset: 2px;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  opacity: 0;
+  animation-name: task-click-ring;
+  animation-duration: 4.6s;
+  animation-iteration-count: infinite;
+}
+
+.task-activity-symbol[data-task-activity="browser"]::after {
+  inset: -1px;
+  border: 1px solid transparent;
+  border-top-color: currentColor;
+  border-right-color: currentColor;
+  border-radius: 50%;
+  animation-name: task-browser-scan;
+  animation-duration: 5.2s;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+}
+
+.task-activity-symbol[data-task-activity="t3-browser"]::after {
+  width: 1px;
+  height: 5px;
+  left: 3px;
+  top: 5px;
+  background: currentColor;
+  animation-name: task-working-travel;
+  animation-duration: 4.4s;
+  animation-iteration-count: infinite;
+}
+
+.task-activity-symbol[data-task-activity="attention"]::before {
+  width: 5px;
+  height: 5px;
+  border: 1.5px solid currentColor;
+  transform: rotate(45deg);
+}
+
+.task-activity-symbol[data-task-activity="woke"]::after {
+  inset: -2px;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  opacity: 0;
+  animation-name: task-woke-ring;
+  animation-duration: 1.8s;
+  animation-iteration-count: 2;
+  animation-fill-mode: both;
+}
+
+@keyframes task-woke-ring {
+  0%,
+  70%,
+  100% {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  15% {
+    opacity: 0.7;
+    transform: scale(0.9);
+  }
+  45% {
+    opacity: 0;
+    transform: scale(1.45);
+  }
+}
+
+@keyframes task-working-travel {
+  0%,
+  12%,
+  72%,
+  100% {
+    transform: translateX(0);
+  }
+  38%,
+  48% {
+    transform: translateX(7px);
+  }
+}
+
+@keyframes task-waiting-orbit {
+  0%,
+  14% {
+    transform: rotate(-35deg);
+  }
+  70%,
+  100% {
+    transform: rotate(325deg);
+  }
+}
+
+@keyframes task-computer-click {
+  0%,
+  12%,
+  70%,
+  100% {
+    transform: translate(0, 0);
+  }
+  32%,
+  40% {
+    transform: translate(-3px, -3px);
+  }
+  36% {
+    transform: translate(-3px, -3px) scale(0.75);
+  }
+}
+
+@keyframes task-click-ring {
+  0%,
+  33%,
+  58%,
+  100% {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  37% {
+    opacity: 0.65;
+    transform: scale(0.5);
+  }
+  54% {
+    opacity: 0;
+    transform: scale(1.4);
+  }
+}
+
+@keyframes task-browser-scan {
+  0%,
+  14% {
+    transform: rotate(-45deg);
+    opacity: 0.3;
+  }
+  48% {
+    opacity: 1;
+  }
+  76%,
+  100% {
+    transform: rotate(315deg);
+    opacity: 0.3;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .project-tint-row {
+    transition: none;
+  }
+
+  .task-activity-symbol::before,
+  .task-activity-symbol::after,
+  .task-activity-symbol .task-activity-cursor {
+    animation: none;
+  }
+}
+
 @custom-variant dark (&:is(.dark, .dark *));
 @custom-variant light (&:not(.dark, .dark *));
 /* Window Controls Overlay: active when Electron exposes native titlebar control geometry. */
@@ -246,6 +779,8 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
   --color-diff-addition-foreground: var(--diff-addition-foreground);
   --color-diff-deletion-foreground: var(--diff-deletion-foreground);
   --color-info-foreground: var(--info-foreground);
+  --color-reset-attention: var(--color-info-foreground);
+  --color-reset-important: var(--color-warning-foreground);
   --color-info: var(--info);
   --color-guest: var(--guest);
   --color-guest-foreground: var(--guest-foreground);
@@ -2544,4 +3079,9 @@ code {
 [data-workspace-area]:focus-visible {
   outline: 2px solid var(--ring);
   outline-offset: -2px;
+}
+
+@theme {
+  --color-ajpemok-ink: #07111c;
+  --color-ajpemok-type: #f5e7c9;
 }

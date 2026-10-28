@@ -672,11 +672,16 @@ function SidebarContent({
   );
 }
 
-function SidebarGroup({ className, ...props }: React.ComponentProps<"div">) {
+function SidebarGroup({
+  className,
+  inset = "default",
+  ...props
+}: React.ComponentProps<"div"> & { inset?: "default" | "none" }) {
   return (
     <div
       className={cn(
-        "relative flex w-full min-w-0 flex-col p-[var(--sidebar-content-inset)]",
+        "relative flex w-full min-w-0 flex-col",
+        inset === "none" ? "p-0" : "p-[var(--sidebar-content-inset)]",
         className,
       )}
       data-sidebar="group"
@@ -725,6 +730,8 @@ const sidebarMenuButtonVariants = cva(
       },
       variant: {
         default: "font-medium text-sidebar-muted-foreground/80",
+        transparent:
+          "font-medium text-sidebar-muted-foreground/80 hover:bg-transparent active:bg-transparent data-[active=true]:bg-transparent data-[state=open]:hover:bg-transparent",
         outline: "bg-sidebar-control-surface ring-1 ring-sidebar-border",
       },
     },

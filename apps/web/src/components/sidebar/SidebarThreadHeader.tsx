@@ -11,11 +11,17 @@ import { cn } from "~/lib/utils";
 import { Button } from "../ui/button";
 import { SidebarInput, SidebarMenuButton } from "../ui/sidebar";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import {
+  ActiveSubagentsToggle,
+  InactiveThreadsToggle,
+  PinnedThreadsToggle,
+} from "./ActiveSubagentThreads";
 
 export interface SidebarThreadHeaderProps {
   searchFieldRef?: RefObject<HTMLDivElement | null>;
   hasProjects: boolean;
   projectScope: ReactNode;
+  activityCounts?: ReactNode;
   onNewProject: () => void;
   onNewThread: (event: ReactMouseEvent) => void;
   newThreadDisabled: boolean;
@@ -36,6 +42,7 @@ export function SidebarThreadHeader({
   searchFieldRef,
   hasProjects,
   projectScope,
+  activityCounts,
   onNewProject,
   onNewThread,
   newThreadDisabled,
@@ -102,6 +109,10 @@ export function SidebarThreadHeader({
         ) : null}
       </div>
       <div className="flex shrink-0 items-center">
+        {activityCounts}
+        <ActiveSubagentsToggle />
+        <InactiveThreadsToggle />
+        <PinnedThreadsToggle />
         {hasProjects ? (
           <>
             {projectScope}
