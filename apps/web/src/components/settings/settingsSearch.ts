@@ -20,6 +20,7 @@ export type SettingsPath =
   | "/settings/general"
   | "/settings/diagnostics"
   | "/settings/appearance"
+  | "/settings/ajpemok"
   | "/settings/chat"
   | "/settings/diffs"
   | "/settings/keybindings"
@@ -88,6 +89,7 @@ export const SETTINGS_SECTION_LABELS: Readonly<Record<SettingsPath, string>> = {
   "/settings/projects": "Projects",
   "/settings/general": "General",
   "/settings/appearance": "Appearance",
+  "/settings/ajpemok": "A3 Fork",
   "/settings/chat": "Chat",
   "/settings/diffs": "Diffs & pull requests",
   "/settings/keybindings": "Keybindings",
@@ -121,6 +123,7 @@ export const SETTINGS_NAV_GROUPS: ReadonlyArray<{
       "/settings/diffs",
       "/settings/keybindings",
       "/settings/snap-shot",
+      "/settings/ajpemok",
     ],
   },
   {
@@ -711,68 +714,88 @@ export const SETTINGS_SEARCH_ITEMS = [
   {
     id: "legacy-context-window-indicator",
     title: "Context and Token Usage",
-    to: "/settings/chat",
+    to: "/settings/ajpemok",
     searchTerms: ["composer meter usage tokens circle old"],
   },
   {
     id: "legacy-sidebar",
     title: "Project Sections",
-    to: "/settings/appearance",
+    to: "/settings/ajpemok",
     searchTerms: ["project thread tree group collapse active inactive flat list legacy"],
   },
   {
     id: "ajpemok-header-scene",
     title: "Header Scene",
-    to: "/settings/appearance",
+    to: "/settings/ajpemok",
     searchTerms: ["Sydney harbour copper skyline background image sidebar"],
   },
   {
     id: "sidebar-recent-section",
     title: "Recent Section",
-    to: "/settings/appearance",
+    to: "/settings/ajpemok",
     searchTerms: ["recent finished completed previous last history"],
   },
   {
     id: "sidebar-keep-recent",
     title: "Keep Recent Threads Visible",
-    to: "/settings/appearance",
+    to: "/settings/ajpemok",
     searchTerms: ["hide inactive project list disappear finish retention recent"],
   },
   {
     id: "sidebar-recent-subagents",
     title: "Include Recent Subagents",
-    to: "/settings/appearance",
+    to: "/settings/ajpemok",
     searchTerms: ["recent finished children agents subagents"],
   },
   {
     id: "sidebar-recent-count",
     title: "Recent Thread Count",
-    to: "/settings/appearance",
+    to: "/settings/ajpemok",
     searchTerms: ["last N five 5 recent limit maximum"],
   },
   {
     id: "sidebar-recent-age",
     title: "Recent Thread Age Limit",
-    to: "/settings/appearance",
+    to: "/settings/ajpemok",
     searchTerms: ["recent minutes hour duration time age unlimited"],
   },
   {
     id: "sidebar-pinned-only",
     title: "Pinned Threads Only",
-    to: "/settings/appearance",
+    to: "/settings/ajpemok",
     searchTerms: ["sidebar project sections pins filter hide unpinned active"],
   },
   {
     id: "sidebar-active-subagents",
     title: "Subagents",
-    to: "/settings/appearance",
+    to: "/settings/ajpemok",
     searchTerms: ["sidebar children delegated running threads agents show active hide visible"],
   },
   {
     id: "ajpemok-header-motion",
     title: "Header Effects",
-    to: "/settings/appearance",
+    to: "/settings/ajpemok",
     searchTerms: ["hover idle animation motion sweep sidebar"],
+  },
+  {
+    id: "sidebar-hide-inactive",
+    title: "Hide Inactive",
+    to: "/settings/ajpemok",
+    searchTerms: ["sidebar project threads active filter running hide idle"],
+  },
+  {
+    id: "sidebar-visible-subagents",
+    title: "Visible Subagents",
+    to: "/settings/ajpemok",
+    searchTerms: ["sidebar children count preview limit show more"],
+  },
+  {
+    id: "ajpemok-improvements",
+    title: "Included Improvements",
+    to: "/settings/ajpemok",
+    searchTerms: [
+      "custom fork features project colours model badges capacity retries inactive tabs capture",
+    ],
   },
   {
     id: "keybindings",
@@ -928,9 +951,15 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["browser preview keyboard shortcuts keystrokes overlay capture"],
   },
   {
+    id: "browser-recording-mouse-presses",
+    title: "Show mouse presses in recordings",
+    to: "/settings/browser",
+    searchTerms: ["browser preview clicks held buttons overlay capture"],
+  },
+  {
     id: "browser-recording-pointer",
     title: "Recording Pointer",
-    to: "/settings/browser",
+    to: "/settings/ajpemok",
     searchTerms: [
       "custom cursor pointer image PNG SVG WebP hotspot click halo colour size tutorial video capture show mouse presses held buttons drag",
     ],
@@ -1198,6 +1227,7 @@ const SETTINGS_CATEGORY_SCOPES: Readonly<Record<SettingsPath, SettingsSearchScop
   "/settings/projects": "project",
   "/settings/general": null,
   "/settings/appearance": null,
+  "/settings/ajpemok": null,
   "/settings/chat": null,
   "/settings/diffs": null,
   "/settings/snap-shot": null,
@@ -1225,12 +1255,17 @@ const RENAMED_SETTINGS_PATHS: Readonly<Record<string, SettingsPath>> = {
 const SPLIT_SETTINGS_PATHS: ReadonlySet<string> = new Set([
   "/settings/general",
   "/settings/appearance",
+  "/settings/chat",
+  "/settings/browser",
+  "/settings/labs",
   "/settings/source-control",
   "/settings/connections",
   ...Object.keys(RENAMED_SETTINGS_PATHS),
 ]);
 // Section anchors that moved but are not search results themselves.
 const MOVED_SECTION_ANCHORS: Readonly<Record<string, SettingsPath>> = {
+  "ajpemok-sidebar": "/settings/ajpemok",
+  "recent-threads": "/settings/ajpemok",
   "authorized-clients": "/settings/access",
   "legacy-features": "/settings/labs",
   "text-generation": "/settings/threads",
