@@ -153,7 +153,10 @@ import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 import * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
 
 const CODEX_PROVIDER = ProviderDriverKind.make("codex");
-const CODEX_CAPACITY_MAX_RETRIES = 5;
+const CODEX_CAPACITY_RETRY_DELAYS_MS = [
+  2_000, 4_000, 8_000, 16_000, 30_000, 60_000, 120_000, 180_000, 240_000, 480_000, 960_000,
+];
+const CODEX_CAPACITY_MAX_RETRIES = CODEX_CAPACITY_RETRY_DELAYS_MS.length;
 export const CODEX_DRIVER_KIND = CODEX_PROVIDER;
 export const CODEX_DEFAULT_INSTANCE_ID = defaultInstanceIdForDriver(CODEX_DRIVER_KIND);
 
@@ -6189,8 +6192,10 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
             Effect.gen(function* () {
               if ((yield* Ref.get(activeTurns)).get(terminal.nativeTurnId) !== context) return true;
               if (context.capacityRetryPending !== undefined) return true;
+              const retryDelayMs =
+                CODEX_CAPACITY_RETRY_DELAYS_MS[context.capacityRetryAttempt ?? 0];
               if (
-                (context.capacityRetryAttempt ?? 0) >= CODEX_CAPACITY_MAX_RETRIES ||
+                retryDelayMs === undefined ||
                 (yield* Ref.get(interruptingNativeTurns)).has(terminal.nativeTurnId)
               )
                 return false;
@@ -6199,7 +6204,6 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
               context.capacityRetryAttempt = attempt;
               const pending = yield* Deferred.make<ActiveCodexTurnContext | undefined>();
               context.capacityRetryPending = pending;
-              const retryDelayMs = Math.min(2_000 * 2 ** (attempt - 1), 30_000);
               const now = yield* DateTime.now;
               const previous = (yield* Ref.get(providerRetries)).get(context.providerTurnId);
               const state: ActiveCodexProviderRetry = {
