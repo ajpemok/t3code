@@ -47,6 +47,9 @@ const PREVIEW_FORWARDED_LAYOUT_COMMANDS = [
   "workspace.focusNext",
   "workspace.focusPrevious",
   "sidebar.toggle",
+  "sidebar.toggleInactive",
+  "sidebar.togglePinnedOnly",
+  "sidebar.toggleSubagents",
   "rightPanel.toggle",
   "rightPanel.toggleMaximized",
 ] as const;

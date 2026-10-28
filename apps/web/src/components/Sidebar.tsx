@@ -1,4 +1,9 @@
 import { attachSidebarTree, SIDEBAR_TREE_PROPS } from "../lib/sidebarTree";
+import { useRecentThreads } from "~/hooks/useRecentThreads";
+import { RecentThreadsShelf } from "./sidebar/RecentThreadsShelf";
+import { projectTintColor } from "~/projectIdentity";
+import { sidebarMainThreadFilter } from "./Sidebar.logic";
+import { SidebarActivityCounts } from "./sidebar/SidebarActivityCounts";
 import { type EnvironmentId, type ScopedProjectRef } from "@t3tools/contracts";
 import type { EnvironmentServerConfig } from "@t3tools/client-runtime/connection";
 import { ThreadContextDragGhost } from "./chat/ThreadContextDragGhost";
@@ -240,6 +245,7 @@ import { SidebarChromeFooter, SidebarChromeHeader } from "./sidebar/SidebarChrom
 import { SidebarHeaderIconButton, SidebarThreadHeader } from "./sidebar/SidebarThreadHeader";
 import { TooltipProvider } from "./ui/tooltip";
 import { composerDraftHasUserContent, DraftId, useComposerDraftStore } from "../composerDraftStore";
+import { useCloseInactiveProjectTabs } from "../hooks/useCloseInactiveProjectTabs";
 import { useThreadRouteTarget } from "../hooks/useThreadRouteTarget";
 import {
   SidebarSearchResultRow,
@@ -410,6 +416,10 @@ function useSidebarThreads(input: {
     routeRowThreadKey,
     folderGroups,
   } = input;
+  const hideInactive = useClientSettings((settings) => settings.sidebarHideInactiveEnabled);
+  const pinnedOnly = useClientSettings((settings) => settings.sidebarPinnedOnlyEnabled);
+  const recent = useRecentThreads();
+  const { retainedKeys } = recent;
   // Folders already separate the work, so boring mode has no Working shelf.
   const workingShelfEnabled =
     useClientSettings((s) => s.sidebarWorkingShelfEnabled) && folderGroups === null;
@@ -458,8 +468,14 @@ function useSidebarThreads(input: {
     clockKey: `${nowMinute}:${snoozeWakeClock}:${inboxReturnsVersion}`,
   });
 
-  const { pinnedThreads, activeThreads, workingThreads, snoozedThreads, settledThreads } =
-    partition;
+  const { snoozedThreads, settledThreads } = partition;
+  const showMainThread = sidebarMainThreadFilter(
+    { hideInactive, pinnedOnly, recentKeys: retainedKeys },
+    threads,
+  );
+  const pinnedThreads = partition.pinnedThreads.filter(showMainThread);
+  const activeThreads = partition.activeThreads.filter(showMainThread);
+  const workingThreads = partition.workingThreads.filter(showMainThread);
   // Older settled threads load in pages; the shelf lists them only as far as they are loaded.
   const olderSettledShelf = useOlderSettledShelf({
     scopes: olderSettledScopes([...serverConfigs.keys()], scopedProjectKeys),
@@ -533,6 +549,16 @@ function useSidebarThreads(input: {
   }
   return {
     ...partition,
+    hasRecentThreads:
+      recent.showSection &&
+      recent.entries.some(
+        ({ thread }) =>
+          scopedProjectKeys === null ||
+          scopedProjectKeys.has(`${thread.environmentId}:${thread.projectId}`),
+      ),
+    workingThreads,
+    pinnedThreads,
+    activeThreads,
     threads,
     workingShelfEnabled,
     searchableThreads: [
@@ -1223,6 +1249,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   );
 
   const {
+    hasRecentThreads,
     workingShelfEnabled,
     pinnedThreads,
     draggableThreadKeys,
@@ -1271,6 +1298,11 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
         ? projectGroups
         : scopedProjectGroups
       : null,
+  });
+
+  const inactiveTabs = useCloseInactiveProjectTabs({
+    threads,
+    selectedThreadKey: routeThreadRef ? scopedThreadKey(routeThreadRef) : null,
   });
 
   // Ranked across environments as the palette ranks them, so one
@@ -2526,6 +2558,8 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
         const clicked = await settlePromise(() =>
           api.contextMenu.show(
             buildThreadActionMenuItems({
+              inactiveTabCount: inactiveTabs.getInactiveTabCount(threadRef),
+              closingInactiveTabs: inactiveTabs.pending,
               canOperate: readEnvironmentScope(
                 threadRef.environmentId,
                 AuthOrchestrationOperateScope,
@@ -2575,6 +2609,9 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
           return;
         }
         switch (clicked.value) {
+          case "close-inactive-tabs":
+            await inactiveTabs.closeInactiveTabs(threadRef);
+            return;
           case "filter-by-project":
             if (threadProjectGroup) {
               setProjectScopeKeys(
@@ -2861,6 +2898,17 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
         fixedHeader={
           <SidebarGroup className="z-[1]">
             <SidebarThreadHeader
+              activityCounts={
+                <SidebarActivityCounts
+                  threads={
+                    scopedProjectKeys === null
+                      ? threads
+                      : threads.filter((thread) =>
+                          scopedProjectKeys.has(`${thread.environmentId}:${thread.projectId}`),
+                        )
+                  }
+                />
+              }
               searchFieldRef={headerSearchRef}
               hasProjects={projectGroups.length > 0}
               projectScope={
@@ -2982,6 +3030,8 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                         return (
                           <ComboboxItem
                             key={item.value}
+                            variant={project ? "project" : "default"}
+                            data-project-color={projectTintColor(project)}
                             hideIndicator
                             value={item}
                             aria-selected={isSelected}
@@ -3050,7 +3100,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
           </SidebarGroup>
         }
       >
-        <SidebarGroup className="flex-1" role="presentation">
+        <SidebarGroup className="flex-1" inset="none" role="presentation">
           {isSearchingThreads ? (
             threadSearchResults.length > 0 ? (
               <TooltipProvider
@@ -3454,6 +3504,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
           ) : null}
           {!isSearchingThreads &&
           !hasProjectFolders &&
+          !hasRecentThreads &&
           visibleDraftSessionCount === 0 &&
           pinnedThreads.length +
             activeThreads.length +
@@ -3484,6 +3535,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
             </div>
           ) : null}
         </SidebarGroup>
+        {!isSearchingThreads ? <RecentThreadsShelf scopedProjectKeys={scopedProjectKeys} /> : null}
       </SidebarContent>
       <SidebarChromeFooter
         showUndoNotice={isSearchingThreads || sidebarListItemsFresh.length === 0}
