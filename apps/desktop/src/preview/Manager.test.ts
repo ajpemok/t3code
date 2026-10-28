@@ -1044,6 +1044,7 @@ describe("PreviewManager", () => {
     const detachListeners = new Set<() => void>();
     let chromiumDetaches = 0;
     let destroyed = false;
+    let zoomFactor = 1;
     const wc = {
       id,
       isDestroyed: () => destroyed,
@@ -1055,8 +1056,10 @@ describe("PreviewManager", () => {
       getURL: () => "http://localhost:5173/README.md",
       getTitle: () => "README.md",
       isLoadingMainFrame: () => true,
-      getZoomFactor: () => 1,
-      setZoomFactor: vi.fn(),
+      getZoomFactor: () => zoomFactor,
+      setZoomFactor: vi.fn((value: number) => {
+        zoomFactor = value;
+      }),
       setAudioMuted: vi.fn(),
       isCurrentlyAudible: () => false,
       on: vi.fn(),
@@ -1100,6 +1103,412 @@ describe("PreviewManager", () => {
       },
     };
   };
+
+  effectIt.effect(
+    "applies logical fixed viewports at the guest's actual zoom and clears them for Fill",
+    () =>
+      withManager((manager) =>
+        Effect.gen(function* () {
+          const guest = makeAttachingGuest(42);
+          fromId.mockReturnValue(guest.wc);
+          const states: PreviewManager.PreviewTabState[] = [];
+          yield* manager.subscribeStateChanges((_tabId, state) =>
+            Effect.sync(() => {
+              states.push(state);
+            }),
+          );
+          yield* manager.createTab("tab_viewport", { zoomFactor: 0.5 });
+          yield* manager.setViewport("tab_viewport", { width: 1024, height: 768 });
+          yield* manager.registerWebview("tab_viewport", 42);
+          yield* manager.setViewport("tab_viewport", { width: 1024, height: 768 });
+          const metricsCalls = () =>
+            guest.sendCommand.mock.calls.filter(
+              ([method]) => method === "Emulation.setDeviceMetricsOverride",
+            );
+          expect(metricsCalls()).toEqual([
+            [
+              "Emulation.setDeviceMetricsOverride",
+              {
+                width: 512,
+                height: 384,
+                deviceScaleFactor: 0,
+                mobile: false,
+              },
+            ],
+          ]);
+          yield* manager.setViewport("tab_viewport", { width: 1024, height: 768 });
+          expect(metricsCalls()).toHaveLength(1);
+
+          guest.wc.setZoomFactor(0.8);
+          yield* manager.setViewport("tab_viewport", { width: 844, height: 390 });
+          expect(metricsCalls().at(-1)?.[1]).toEqual({
+            width: 675,
+            height: 312,
+            deviceScaleFactor: 0,
+            mobile: false,
+          });
+          yield* manager.setZoomFactor("tab_viewport", 1.25);
+          expect(metricsCalls().at(-1)?.[1]).toEqual({
+            width: 1055,
+            height: 488,
+            deviceScaleFactor: 0,
+            mobile: false,
+          });
+          vi.spyOn(guest.wc, "getZoomFactor").mockImplementation(() => {
+            throw new Error("zoom unavailable");
+          });
+          yield* manager.setViewport("tab_viewport", null);
+          yield* manager.setViewport("tab_viewport", null);
+          yield* manager.zoomOut("tab_viewport");
+          expect(metricsCalls()).toHaveLength(3);
+          expect(
+            guest.sendCommand.mock.calls.filter(
+              ([method]) => method === "Emulation.clearDeviceMetricsOverride",
+            ),
+          ).toHaveLength(1);
+          expect(states.every((state) => state.controller === "none")).toBe(true);
+
+          const replacement = makeAttachingGuest(43);
+          fromId.mockReturnValue(replacement.wc);
+          yield* manager.registerWebview("tab_viewport", 43);
+          yield* manager.setViewport("tab_viewport", null);
+          expect(replacement.sendCommand).toHaveBeenCalledWith(
+            "Emulation.clearDeviceMetricsOverride",
+          );
+          expect(
+            replacement.sendCommand.mock.calls.some(
+              ([method]) => method === "Emulation.setDeviceMetricsOverride",
+            ),
+          ).toBe(false);
+        }),
+      ),
+  );
+
+  effectIt.effect(
+    "restores a fixed viewport after app zoom, guest replacement and debugger reattachment",
+    () =>
+      withManager((manager) =>
+        Effect.gen(function* () {
+          const guest = makeAttachingGuest(42);
+          fromId.mockReturnValue(guest.wc);
+          yield* manager.createTab("tab_viewport_restore", { zoomFactor: 0.8 });
+          yield* manager.registerWebview("tab_viewport_restore", 42);
+          yield* manager.setViewport("tab_viewport_restore", { width: 1024, height: 768 });
+          guest.wc.setZoomFactor(1.25);
+          yield* manager.reapplyZoom();
+          expect(guest.wc.getZoomFactor()).toBe(0.8);
+          expect(
+            guest.sendCommand.mock.calls.filter(
+              ([method]) => method === "Emulation.setDeviceMetricsOverride",
+            ),
+          ).toHaveLength(1);
+
+          const replacement = makeAttachingGuest(43);
+          const restored = Promise.withResolvers<void>();
+          replacement.sendCommand.mockImplementation(async (method) => {
+            if (method === "Emulation.setDeviceMetricsOverride") restored.resolve();
+          });
+          fromId.mockReturnValue(replacement.wc);
+          yield* manager.registerWebview("tab_viewport_restore", 43);
+          yield* Effect.promise(() => restored.promise);
+          expect(replacement.sendCommand).toHaveBeenCalledWith(
+            "Emulation.setDeviceMetricsOverride",
+            {
+              width: 819,
+              height: 614,
+              deviceScaleFactor: 0,
+              mobile: false,
+            },
+          );
+
+          const reattached = Promise.withResolvers<void>();
+          replacement.sendCommand.mockImplementation(async (method) => {
+            if (method === "Emulation.setDeviceMetricsOverride") reattached.resolve();
+          });
+          replacement.chromiumDetach();
+          yield* Effect.promise(() => reattached.promise);
+          expect(replacement.attach).toHaveBeenCalledTimes(2);
+          expect(
+            replacement.sendCommand.mock.calls.filter(
+              ([method]) => method === "Emulation.setDeviceMetricsOverride",
+            ),
+          ).toHaveLength(2);
+        }),
+      ),
+  );
+
+  effectIt.effect("restores the previous viewport when a resize or Fill command rejects", () =>
+    withManager((manager) =>
+      Effect.gen(function* () {
+        const guest = makeAttachingGuest(42);
+        let nativeViewport: unknown = null;
+        guest.sendCommand.mockImplementation(async (method, params) => {
+          if (method === "Emulation.setDeviceMetricsOverride") nativeViewport = params;
+          if (method === "Emulation.clearDeviceMetricsOverride") nativeViewport = null;
+          if (
+            method === "Emulation.setDeviceMetricsOverride" &&
+            (params as { width: number }).width === 1024
+          )
+            throw new Error("resize rejected");
+          if (method === "Emulation.clearDeviceMetricsOverride") throw new Error("clear rejected");
+        });
+        fromId.mockReturnValue(guest.wc);
+        yield* manager.createTab("tab_viewport_failure");
+        yield* manager.registerWebview("tab_viewport_failure", 42);
+        yield* manager.setViewport("tab_viewport_failure", { width: 390, height: 844 });
+        expect(
+          Exit.isFailure(
+            yield* manager
+              .setViewport("tab_viewport_failure", { width: 1024, height: 768 })
+              .pipe(Effect.exit),
+          ),
+        ).toBe(true);
+        expect(nativeViewport).toEqual({
+          width: 390,
+          height: 844,
+          deviceScaleFactor: 0,
+          mobile: false,
+        });
+        expect(
+          Exit.isFailure(
+            yield* manager.setViewport("tab_viewport_failure", null).pipe(Effect.exit),
+          ),
+        ).toBe(true);
+        expect(nativeViewport).toEqual({
+          width: 390,
+          height: 844,
+          deviceScaleFactor: 0,
+          mobile: false,
+        });
+
+        const replacement = makeAttachingGuest(43);
+        const restored = Promise.withResolvers<void>();
+        replacement.sendCommand.mockImplementation(async (method) => {
+          if (method === "Emulation.setDeviceMetricsOverride") restored.resolve();
+        });
+        fromId.mockReturnValue(replacement.wc);
+        yield* manager.registerWebview("tab_viewport_failure", 43);
+        yield* Effect.promise(() => restored.promise);
+        expect(replacement.sendCommand).toHaveBeenCalledWith("Emulation.setDeviceMetricsOverride", {
+          width: 390,
+          height: 844,
+          deviceScaleFactor: 0,
+          mobile: false,
+        });
+      }),
+    ),
+  );
+
+  effectIt.effect(
+    "keeps the last viewport through a failed debugger setup and retries registration",
+    () =>
+      withManager((manager) =>
+        Effect.gen(function* () {
+          const guest = makeAttachingGuest(42);
+          fromId.mockReturnValue(guest.wc);
+          yield* manager.createTab("tab_viewport_setup_failure");
+          yield* manager.registerWebview("tab_viewport_setup_failure", 42);
+          yield* manager.setViewport("tab_viewport_setup_failure", { width: 390, height: 844 });
+          const replacement = makeAttachingGuest(43);
+          const setupFailed = Promise.withResolvers<void>();
+          replacement.sendCommand.mockImplementationOnce(async () => {
+            setupFailed.resolve();
+            throw new Error("debugger setup rejected");
+          });
+          fromId.mockReturnValue(replacement.wc);
+          yield* manager.registerWebview("tab_viewport_setup_failure", 43);
+          yield* Effect.promise(() => setupFailed.promise);
+          const restored = Promise.withResolvers<void>();
+          replacement.sendCommand.mockImplementation(async (method) => {
+            if (method === "Emulation.setDeviceMetricsOverride") restored.resolve();
+          });
+          yield* manager.registerWebview("tab_viewport_setup_failure", 43);
+          yield* Effect.promise(() => restored.promise);
+          expect(replacement.sendCommand).toHaveBeenCalledWith(
+            "Emulation.setDeviceMetricsOverride",
+            {
+              width: 390,
+              height: 844,
+              deviceScaleFactor: 0,
+              mobile: false,
+            },
+          );
+        }),
+      ),
+  );
+
+  effectIt.effect("serialises overlapping native resizes so a delayed command cannot win", () =>
+    withManager((manager) =>
+      Effect.gen(function* () {
+        const guest = makeAttachingGuest(42);
+        fromId.mockReturnValue(guest.wc);
+        yield* manager.createTab("tab_viewport_race");
+        yield* manager.registerWebview("tab_viewport_race", 42);
+        const started = Promise.withResolvers<void>();
+        const release = Promise.withResolvers<void>();
+        let nativeViewport: unknown = null;
+        guest.sendCommand.mockImplementation(async (method, params) => {
+          if (method !== "Emulation.setDeviceMetricsOverride") return;
+          if ((params as { width: number }).width === 1024) {
+            started.resolve();
+            await release.promise;
+          }
+          nativeViewport = params;
+        });
+        const first = yield* manager
+          .setViewport("tab_viewport_race", { width: 1024, height: 768 })
+          .pipe(Effect.forkChild({ startImmediately: true }));
+        yield* Effect.promise(() => started.promise);
+        const second = yield* manager
+          .setViewport("tab_viewport_race", { width: 1440, height: 900 })
+          .pipe(Effect.forkChild({ startImmediately: true }));
+        release.resolve();
+        yield* Fiber.join(first);
+        yield* Fiber.join(second);
+        expect(nativeViewport).toEqual({
+          width: 1440,
+          height: 900,
+          deviceScaleFactor: 0,
+          mobile: false,
+        });
+        yield* manager.setViewport("tab_viewport_race", null);
+        yield* manager.closeTab("tab_viewport_race");
+        yield* manager.createTab("tab_viewport_race");
+        expect(
+          Exit.isFailure(yield* manager.setViewport("missing_tab", null).pipe(Effect.exit)),
+        ).toBe(true);
+        const replacement = makeAttachingGuest(43);
+        fromId.mockReturnValue(replacement.wc);
+        yield* manager.registerWebview("tab_viewport_race", 43);
+        yield* manager.setColorScheme("tab_viewport_race", "dark");
+        expect(
+          replacement.sendCommand.mock.calls.some(
+            ([method]) =>
+              method === "Emulation.setDeviceMetricsOverride" ||
+              method === "Emulation.clearDeviceMetricsOverride",
+          ),
+        ).toBe(false);
+      }),
+    ),
+  );
+
+  effectIt.effect("bounds a stalled native viewport command and releases later resizes", () =>
+    withManager((manager) =>
+      Effect.gen(function* () {
+        const guest = makeAttachingGuest(42);
+        fromId.mockReturnValue(guest.wc);
+        yield* manager.createTab("tab_viewport_timeout");
+        yield* manager.registerWebview("tab_viewport_timeout", 42);
+        yield* manager.setViewport("tab_viewport_timeout", { width: 390, height: 844 });
+        const started = Promise.withResolvers<void>();
+        guest.sendCommand.mockImplementation(async (method, params) => {
+          if (
+            method === "Emulation.setDeviceMetricsOverride" &&
+            (params as { width: number }).width === 1024
+          ) {
+            started.resolve();
+            return new Promise<never>(() => {});
+          }
+        });
+        const stalled = yield* manager
+          .setViewport("tab_viewport_timeout", { width: 1024, height: 768 })
+          .pipe(Effect.forkChild({ startImmediately: true }));
+        yield* Effect.promise(() => started.promise);
+        yield* TestClock.adjust("2 seconds");
+        expect(Exit.isFailure(yield* Fiber.await(stalled))).toBe(true);
+        expect(guest.sendCommand.mock.calls.at(-1)).toEqual([
+          "Emulation.setDeviceMetricsOverride",
+          {
+            width: 390,
+            height: 844,
+            deviceScaleFactor: 0,
+            mobile: false,
+          },
+        ]);
+        yield* manager.setViewport("tab_viewport_timeout", { width: 1440, height: 900 });
+        expect(guest.sendCommand.mock.calls.at(-1)?.[1]).toEqual({
+          width: 1440,
+          height: 900,
+          deviceScaleFactor: 0,
+          mobile: false,
+        });
+      }),
+    ),
+  );
+
+  effectIt.effect("preserves a colour choice made while a replacement viewport is restored", () =>
+    withManager((manager) =>
+      Effect.gen(function* () {
+        const first = makeAttachingGuest(42);
+        const firstMedia = Promise.withResolvers<void>();
+        first.sendCommand.mockImplementation(async (method) => {
+          if (method === "Emulation.setEmulatedMedia") firstMedia.resolve();
+        });
+        fromId.mockReturnValue(first.wc);
+        yield* manager.createTab("tab_viewport_colour", { colorScheme: "dark" });
+        yield* manager.registerWebview("tab_viewport_colour", 42);
+        yield* Effect.promise(() => firstMedia.promise);
+        yield* manager.setViewport("tab_viewport_colour", { width: 390, height: 844 });
+
+        const replacement = makeAttachingGuest(43);
+        const restoring = Promise.withResolvers<void>();
+        const release = Promise.withResolvers<void>();
+        const restored = Promise.withResolvers<void>();
+        const nativeColours: string[] = [];
+        replacement.sendCommand.mockImplementation(async (method, params) => {
+          if (method === "Emulation.setDeviceMetricsOverride") {
+            restoring.resolve();
+            await release.promise;
+          }
+          if (method === "Emulation.setEmulatedMedia") {
+            nativeColours.push(
+              (params as { features: Array<{ value: string }> }).features[0]!.value,
+            );
+            if (nativeColours.length === 2) restored.resolve();
+          }
+        });
+        fromId.mockReturnValue(replacement.wc);
+        yield* manager.registerWebview("tab_viewport_colour", 43);
+        yield* Effect.promise(() => restoring.promise);
+        yield* manager.setColorScheme("tab_viewport_colour", "light");
+        expect(nativeColours).toEqual(["light"]);
+        release.resolve();
+        yield* Effect.promise(() => restored.promise);
+        expect(nativeColours).toEqual(["light", "light"]);
+      }),
+    ),
+  );
+
+  effectIt.effect("sets the opaque base as soon as a guest attaches", () =>
+    withManager((manager) =>
+      Effect.gen(function* () {
+        const claimed = makeAttachingGuest(44);
+        fromId.mockReturnValue(claimed.wc);
+        yield* manager.prepareWebview(claimed.wc);
+        expect(claimed.attach).toHaveBeenCalledTimes(1);
+        expect(claimed.sendCommand.mock.calls[0]).toEqual([
+          "Emulation.setDefaultBackgroundColorOverride",
+          { color: { r: 255, g: 255, b: 255, a: 1 } },
+        ]);
+
+        yield* manager.createTab("tab_early");
+        yield* manager.registerWebview("tab_early", 44);
+        yield* manager.setColorScheme("tab_early", "dark");
+        expect(claimed.attach).toHaveBeenCalledTimes(1);
+        expect(claimed.sendCommand).toHaveBeenCalledWith("Emulation.setEmulatedMedia", {
+          features: [{ name: "prefers-color-scheme", value: "dark" }],
+        });
+
+        const unclaimed = makeAttachingGuest(45);
+        yield* manager.prepareWebview(unclaimed.wc);
+        expect(unclaimed.attach).toHaveBeenCalledTimes(1);
+        unclaimed.destroy();
+        yield* Effect.yieldNow;
+        expect(unclaimed.detach).toHaveBeenCalledTimes(1);
+        expect(claimed.detach).not.toHaveBeenCalled();
+      }),
+    ),
+  );
 
   effectIt.effect("reattaches a debugger that Chromium dropped on its own", () =>
     withManager((manager) =>
@@ -1679,6 +2088,49 @@ describe("PreviewManager", () => {
         expect(host.session.setDisplayMediaRequestHandler).not.toHaveBeenCalled();
       }),
     ),
+  );
+
+  effectIt.effect.each([{ viewport: null }, { viewport: { width: 1280, height: 800 } }])(
+    "restores native viewport intent after capture changes Chromium emulation (%s)",
+    ({ viewport }) =>
+      Effect.gen(function* () {
+        const host = yield* DesktopBrowserHost.DesktopBrowserHost;
+        using attached = vi.spyOn(host, "attach");
+        const wc = makeTestPreviewWebContents(async () => ({
+          toJPEG: () => Buffer.from("jpeg"),
+          getSize: () => ({ width: 100, height: 80 }),
+        }));
+        Object.assign(wc, { isDevToolsOpened: () => false, getUserAgent: () => "Electron" });
+        let debuggerAttached = false;
+        wc.debugger.isAttached = () => debuggerAttached;
+        wc.debugger.attach = () => {
+          debuggerAttached = true;
+        };
+        let emulatedWidth: number | null = null;
+        wc.debugger.sendCommand = vi.fn(
+          async (method: string, params?: Record<string, unknown>) => {
+            if (method === "Emulation.setDeviceMetricsOverride")
+              emulatedWidth = Number(params?.width);
+            if (method === "Emulation.clearDeviceMetricsOverride") emulatedWidth = null;
+            if (method === "Page.captureScreenshot") {
+              emulatedWidth = 400;
+              return { data: "fixture" };
+            }
+            return {};
+          },
+        );
+        fromId.mockReturnValue(wc);
+        const manager = yield* PreviewManager.PreviewManager;
+        yield* manager.createTab("capture-viewport", {
+          serverTab: { threadId: "thread-1", tabId: "server-tab-1" },
+        });
+        yield* manager.registerWebview("capture-viewport", wc.id);
+        yield* manager.setViewport("capture-viewport", viewport);
+        const capture = attached.mock.calls.at(-1)?.[1].captureScreenshot;
+        expect(capture).toBeDefined();
+        yield* Effect.promise(() => capture!({ format: "png" }));
+        expect(emulatedWidth).toBe(viewport?.width ?? null);
+      }).pipe(Effect.provide(managerLayer()), Effect.scoped),
   );
 
   effectIt.effect("tells the server when a tab it renders natively closes", () =>

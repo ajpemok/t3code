@@ -1,10 +1,11 @@
 import type {
   DesktopPreviewColorScheme,
+  DesktopPreviewViewport,
   PreviewViewportSetting,
   ScopedThreadRef,
 } from "@t3tools/contracts";
 import { useShallow } from "zustand/react/shallow";
-import { useEffect, useEffectEvent, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from "react";
 
 import { previewBridge } from "~/components/preview/previewBridge";
 import { usePreviewBridge } from "~/components/preview/usePreviewBridge";
@@ -78,6 +79,7 @@ export function HostedBrowserWebview(props: {
   const config = usePreviewWebviewConfig(threadRef.environmentId, profileId);
   const [initialSrc] = useState(() => initialUrl ?? "about:blank");
   const tabLeaseRef = useRef<AcquiredDesktopTab | null>(null);
+  const guestViewportRef = useRef<DesktopPreviewViewport>(null);
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const webviewRef = useRef<ElectronWebview | null>(null);
   const crashRecoveryRef = useRef<WebviewCrashRecoveryState>(INITIAL_WEBVIEW_CRASH_RECOVERY_STATE);
@@ -162,6 +164,8 @@ export function HostedBrowserWebview(props: {
           const webContentsId = webview.getWebContentsId();
           if (Number.isInteger(webContentsId) && webContentsId > 0) {
             await bridge.registerWebview(runtimeTabId, webContentsId);
+            if (disposed || webviewRef.current !== webview) return;
+            await bridge.setViewport?.(runtimeTabId, guestViewportRef.current);
           }
         } catch {}
       })();
@@ -247,6 +251,37 @@ export function HostedBrowserWebview(props: {
     deviceToolbarVisible,
     aspectRatio: lockedAspectRatio,
   });
+  const guestWidth = effectiveViewport._tag === "fill" ? null : effectiveViewport.width;
+  const guestHeight = effectiveViewport._tag === "fill" ? null : effectiveViewport.height;
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Keep guest reattachment callbacks aligned with the committed viewport.
+  useLayoutEffect(() => {
+    guestViewportRef.current =
+      guestWidth === null || guestHeight === null
+        ? null
+        : { width: guestWidth, height: guestHeight };
+  }, [guestWidth, guestHeight]);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Apply the measured viewport to the native guest after its lease is ready.
+  useEffect(() => {
+    const setViewport = previewBridge?.setViewport;
+    const lease = tabLeaseRef.current;
+    if (!clientSettingsHydrated || !setViewport || !lease) return;
+    let disposed = false;
+    void lease.ready
+      .then(async () => {
+        if (!disposed)
+          await setViewport(
+            runtimeTabId,
+            guestWidth === null || guestHeight === null
+              ? null
+              : { width: guestWidth, height: guestHeight },
+          );
+      })
+      .catch(() => undefined);
+    return () => {
+      disposed = true;
+    };
+  }, [clientSettingsHydrated, runtimeTabId, guestWidth, guestHeight]);
+
   const fittedSourceViewport =
     presentation.fitSourceContent && lastRect
       ? resolveFittedBrowserViewport(viewport, presentation.fittedSourceContent, layoutZoomFactor)

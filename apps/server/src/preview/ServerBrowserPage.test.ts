@@ -8,6 +8,7 @@ import {
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vite-plus/test";
 
 import * as ServerBrowserPage from "./ServerBrowserPage.ts";
+import { DEFAULT_BROWSER_RECORDING_POINTER } from "@t3tools/contracts";
 
 describe("server browser element refs", () => {
   let browser: Browser;
@@ -242,6 +243,73 @@ describe("server browser element refs", () => {
     );
     await ServerBrowserPage.click(page, { selector: 'button[data-example=" >> aria-ref=e1"]' });
     expect(await page.locator("button").textContent()).toBe("saved");
+  });
+
+  it("encodes the custom pointer at its hotspot in the first decoded video frame", async () => {
+    const imageDataUrl = await page.evaluate<string>(`(() => {
+      const canvas = document.createElement("canvas");
+      canvas.width = canvas.height = 32;
+      const context = canvas.getContext("2d");
+      context.fillStyle = "#ff00ff";
+      context.fillRect(0, 0, 32, 32);
+      return canvas.toDataURL();
+    })()`);
+    await page.evaluate(
+      ServerBrowserPage.recordingEncoderScript(
+        30,
+        {
+          ...DEFAULT_BROWSER_RECORDING_POINTER,
+          imageDataUrl,
+          size: 40,
+          hotspotX: 0.5,
+          hotspotY: 1,
+        },
+        false,
+      ),
+    );
+    const pixels = await page.evaluate<{ inside: number[]; below: number[] }>(`(async () => {
+      const recorder = window.__t3Recorder;
+      const canvas = document.createElement("canvas");
+      canvas.width = 320;
+      canvas.height = 240;
+      const context = canvas.getContext("2d");
+      context.fillStyle = "white";
+      context.fillRect(0, 0, 320, 240);
+      recorder.cursor(120, 80, false);
+      await recorder.frame(canvas.toDataURL("image/jpeg").split(",")[1], 320);
+      const metadata = await recorder.stop();
+      const chunks = [];
+      for (let index = 0; index < metadata.count; index++)
+        chunks.push(
+          Uint8Array.from(atob(await recorder.chunk(index)), (char) => char.charCodeAt(0)),
+        );
+      const video = document.createElement("video");
+      const url = URL.createObjectURL(new Blob(chunks, { type: metadata.mimeType }));
+      try {
+        await new Promise((resolve, reject) => {
+          video.addEventListener("loadeddata", () => resolve(), { once: true });
+          video.addEventListener("error", reject, { once: true });
+          video.src = url;
+        });
+        video.muted = true;
+        await new Promise((resolve, reject) => {
+          video.requestVideoFrameCallback(() => resolve());
+          void video.play().catch(reject);
+        });
+        video.pause();
+        context.drawImage(video, 0, 0);
+        return {
+          inside: [...context.getImageData(120, 60, 1, 1).data],
+          below: [...context.getImageData(120, 90, 1, 1).data],
+        };
+      } finally {
+        URL.revokeObjectURL(url);
+      }
+    })()`);
+    expect(pixels.inside[0]).toBeGreaterThan(200);
+    expect(pixels.inside[1]).toBeLessThan(80);
+    expect(pixels.inside[2]).toBeGreaterThan(200);
+    expect(pixels.below.slice(0, 3).every((value) => value > 200)).toBe(true);
   });
 });
 

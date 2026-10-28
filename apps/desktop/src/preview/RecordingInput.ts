@@ -1,6 +1,9 @@
+import type { BrowserRecordingPointer } from "@t3tools/contracts";
+
 export interface RecordingInputOptions {
   readonly showKeyPresses: boolean;
   readonly showMousePresses: boolean;
+  readonly pointer?: BrowserRecordingPointer | undefined;
 }
 
 export const DEFAULT_RECORDING_INPUT_OPTIONS: RecordingInputOptions = {

@@ -24,6 +24,7 @@ import * as Path from "effect/Path";
 import * as PubSub from "effect/PubSub";
 import * as Queue from "effect/Queue";
 import * as Stream from "effect/Stream";
+import * as TestClock from "effect/testing/TestClock";
 import type { BrowserContext, Page } from "playwright-core";
 import { beforeEach, expect, vi } from "vite-plus/test";
 
@@ -240,6 +241,9 @@ function makeEncoderPage() {
   const sandbox: Record<string, unknown> = {
     document: { createElement: () => canvas },
     Path2D: function Path2D() {},
+    Image: class {
+      decode = async () => {};
+    },
     MediaRecorder: FakeMediaRecorder,
     createImageBitmap: async () => ({ width: 1280, height: 800, close() {} }),
     atob,
@@ -433,6 +437,195 @@ it.live("preview_open reports its navigation timeout instead of the request budg
         timeoutMs: 15_000,
       });
       expect(error.message).toBe("Preview automation open timed out after 15000ms.");
+    }),
+  ).pipe(Effect.provide(layer)),
+);
+
+it.effect("a stalled tab request times out without disconnecting another agent", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const { broker, tabId } = yield* ready;
+      const otherScope = asSession("agent-b");
+      const other = yield* broker.invoke<PreviewAutomationStatus>({
+        scope: otherScope,
+        operation: "open",
+        input: { reuseExistingTab: false, open: false, url: "https://example.com/peer" },
+      });
+      const started = Promise.withResolvers<void>();
+      const finish = Promise.withResolvers<void>();
+      const page = contexts[0]!.page;
+      page.goto.mockImplementationOnce(() => {
+        started.resolve();
+        return finish.promise;
+      });
+      const pending = yield* broker
+        .invoke<PreviewAutomationStatus>({
+          scope,
+          tabId,
+          operation: "navigate",
+          input: { url: "https://example.com/stalled" },
+          timeoutMs: 2_000,
+        })
+        .pipe(Effect.flip, Effect.forkScoped);
+      yield* Effect.promise(() => started.promise);
+      const reading = Promise.withResolvers<void>();
+      const title = Promise.withResolvers<string>();
+      contexts[1]!.page.title.mockImplementationOnce(() => {
+        reading.resolve();
+        return title.promise;
+      });
+      const peer = yield* broker
+        .invoke<PreviewAutomationStatus>({
+          scope: otherScope,
+          tabId: PreviewTabId.make(other.tabId!),
+          operation: "status",
+          input: {},
+          timeoutMs: 10_000,
+        })
+        .pipe(Effect.forkScoped);
+      yield* Effect.promise(() => reading.promise);
+      try {
+        yield* TestClock.adjust(3_001);
+        expect(yield* Fiber.join(pending)).toMatchObject({
+          _tag: "PreviewAutomationTimeoutError",
+        });
+        title.resolve("other agent's page");
+        expect(yield* Fiber.join(peer)).toMatchObject({
+          available: true,
+          title: "other agent's page",
+          tabId: other.tabId,
+        });
+        const status = yield* broker.invoke<PreviewAutomationStatus>({
+          scope: otherScope,
+          tabId: PreviewTabId.make(other.tabId!),
+          operation: "status",
+          input: {},
+        });
+        expect(status).toMatchObject({ available: true, tabId: other.tabId });
+      } finally {
+        finish.resolve();
+        title.resolve("other agent's page");
+      }
+      expect(page.goto).toHaveBeenCalledTimes(1);
+    }),
+  ).pipe(Effect.provide(layer)),
+);
+
+it.effect("a timed-out recording seed releases capture without starting a late recording", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const { broker, tabId } = yield* ready;
+      const started = Promise.withResolvers<void>();
+      const frame = Promise.withResolvers<Record<string, unknown>>();
+      const session = contexts[0]!.sessions[0]!;
+      const send = session.send.getMockImplementation()!;
+      session.send.mockImplementation((method, input) => {
+        if (
+          method === "Page.captureScreenshot" &&
+          (input as { format: string }).format === "jpeg"
+        ) {
+          started.resolve();
+          return frame.promise;
+        }
+        return send(method, input);
+      });
+      try {
+        const recording = yield* broker
+          .invoke<{ recording: boolean }>({
+            scope,
+            tabId,
+            operation: "recordingStart",
+            input: {},
+            timeoutMs: 2_000,
+          })
+          .pipe(Effect.flip, Effect.forkScoped);
+        yield* Effect.promise(() => started.promise);
+        yield* TestClock.adjust(3_001);
+        expect(yield* Fiber.join(recording)).toMatchObject({
+          _tag: "PreviewAutomationTimeoutError",
+        });
+        const snapshot = yield* broker.invoke<PreviewAutomationSnapshot>({
+          scope,
+          tabId,
+          operation: "snapshot",
+          input: {},
+          timeoutMs: 1_000,
+        });
+        expect(snapshot).toMatchObject({ title: "test page" });
+        frame.resolve({ data: "ZnJhbWU=" });
+        const stopped = yield* broker
+          .invoke<void>({ scope, tabId, operation: "recordingStop", input: {} })
+          .pipe(Effect.flip);
+        expect(stopped).toMatchObject({
+          _tag: "PreviewAutomationExecutionError",
+          remoteTag: "PreviewAutomationRecordingNotActiveError",
+        });
+        expect(
+          session.send.mock.calls.filter(([method]) => method === "Page.startScreencast"),
+        ).toHaveLength(0);
+      } finally {
+        frame.resolve({ data: "ZnJhbWU=" });
+      }
+    }),
+  ).pipe(Effect.provide(layer)),
+);
+
+it.effect("an expired queued navigation is not replayed after the blocked action finishes", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const { broker, tabId } = yield* ready;
+      let now = 0;
+      const clock = vi.spyOn(performance, "now").mockImplementation(() => now);
+      const started = Promise.withResolvers<void>();
+      const finish = Promise.withResolvers<void>();
+      const page = contexts[0]!.page;
+      page.goto.mockImplementationOnce(() => {
+        started.resolve();
+        return finish.promise;
+      });
+      try {
+        const first = yield* broker
+          .invoke<PreviewAutomationStatus>({
+            scope,
+            tabId,
+            operation: "navigate",
+            input: { url: "https://example.com/first" },
+            timeoutMs: 10_000,
+          })
+          .pipe(Effect.forkScoped);
+        yield* Effect.promise(() => started.promise);
+        const queued = yield* broker
+          .invoke<PreviewAutomationStatus>({
+            scope,
+            tabId,
+            operation: "navigate",
+            input: { url: "https://example.com/expired" },
+            timeoutMs: 1_000,
+          })
+          .pipe(Effect.flip, Effect.forkScoped);
+        yield* Effect.yieldNow;
+        yield* TestClock.adjust(2_001);
+        expect(yield* Fiber.join(queued)).toMatchObject({
+          _tag: "PreviewAutomationTimeoutError",
+        });
+        now += 2_000;
+        finish.resolve();
+        yield* Fiber.join(first);
+        const corrected = yield* broker.invoke<PreviewAutomationStatus>({
+          scope,
+          tabId,
+          operation: "navigate",
+          input: { url: "https://example.com/corrected" },
+        });
+        expect(corrected.url).toBe("https://example.com/corrected");
+        expect(page.goto.mock.calls.map(([url]) => url)).toEqual([
+          "https://example.com/first",
+          "https://example.com/corrected",
+        ]);
+      } finally {
+        finish.resolve();
+        clock.mockRestore();
+      }
     }),
   ).pipe(Effect.provide(layer)),
 );
@@ -1298,6 +1491,75 @@ it.live(
           reason:
             'No browser profile is named "Personal". Use one of: Default (id default), Incognito (id incognito), Work (id profile-work).',
         });
+      }),
+    ).pipe(Effect.provide(layer)),
+);
+
+it.live.each([1, 1.25, 1.095])(
+  "desktop resize preserves CSS dimensions at native zoom %s",
+  (zoom) =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        desktopRendersNext = true;
+        const { broker, tabId } = yield* ready;
+        const context = desktopConnections[0]!.context;
+        const cdp = context.sessions[0]!;
+        const send = cdp.send.getMockImplementation()!;
+        let measured = { width: 800, height: 600 };
+        let refuseResize = false;
+        cdp.send.mockImplementation(async (method, input) => {
+          if (method === "Page.getLayoutMetrics")
+            return { cssVisualViewport: { pageX: 0, pageY: 0, zoom } };
+          if (method === "Runtime.evaluate" && (input as { contextId?: number }).contextId === 7) {
+            return { result: { value: { ratio: zoom, ...measured } } };
+          }
+          if (method === "Emulation.setDeviceMetricsOverride") {
+            if (!refuseResize) {
+              const size = input as { width: number; height: number };
+              measured = {
+                width: Math.round(size.width / zoom),
+                height: Math.round(size.height / zoom),
+              };
+            }
+            return {};
+          }
+          if (method === "Emulation.clearDeviceMetricsOverride") {
+            measured = { width: 800, height: 600 };
+            return {};
+          }
+          return send(method, input);
+        });
+        for (const size of [
+          { width: 390, height: 844 },
+          { width: 844, height: 390 },
+        ]) {
+          const result = yield* broker.invoke<{ viewport: typeof size }>({
+            scope,
+            tabId,
+            operation: "resize",
+            input: { mode: "freeform", ...size },
+          });
+          expect(result.viewport).toEqual(size);
+          expect(measured).toEqual(size);
+        }
+        const filled = yield* broker.invoke<{ viewport: typeof measured }>({
+          scope,
+          tabId,
+          operation: "resize",
+          input: { mode: "fill" },
+        });
+        expect(filled.viewport).toEqual({ width: 800, height: 600 });
+        refuseResize = true;
+        const error = yield* broker
+          .invoke<{ viewport: { width: number; height: number } }>({
+            scope,
+            tabId,
+            operation: "resize",
+            input: { mode: "freeform", width: 390, height: 844 },
+          })
+          .pipe(Effect.flip);
+        expect(error.message).toContain("has not reached the requested viewport");
+        expect(context.page.setViewportSize).not.toHaveBeenCalled();
       }),
     ).pipe(Effect.provide(layer)),
 );
