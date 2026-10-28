@@ -7,6 +7,7 @@ export type ThreadActionMenuId =
   | "filter-by-project"
   | "turn-into-project"
   | "project-settings"
+  | "close-inactive-tabs"
   | "pin"
   | "unpin"
   | "settle"
@@ -68,6 +69,8 @@ export function buildDraftActionMenuItems(options: {
 }
 
 export interface ThreadActionMenuState {
+  readonly inactiveTabCount?: number;
+  readonly closingInactiveTabs?: boolean;
   readonly canOperate: boolean;
   readonly canFind?: boolean;
   readonly branch: string | null;
@@ -110,6 +113,7 @@ export function threadActionRequiresOperate(action: ThreadActionMenuId): boolean
     "copy-branch",
     "copy-thread",
     "copy-thread-id",
+    "close-inactive-tabs",
   ].includes(action);
 }
 
@@ -238,6 +242,15 @@ export function buildThreadActionMenuItems(
       ],
     },
     { id: "project-settings", label: "Project settings", icon: "settings" },
+    ...(state.inactiveTabCount !== undefined
+      ? [
+          {
+            id: "close-inactive-tabs" as const,
+            label: `Close all inactive tabs (${state.inactiveTabCount})`,
+            disabled: state.closingInactiveTabs || state.inactiveTabCount === 0,
+          },
+        ]
+      : []),
     {
       id: "archive",
       label: "Archive thread",

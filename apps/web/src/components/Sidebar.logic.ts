@@ -19,6 +19,7 @@ import type { SidebarProjectSortOrder, SidebarThreadSortOrder } from "@t3tools/c
 import type { AsyncResult } from "effect/reactivity";
 import {
   effectiveSnoozed,
+  threadWokeAt,
   type ThreadSnoozeShell,
 } from "@t3tools/client-runtime/state/thread-settled";
 import {
@@ -576,7 +577,7 @@ export function filterSidebarV2VisibleThreads<
 >(
   threads: readonly T[],
   scopedProjectKeys: ReadonlySet<string> | null,
-  delegatedUnderParent: ReadonlySet<string>,
+  delegatedUnderParent: ReadonlySet<string> = new Set(),
 ): T[] {
   return threads.filter(
     (thread) =>
@@ -589,6 +590,137 @@ export function filterSidebarV2VisibleThreads<
       (scopedProjectKeys === null ||
         scopedProjectKeys.has(`${thread.environmentId}:${thread.projectId}`)),
   );
+}
+
+export function filterProjectSectionThreads<T extends SidebarThreadSummary>(
+  threads: readonly T[],
+  options: {
+    readonly now: string;
+    readonly hideInactive?: boolean;
+    readonly pinnedOnly?: boolean;
+    readonly recentKeys?: ReadonlySet<string>;
+    readonly delegatedUnderParent?: ReadonlySet<string>;
+    readonly capabilities: ReadonlyMap<
+      string,
+      { readonly threadSettlement?: boolean; readonly threadSnooze?: boolean }
+    >;
+  },
+): T[] {
+  return partitionProjectSectionThreads(threads, options).active;
+}
+
+export function partitionProjectSectionThreads<T extends SidebarThreadSummary>(
+  threads: readonly T[],
+  options: Parameters<typeof filterProjectSectionThreads>[1],
+) {
+  const active: T[] = [];
+  const snoozed: T[] = [];
+  const settled: T[] = [];
+  for (const thread of filterSidebarV2VisibleThreads(threads, null, options.delegatedUnderParent)) {
+    const capabilities = options.capabilities.get(thread.environmentId);
+    const target =
+      capabilities?.threadSnooze && effectiveSnoozed(thread, { now: options.now })
+        ? snoozed
+        : capabilities?.threadSettlement && thread.settledOverride === "settled"
+          ? settled
+          : active;
+    target.push(thread);
+  }
+  return { active: active.filter(sidebarMainThreadFilter(options, threads)), snoozed, settled };
+}
+
+export function sidebarMainThreadFilter(
+  options: {
+    readonly hideInactive?: boolean;
+    readonly pinnedOnly?: boolean;
+    readonly recentKeys?: ReadonlySet<string>;
+  },
+  allThreads: readonly SidebarThreadSummary[],
+) {
+  const activeKeys = options.hideInactive ? activeSidebarThreadKeys(allThreads) : null;
+  return (thread: SidebarThreadSummary) =>
+    (!options.pinnedOnly || thread.pinnedAt !== null) &&
+    (activeKeys === null ||
+      activeKeys.has(`${thread.environmentId}:${thread.id}`) ||
+      options.recentKeys?.has(`${thread.environmentId}:${thread.id}`) === true);
+}
+
+export function activeSubagentsByParent<T extends SidebarThreadSummary>(threads: readonly T[]) {
+  return subagentsByParent(threads, "active");
+}
+
+export function subagentsByParent<T extends SidebarThreadSummary>(
+  threads: readonly T[],
+  mode: "show" | "active",
+  options: {
+    readonly now?: string;
+    readonly includeSnoozed?: boolean;
+    readonly recentKeys?: ReadonlySet<string>;
+  } = {},
+) {
+  const now = options.now ?? new Date().toISOString();
+  const byParent = new Map<string, T[]>();
+  for (const thread of threads) {
+    const parentId = thread.lineage.parentThreadId;
+    if (
+      parentId === null ||
+      parentId === thread.id ||
+      thread.lineage.relationshipToParent !== "subagent" ||
+      thread.archivedAt !== null ||
+      thread.settledOverride === "settled" ||
+      (!options.includeSnoozed && effectiveSnoozed(thread, { now }))
+    )
+      continue;
+    const needsInput =
+      thread.hasPendingApprovals ||
+      thread.hasPendingUserInput ||
+      thread.pendingSubagentRequest != null;
+    const runActive =
+      thread.latestRun !== null &&
+      ["preparing", "queued", "starting", "running", "waiting"].includes(thread.latestRun.status);
+    const runtimeActive =
+      thread.runtime?.status === "starting" ||
+      thread.runtime?.status === "running" ||
+      ((thread.runtime === null || thread.runtime.status === "idle") && runActive);
+    if (
+      mode === "active" &&
+      !needsInput &&
+      !runtimeActive &&
+      !isSidebarThreadActive(thread) &&
+      !options.recentKeys?.has(`${thread.environmentId}:${thread.id}`)
+    )
+      continue;
+    const parentKey = `${thread.environmentId}:${parentId}`;
+    const siblings = byParent.get(parentKey);
+    if (siblings) siblings.push(thread);
+    else byParent.set(parentKey, [thread]);
+  }
+  return byParent;
+}
+
+function activeSidebarThreadKeys(threads: readonly SidebarThreadSummary[]) {
+  const keys = new Set(activeSubagentsByParent(threads).keys());
+  for (const thread of threads) {
+    if (isSidebarThreadActive(thread)) keys.add(`${thread.environmentId}:${thread.id}`);
+  }
+  return keys;
+}
+
+export function sidebarActivityCounts(
+  threads: readonly SidebarThreadSummary[],
+  now = new Date().toISOString(),
+) {
+  const counts = { threads: { active: 0, inactive: 0 }, subagents: { active: 0, inactive: 0 } };
+  for (const thread of threads) {
+    if (thread.archivedAt !== null) continue;
+    const group = isSidebarSubagentThread(thread) ? counts.subagents : counts.threads;
+    const active =
+      thread.settledOverride !== "settled" &&
+      !effectiveSnoozed(thread, { now }) &&
+      isSidebarThreadActive(thread);
+    group[active ? "active" : "inactive"] += 1;
+  }
+  return counts;
 }
 
 export function buildBulkTitleRegenerationContextMenuItem(input: {
@@ -616,9 +748,24 @@ export function buildBulkUnpinContextMenuItem(input: {
   return { id: "unpin", label: `Unpin (${input.pinnedCount})` };
 }
 
+export function projectThreadPinTargets<
+  T extends Pick<
+    SidebarThreadSummary,
+    "id" | "archivedAt" | "lineage" | "environmentId" | "projectId" | "settledOverride" | "pinnedAt"
+  >,
+>(threads: readonly T[], action: "pin" | "unpin", delegatedUnderParent?: ReadonlySet<string>): T[] {
+  return filterSidebarV2VisibleThreads(threads, null, delegatedUnderParent).filter(
+    (thread) =>
+      thread.settledOverride !== "settled" &&
+      (action === "pin" ? thread.pinnedAt == null : thread.pinnedAt != null),
+  );
+}
+
 export interface ThreadStatusPill {
   label:
     | "Working"
+    | "Compacting"
+    | "Woke"
     | "Connecting"
     | "Completed"
     | "Failed"
@@ -630,6 +777,17 @@ export interface ThreadStatusPill {
   colorClass: string;
   dotClass: string;
   pulse: boolean;
+  wokeAt?: string;
+}
+
+function isSidebarThreadActive(thread: ThreadStatusInput): boolean {
+  const status = resolveThreadStatusPill({ thread });
+  return (
+    (status !== null && status.label !== "Completed" && status.label !== "Failed") ||
+    ((thread.runtime === null || thread.runtime.status === "idle") &&
+      thread.latestRun !== null &&
+      ["preparing", "queued", "starting", "running", "waiting"].includes(thread.latestRun.status))
+  );
 }
 
 const THREAD_STATUS_PRIORITY: Record<ThreadStatusPill["label"], number> = {
@@ -638,6 +796,8 @@ const THREAD_STATUS_PRIORITY: Record<ThreadStatusPill["label"], number> = {
   "Guest Request": 3.75,
   Failed: 3.5,
   Working: 3,
+  Compacting: 3.25,
+  Woke: 2.25,
   Connecting: 3,
   Waiting: 2.5,
   "Plan Ready": 2,
@@ -658,6 +818,10 @@ type ThreadStatusInput = Pick<
   lastVisitedAt?: string | null | undefined;
   pendingBackgroundTasks?: SidebarThreadSummary["pendingBackgroundTasks"] | undefined;
   blockedOnThreadWait?: boolean | undefined;
+  isCompacting?: boolean | undefined;
+  snoozedUntil?: string | null;
+  snoozedAt?: string | null;
+  settledOverride?: "settled" | "active" | null | undefined;
 };
 
 /**
@@ -1072,6 +1236,7 @@ export function resolveWorkingStartedAt(
 
 export function resolveThreadStatusPill(input: {
   thread: ThreadStatusInput;
+  now?: string;
 }): ThreadStatusPill | null {
   const { thread } = input;
 
@@ -1099,6 +1264,15 @@ export function resolveThreadStatusPill(input: {
       colorClass: "text-guest-foreground",
       dotClass: "bg-guest",
       pulse: false,
+    };
+  }
+
+  if (thread.isCompacting && thread.runtime?.activeRunId != null) {
+    return {
+      label: "Compacting",
+      colorClass: "text-error-foreground",
+      dotClass: "bg-error-foreground",
+      pulse: true,
     };
   }
 
@@ -1145,6 +1319,23 @@ export function resolveThreadStatusPill(input: {
       colorClass: "text-red-600 dark:text-red-300/90",
       dotClass: "bg-red-500 dark:bg-red-300/90",
       pulse: false,
+    };
+  }
+
+  const wokeAt =
+    thread.snoozedUntil == null || thread.settledOverride === "settled"
+      ? null
+      : threadWokeAt(thread, { now: input.now ?? new Date().toISOString() });
+  if (
+    wokeAt !== null &&
+    (thread.lastVisitedAt == null || Date.parse(thread.lastVisitedAt) < Date.parse(wokeAt))
+  ) {
+    return {
+      label: "Woke",
+      colorClass: "text-warning-foreground",
+      dotClass: "bg-warning-foreground",
+      pulse: false,
+      wokeAt,
     };
   }
 
