@@ -1,6 +1,7 @@
 import { useAtomValue } from "@effect/atom-react";
 import { resolveSidebarSubagentVisibility } from "@t3tools/contracts";
 import { Atom } from "effect/reactivity";
+import * as Schema from "effect/Schema";
 import {
   recentThreads,
   recentThreadVisibilityKeys,
@@ -9,6 +10,51 @@ import {
 import { environmentThreadShells } from "~/state/threads";
 import { useClientSettings } from "./useSettings";
 import { useNowMinute } from "./useNowMinute";
+import { useLocalStorage, writeLocalStorageValue } from "./useLocalStorage";
+import { stackedThreadToast, toastManager } from "~/components/ui/toast";
+
+const DISMISSED_KEY = "t3code:sidebar:recent-dismissed";
+const DISMISSED_SCHEMA = Schema.Record(Schema.String, Schema.String);
+const decodeDismissed = Schema.decodeSync(Schema.fromJsonString(DISMISSED_SCHEMA));
+const NO_DISMISSALS: Record<string, string> = {};
+
+export function restoreDismissedRecentThreads() {
+  writeLocalStorageValue(DISMISSED_KEY, NO_DISMISSALS, NO_DISMISSALS, DISMISSED_SCHEMA);
+}
+
+export function dismissRecentThread(entry: RecentThreadEntry) {
+  const key = `${entry.thread.environmentId}:${entry.thread.id}`;
+  writeLocalStorageValue(
+    DISMISSED_KEY,
+    (current) => ({ ...current, [key]: entry.finishedAt }),
+    NO_DISMISSALS,
+    DISMISSED_SCHEMA,
+  );
+  const id = toastManager.add(
+    stackedThreadToast({
+      type: "info",
+      title: "Dismissed from Recent",
+      description: entry.thread.title,
+      actionProps: {
+        children: "Undo",
+        onClick: () => {
+          writeLocalStorageValue(
+            DISMISSED_KEY,
+            (current) => {
+              if (current[key] !== entry.finishedAt) return current;
+              const next = { ...current };
+              delete next[key];
+              return next;
+            },
+            NO_DISMISSALS,
+            DISMISSED_SCHEMA,
+          );
+          toastManager.close(id);
+        },
+      },
+    }),
+  );
+}
 
 const EMPTY_RECENT = {
   entries: [] as readonly RecentThreadEntry[],
@@ -20,7 +66,7 @@ const recentAtom = Atom.family((key: string | null) => {
   let previous = EMPTY_RECENT;
   return Atom.make((get) => {
     if (key === null) return EMPTY_RECENT;
-    const [count, age, include, pinned, show, keep, now] = key.split("|");
+    const [count, age, include, pinned, show, keep, now, dismissed] = key.split("|");
     if (show !== "true" && keep !== "true") return EMPTY_RECENT;
     const threads = get(environmentThreadShells.quietThreadShellsAtom);
     const entries = recentThreads(threads, {
@@ -29,6 +75,7 @@ const recentAtom = Atom.family((key: string | null) => {
       includeSubagents: include === "true",
       pinnedOnly: pinned === "true",
       now: now!,
+      dismissed: decodeDismissed(decodeURIComponent(dismissed!)),
     });
     const next = {
       entries,
@@ -55,6 +102,7 @@ const recentAtom = Atom.family((key: string | null) => {
 });
 
 export function useRecentThreads(enabled = true) {
+  const [dismissed] = useLocalStorage(DISMISSED_KEY, NO_DISMISSALS, DISMISSED_SCHEMA);
   const settings = useClientSettings((s) => ({
     count: s.sidebarRecentThreadCount ?? 5,
     age: s.sidebarRecentThreadMaxAgeMinutes ?? 60,
@@ -74,7 +122,9 @@ export function useRecentThreads(enabled = true) {
         settings.show,
         settings.keep,
         `${minute}:00.000Z`,
+        encodeURIComponent(JSON.stringify(dismissed)),
       ].join("|")
     : null;
-  return useAtomValue(recentAtom(key));
+  const recent = useAtomValue(recentAtom(key));
+  return { ...recent, dismissedCount: Object.keys(dismissed).length };
 }

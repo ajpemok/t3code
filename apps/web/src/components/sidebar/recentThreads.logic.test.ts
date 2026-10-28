@@ -33,6 +33,21 @@ it("limits finished threads by count and age, with zero age allowing older resul
   expect(recentThreads([old], { ...options, maxAgeMinutes: 0 })).toMatchObject([{ thread: old }]);
 });
 
+it("dismisses only the selected completion and shows a later completion again", () => {
+  const first = finished("thread", "2026-10-28T11:50:00.000Z");
+  const other = { ...first, environmentId: EnvironmentId.make("other") };
+  const dismissed = { "environment-test:thread": first.latestRun!.completedAt! };
+  expect(recentThreads([first, other], { ...options, dismissed })).toMatchObject([
+    { thread: other },
+  ]);
+  expect(
+    recentThreadVisibilityKeys(recentThreads([first], { ...options, dismissed }), [first]).size,
+  ).toBe(0);
+  const next = finished("thread", "2026-10-28T11:59:00.000Z");
+  expect(recentThreads([next], { ...options, dismissed })).toMatchObject([{ thread: next }]);
+  expect(recentThreads([first], { ...options, dismissed: {} })).toMatchObject([{ thread: first }]);
+});
+
 it("does not bring parked, archived, empty or newly active threads into Recent", () => {
   const done = finished("done", now);
   const running = {
