@@ -74,4 +74,23 @@ describe("buildThreadActionMenuItems", () => {
     expect(items.find((item) => item.id === "archive")?.disabled).toBe(true);
     expect(items.find((item) => item.id === "turn-into-project")?.disabled).toBe(true);
   });
+
+  it("offers counted local tab cleanup even without thread mutation permission", () => {
+    const item = buildThreadActionMenuItems({
+      ...baseState,
+      canOperate: false,
+      inactiveTabCount: 3,
+    }).find((item) => item.id === "close-inactive-tabs");
+    expect(item).toMatchObject({ label: "Close all inactive tabs (3)", disabled: false });
+    for (const state of [
+      { inactiveTabCount: 0 },
+      { inactiveTabCount: 3, closingInactiveTabs: true },
+    ]) {
+      expect(
+        buildThreadActionMenuItems({ ...baseState, ...state }).find(
+          (item) => item.id === "close-inactive-tabs",
+        )?.disabled,
+      ).toBe(true);
+    }
+  });
 });
