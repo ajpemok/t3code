@@ -6,7 +6,8 @@ need a separate branch and working directory.
 ## Project Sections and Header
 
 Turn on **Project Sections** in **Settings → A3 Fork** to group threads into
-collapsible project trees. Turn it off to return to the flat list. Collapse choices
+collapsible project folders. Pinned threads stay above the folders. Turn Project
+Sections off to return to the flat list. Collapse choices
 are saved on this client. Both views show active and idle threads; settled and snoozed
 threads stay in the bottom-aligned **Settled** and **Snoozed** sections. Expand either
 section to reopen a thread or bring it back to the project list.
