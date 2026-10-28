@@ -352,8 +352,8 @@ weight, with a subtle opacity pulse paused offscreen, when hidden and with reduc
 ## Compacting Status
 
 Report a running compaction in the shell for the active run only, then clear it
-when that item completes. This is display metadata; steering, provider retries
-and native-child activity use upstream behaviour.
+when that item completes. This is display metadata; steering and native-child
+activity use upstream behaviour.
 
 | Files                                                      | Fork Responsibility                                    |
 | ---------------------------------------------------------- | ------------------------------------------------------ |
@@ -361,6 +361,19 @@ and native-child activity use upstream behaviour.
 | `apps/server/src/orchestration-v2/ProjectionStore.test.ts` | Matching list and per-thread shell status.             |
 | `packages/contracts/src/orchestrationV2.ts`                | Optional compacting indicator.                         |
 | `packages/client-runtime/src/state/models.ts`              | Preserve the reported indicator for the client.        |
+
+## Codex Capacity Backoff
+
+Keep upstream's capacity recovery in the Codex adapter and append waits of
+60, 120, 180, 240, 480 and 960 seconds after its five quick retries. Stop still
+cancels the wait, and exhaustion ends the turn after 11 retries. Preserve upstream's
+empty-input continuation, root-turn restriction and compaction exclusion.
+The separate fork provider retry worker remains retired.
+
+| Files                                                              | Fork Responsibility                              |
+| ------------------------------------------------------------------ | ------------------------------------------------ |
+| `apps/server/src/orchestration-v2/Adapters/CodexAdapterV2.ts`      | Extended capacity retry delays in upstream code. |
+| `apps/server/src/orchestration-v2/Adapters/CodexAdapterV2.test.ts` | Full schedule, exhaustion and recovery coverage. |
 
 ## Wake Indicators and Window Resizing
 
