@@ -2,6 +2,7 @@ import * as NodeZlib from "node:zlib";
 import {
   DesktopPreviewRecordingInputSchema,
   DESKTOP_PREVIEW_RECORDING_CAPTURE_TRIGGER,
+  DESKTOP_PREVIEW_CAPTURE_ACTIVITY_TRIGGER,
 } from "@t3tools/contracts";
 import type {
   DesktopPreviewAnnotationTheme,
@@ -17,6 +18,7 @@ import type {
   DesktopPreviewRecordingInputEvent,
   DesktopPreviewScreenshotArtifact,
   DesktopPreviewTabDefaults,
+  DesktopPreviewViewport,
   PreviewForwardedShortcut,
 } from "@t3tools/contracts";
 import * as HostProcess from "@t3tools/shared/HostProcess";
@@ -371,7 +373,7 @@ interface ManagedListeners {
   readonly webContents: Electron.WebContents;
 }
 
-type FrameCaptureConsumer = "picture-in-picture" | "recording";
+type FrameCaptureConsumer = "picture-in-picture" | "recording" | `automation:${number}`;
 
 interface FrameCaptureSession {
   readonly recordingInputOptions?: RecordingInputOptions;
@@ -520,6 +522,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
   const browserHost = yield* DesktopBrowserHost.DesktopBrowserHost;
   const passkeys = yield* PreviewPasskeys.PreviewPasskeys;
   const context = yield* Effect.context<never>();
+  const runViewport = Effect.runPromiseWith(context);
   const runFork = Effect.runForkWith(context);
   const resolvedArtifactDirectory = path.resolve(artifactDirectory);
 
@@ -559,6 +562,8 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
     { readonly semaphore: Semaphore.Semaphore; users: number }
   >();
   const tabLifecycleGenerations = new Map<string, number>();
+  const viewportOverrides = new Map<string, DesktopPreviewViewport>();
+  const appliedViewports = new WeakMap<BrowserControlSession, DesktopPreviewViewport>();
 
   const attempt = <A>(errorContext: PreviewOperationContext, evaluate: () => A) =>
     Effect.try({
@@ -1653,6 +1658,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
     if (!(yield* SynchronizedRef.get(tabsRef)).has(tabId)) return;
     clearPendingRecording(tabId);
     annotationSendEnabled.delete(tabId);
+    viewportOverrides.delete(tabId);
     yield* Effect.all(
       [
         cancelPickElement(tabId),
@@ -1752,6 +1758,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
     yield* keepFrameCaptureWebContentsUnthrottled(tabId, wc);
     if (tab.webContentsId === webContentsId && currentAttachment?.webContents === wc) {
       yield* assertTabZoom(tabId);
+      runFork(restoreControlSession(tabId, wc));
       yield* attempt({ operation: "registerWebview.sendTheme", tabId, webContentsId }, () => {
         wc.send(ANNOTATION_THEME_CHANNEL, annotationTheme);
         wc.send(ANNOTATION_SEND_ENABLED_CHANNEL, annotationSendEnabled.get(tabId) === true);
@@ -2219,28 +2226,141 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
     );
   });
 
+  const applyViewport = Effect.fn("PreviewManager.applyViewport")(
+    function* (tabId: string, wc: Electron.WebContents, viewport: DesktopPreviewViewport) {
+      const control = yield* ensureControlSession(wc);
+      const tab = (yield* SynchronizedRef.get(tabsRef)).get(tabId);
+      if (tab?.webContentsId !== wc.id || webContents.fromId(wc.id) !== wc) return;
+      const zoom =
+        viewport === null
+          ? 1
+          : yield* attempt({ operation: "viewport.readZoom", tabId, webContentsId: wc.id }, () =>
+              wc.getZoomFactor(),
+            );
+      const metrics =
+        viewport === null
+          ? null
+          : {
+              width: Math.max(1, Math.round(viewport.width * zoom)),
+              height: Math.max(1, Math.round(viewport.height * zoom)),
+            };
+      const applied = appliedViewports.get(control);
+      if (
+        applied !== undefined &&
+        applied?.width === metrics?.width &&
+        applied?.height === metrics?.height
+      )
+        return;
+      appliedViewports.delete(control);
+      yield* attemptPromise({ operation: "viewport.apply", tabId, webContentsId: wc.id }, () =>
+        metrics === null
+          ? control.debugger.sendCommand("Emulation.clearDeviceMetricsOverride")
+          : control.debugger.sendCommand("Emulation.setDeviceMetricsOverride", {
+              ...metrics,
+              deviceScaleFactor: 0,
+              mobile: false,
+            }),
+      );
+      appliedViewports.set(control, metrics);
+    },
+    (effect, tabId, wc) =>
+      effect.pipe(
+        Effect.timeout("2 seconds"),
+        Effect.mapError(
+          (cause) =>
+            new PreviewOperationError({
+              operation: "viewport.apply",
+              tabId,
+              webContentsId: wc.id,
+              cause,
+            }),
+        ),
+      ),
+  );
+
+  // › The caller holds the lifecycle lock while zoom, guest identity and CDP metrics are reconciled.
+  const restoreViewportUnlocked = Effect.fn("PreviewManager.restoreViewport")(function* (
+    tabId: string,
+    expectedGuest?: Electron.WebContents,
+  ) {
+    const viewport = viewportOverrides.get(tabId);
+    const tab = (yield* SynchronizedRef.get(tabsRef)).get(tabId);
+    if (viewport === undefined || tab?.webContentsId == null) return;
+    const wc = webContents.fromId(tab.webContentsId);
+    if (!wc || wc.isDestroyed() || (expectedGuest && expectedGuest !== wc)) return;
+    yield* applyViewport(tabId, wc, viewport);
+  });
+
+  const setViewport = Effect.fn("PreviewManager.setViewport")(function* (
+    tabId: string,
+    viewport: DesktopPreviewViewport,
+  ) {
+    const generation = tabLifecycleGenerations.get(tabId);
+    // › Serialise CDP writes with guest replacement so a late resize cannot overwrite a newer one.
+    yield* withTabLifecycleLock(
+      tabId,
+      Effect.gen(function* () {
+        const tab = (yield* SynchronizedRef.get(tabsRef)).get(tabId);
+        if (
+          !tab ||
+          tabLifecycleGenerations.get(tabId) !== generation ||
+          (yield* Ref.get(closingTabIdsRef)).has(tabId)
+        ) {
+          return yield* new PreviewTabNotFoundError({ tabId });
+        }
+        const wc = tab.webContentsId === null ? null : webContents.fromId(tab.webContentsId);
+        if (wc && !wc.isDestroyed()) {
+          yield* applyViewport(tabId, wc, viewport).pipe(
+            Effect.onError(() =>
+              applyViewport(tabId, wc, viewportOverrides.get(tabId) ?? null).pipe(Effect.ignore),
+            ),
+          );
+        }
+        viewportOverrides.set(tabId, viewport);
+      }),
+    );
+  });
+
   const reapplyZoom = Effect.fn("PreviewManager.reapplyZoom")(function* () {
     const tabIds = Array.from((yield* SynchronizedRef.get(tabsRef)).keys());
-    yield* Effect.forEach(tabIds, assertTabZoom, { discard: true });
+    yield* Effect.forEach(
+      tabIds,
+      (tabId) =>
+        withTabLifecycleLock(
+          tabId,
+          Effect.gen(function* () {
+            yield* assertTabZoom(tabId);
+            yield* restoreViewportUnlocked(tabId).pipe(Effect.ignore);
+          }),
+        ),
+      { discard: true },
+    );
   });
 
   const applyZoom = Effect.fn("PreviewManager.applyZoom")(function* (
     tabId: string,
     transform: (current: number) => number,
   ) {
-    const tab = (yield* SynchronizedRef.get(tabsRef)).get(tabId);
-    if (!tab) return;
-    const next = transform(tab.zoomFactor);
-    if (Math.abs(next - tab.zoomFactor) < ZOOM_EPSILON) return;
-    if (tab.webContentsId != null) {
-      const wc = webContents.fromId(tab.webContentsId);
-      if (wc && !wc.isDestroyed()) {
-        yield* attempt({ operation: "applyZoom", tabId, webContentsId: wc.id }, () =>
-          wc.setZoomFactor(next),
-        );
-      }
-    }
-    yield* update(tabId, { zoomFactor: next });
+    yield* withTabLifecycleLock(
+      tabId,
+      Effect.gen(function* () {
+        const tab = (yield* SynchronizedRef.get(tabsRef)).get(tabId);
+        if (!tab) return;
+        const next = transform(tab.zoomFactor);
+        if (Math.abs(next - tab.zoomFactor) >= ZOOM_EPSILON) {
+          if (tab.webContentsId != null) {
+            const wc = webContents.fromId(tab.webContentsId);
+            if (wc && !wc.isDestroyed()) {
+              yield* attempt({ operation: "applyZoom", tabId, webContentsId: wc.id }, () =>
+                wc.setZoomFactor(next),
+              );
+            }
+          }
+          yield* update(tabId, { zoomFactor: next });
+        }
+        yield* restoreViewportUnlocked(tabId);
+      }),
+    );
   });
 
   // Media emulation belongs to the debugger session and must be restored after every reattach.
@@ -2276,15 +2396,40 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
       }
       if (afterAttach.serverTab) {
         yield* listenToBrowserHost;
-        browserHost.attach(afterAttach.serverTab, { webContents: wc, debugger: control.debugger });
+        browserHost.attach(afterAttach.serverTab, {
+          webContents: wc,
+          debugger: control.debugger,
+          applyViewport: (size) =>
+            runViewport(setViewport(tabId, size).pipe(Effect.timeout("3 seconds"))),
+          acquireRendering: () => runViewport(acquireAutomationRendering(tabId, wc)),
+          screencastCssWidth: (deviceWidth) =>
+            viewportOverrides.get(tabId)?.width ?? deviceWidth / wc.getZoomFactor(),
+          captureScreenshot: (params) =>
+            control.debugger.sendCommand("Page.captureScreenshot", params).finally(() =>
+              runViewport(
+                withTabLifecycleLock(
+                  tabId,
+                  Effect.gen(function* () {
+                    // Captures can change Chromium's emulation without updating our viewport cache.
+                    appliedViewports.delete(control);
+                    yield* restoreViewportUnlocked(tabId, wc);
+                  }),
+                ),
+              ),
+            ),
+        });
       }
-      if (afterAttach.colorScheme !== "system") {
+      yield* withTabLifecycleLock(tabId, restoreViewportUnlocked(tabId, wc));
+      const current = (yield* SynchronizedRef.get(tabsRef)).get(tabId);
+      if (current?.webContentsId !== wc.id || webContents.fromId(wc.id) !== wc || wc.isDestroyed())
+        return;
+      if (current.colorScheme !== "system") {
         yield* attemptPromise({ operation: "applyColorScheme", tabId, webContentsId: wc.id }, () =>
           control.debugger.sendCommand("Emulation.setEmulatedMedia", {
             features: [
               {
                 name: "prefers-color-scheme",
-                value: afterAttach.colorScheme,
+                value: current.colorScheme,
               },
             ],
           }),
@@ -2640,6 +2785,49 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
       ),
     );
   });
+
+  let automationCaptureSequence = 0;
+  const acquireAutomationRendering = Effect.fn("PreviewManager.acquireAutomationRendering")(
+    function* (tabId: string, wc: Electron.WebContents) {
+      const host = wc.hostWebContents;
+      if (host === null || host.isDestroyed()) {
+        return yield* new PreviewMainWindowClosedError({ tabId });
+      }
+      const consumer = `automation:${++automationCaptureSequence}` as const;
+      const expression = (active: boolean) =>
+        `globalThis[${JSON.stringify(DESKTOP_PREVIEW_CAPTURE_ACTIVITY_TRIGGER)}]?.(${JSON.stringify(tabId)}, ${JSON.stringify(consumer)}, ${active})`;
+      const activity = (active: boolean) =>
+        attemptPromise({ operation: "automation.rendering", tabId, webContentsId: wc.id }, () =>
+          host.executeJavaScript(expression(active)),
+        ).pipe(Effect.timeout("3 seconds"));
+      const release = activity(false).pipe(
+        Effect.ignore,
+        Effect.ensuring(stopFrameCapture(tabId, consumer)),
+      );
+      yield* startFrameCapture(tabId, consumer);
+      yield* activity(true).pipe(
+        Effect.flatMap((ready) =>
+          ready === true && !wc.isDestroyed()
+            ? Effect.void
+            : Effect.fail(
+                new PreviewOperationError({
+                  operation: "automation.rendering",
+                  tabId,
+                  webContentsId: wc.id,
+                  cause: new Error("The preview renderer did not acknowledge capture activity."),
+                }),
+              ),
+        ),
+        Effect.onError(() => release),
+      );
+      let released = false;
+      return () => {
+        if (released) return Promise.resolve();
+        released = true;
+        return runViewport(release);
+      };
+    },
+  );
 
   const releasePictureInPicture = Effect.fn("PreviewManager.releasePictureInPicture")(function* (
     tabId: string,
@@ -3299,6 +3487,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
     setAnnotationSendEnabled,
     setAudioMuted,
     setColorScheme,
+    setViewport,
     setMainWindow,
     setForwardedShortcuts: (shortcuts: ReadonlyArray<PreviewForwardedShortcut>) =>
       Effect.sync(() => {
@@ -3495,6 +3684,10 @@ export class PreviewManager extends Context.Service<
       tabId: string,
       colorScheme: DesktopPreviewColorScheme,
     ) => Effect.Effect<void, PreviewManagerError>;
+    readonly setViewport: (
+      tabId: string,
+      viewport: DesktopPreviewViewport,
+    ) => Effect.Effect<void, PreviewManagerError>;
     readonly setZoomFactor: (
       tabId: string,
       zoomFactor: number,
@@ -3642,6 +3835,7 @@ export const make = Effect.gen(function* PreviewManagerMake() {
     hardReload: operations.hardReload,
     setColorScheme: operations.setColorScheme,
     setZoomFactor: operations.setZoomFactor,
+    setViewport: operations.setViewport,
     setAudioMuted: operations.setAudioMuted,
     openDevTools: operations.openDevTools,
     clearCookies: Effect.fn("PreviewManager.clearCookies")(function* (partitions) {
