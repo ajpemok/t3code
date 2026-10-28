@@ -397,7 +397,7 @@ function SnoozeMenuButton(props: {
             />
           }
         >
-          <ClockIcon className="size-3" />
+          <ClockIcon className="size-3.5" />
         </TooltipTrigger>
         <TooltipPopup>Snooze thread</TooltipPopup>
       </Tooltip>
@@ -1450,11 +1450,11 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
             ) : (
               <span
                 className={cn(
-                  "group/sidebar-status-slot relative flex min-w-0 shrink-0 items-center justify-end self-center text-xs",
+                  "group/sidebar-status-slot relative grid min-w-0 shrink-0 grid-cols-[auto_auto] grid-rows-[0.875rem_auto] items-center gap-x-1 gap-y-0.5 self-center text-xs",
                   props.sweepAction !== null && "hidden",
                 )}
               >
-                <span className="pointer-events-auto order-last ml-1 flex flex-col items-end justify-center gap-0.5 self-center tabular-nums text-secondary-label">
+                <span className="pointer-events-auto col-start-2 row-span-2 row-start-1 grid grid-rows-subgrid items-center justify-items-end tabular-nums text-secondary-label">
                   {topStatus ? (
                     isWokeStatus ? (
                       <ThreadModelBadge
@@ -1543,7 +1543,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                 {props.settlementSupported || showSnoozeButton || hasUnsentDraft ? (
                   <span
                     className={cn(
-                      "pointer-events-none order-first flex items-stretch opacity-0 has-[:focus-visible]:pointer-events-auto has-[:focus-visible]:opacity-100 group-any-hover/sidebar-row:pointer-events-auto group-any-hover/sidebar-row:opacity-100",
+                      "pointer-events-none col-start-1 row-start-1 flex h-6 items-stretch opacity-0 has-[:focus-visible]:pointer-events-auto has-[:focus-visible]:opacity-100 group-any-hover/sidebar-row:pointer-events-auto group-any-hover/sidebar-row:opacity-100",
                       snoozeMenuOpen && "pointer-events-auto opacity-100",
                     )}
                   >
@@ -1582,7 +1582,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                               aria-label="Settle thread"
                               onClick={handleSettleClick}
                               onPointerDown={handleActionPointerDown}
-                              className="-mr-1 inline-flex cursor-pointer items-center gap-1 rounded-md bg-transparent px-1.5 text-xs text-muted-foreground hover:text-foreground"
+                              className="inline-flex h-full cursor-pointer items-center justify-center rounded-md bg-transparent px-1.5 text-xs text-muted-foreground hover:text-foreground"
                             />
                           }
                         >
