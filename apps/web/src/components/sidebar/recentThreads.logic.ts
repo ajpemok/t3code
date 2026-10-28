@@ -43,6 +43,7 @@ export function recentThreads(
     readonly maxAgeMinutes: number;
     readonly includeSubagents: boolean;
     readonly pinnedOnly?: boolean;
+    readonly dismissed?: Readonly<Record<string, string>>;
   },
 ): RecentThreadEntry[] {
   const byKey = new Map(threads.map((thread) => [keyOf(thread), thread]));
@@ -55,6 +56,7 @@ export function recentThreads(
     .flatMap((thread) => {
       const subagent = isSidebarSubagentThread(thread);
       const at = finishedAt(thread);
+      if (at && options.dismissed?.[keyOf(thread)] === at) return [];
       if (!at || !Number.isFinite(Date.parse(at)) || Date.parse(at) <= cutoff || active(thread))
         return [];
       if (subagent && !options.includeSubagents) return [];

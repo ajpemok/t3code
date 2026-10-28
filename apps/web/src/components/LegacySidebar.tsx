@@ -208,6 +208,7 @@ import {
   isTrailingDoubleClick,
   resolveProjectStatusIndicator,
   activeSubagentsByParent,
+  filterProjectSections,
   resolveThreadLastVisitedAt,
   resolveThreadStatusPill,
   orderItemsByPreferredIds,
@@ -250,7 +251,6 @@ import { useProject } from "~/state/entities";
 import { projectTintColor } from "~/projectIdentity";
 import { useCloseInactiveProjectTabs } from "~/hooks/useCloseInactiveProjectTabs";
 import { ThreadActivityStatus } from "./sidebar/ThreadSurfaceUseIndicator";
-import { ThreadModelIdentity } from "./sidebar/ThreadModelDetails";
 import { useDelegatedUnderParent } from "~/state/entities";
 import { primaryServerKeybindingsAtom } from "../state/server";
 import { appAtomRegistry } from "../rpc/atomRegistry";
@@ -756,7 +756,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
         className={cn(
           "project-tint-row",
           isHighlighted && "project-tint-selected",
-          "relative isolate flex h-8 w-full min-w-0 cursor-pointer select-none items-center gap-2 overflow-hidden rounded-md px-2 text-left text-xs outline-hidden focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring group-data-[collapsible=icon]:hidden [&>span:last-child]:truncate [&>svg:not([class*='size-'])]:size-4 [&>svg]:shrink-0 [&>svg]:text-sidebar-muted-foreground",
+          "relative isolate flex min-h-10 w-full min-w-0 cursor-pointer select-none items-center gap-3 overflow-hidden rounded-md px-2 py-1 text-left text-xs outline-hidden focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring group-data-[collapsible=icon]:hidden [&>span:last-child]:truncate [&>svg:not([class*='size-'])]:size-3.5 [&>svg]:shrink-0 [&>svg]:text-sidebar-muted-foreground",
           isActive
             ? "bg-sidebar-row-active font-medium text-sidebar-foreground hover:bg-sidebar-row-active"
             : isSelected
@@ -769,74 +769,108 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
         onKeyDown={handleRowKeyDown}
         onContextMenu={handleRowContextMenu}
       >
-        <div className="flex min-w-0 flex-1 items-center gap-1.5 text-left">
-          {prStatus && pr && (
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <a
-                    href={prStatus.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-label={prStatus.tooltip}
-                    className={`inline-flex items-center justify-center ${prStatus.colorClass} cursor-pointer rounded-sm outline-hidden focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring`}
-                    onPointerDown={(event) => event.stopPropagation()}
-                    onClick={handlePrClick}
-                  >
-                    <ChangeRequestStatusIcon
-                      state={pr.state}
-                      isDraft={pr.isDraft}
-                      className="size-3"
-                    />
-                  </a>
-                }
+        <div className="flex min-w-0 flex-1 flex-col items-start gap-0.5 text-left">
+          <div className="flex w-full min-w-0 items-center gap-1.5">
+            {prStatus && pr && (
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <a
+                      href={prStatus.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label={prStatus.tooltip}
+                      className={`inline-flex items-center justify-center ${prStatus.colorClass} cursor-pointer rounded-sm outline-hidden focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring`}
+                      onPointerDown={(event) => event.stopPropagation()}
+                      onClick={handlePrClick}
+                    >
+                      <ChangeRequestStatusIcon
+                        state={pr.state}
+                        isDraft={pr.isDraft}
+                        className="size-3"
+                      />
+                    </a>
+                  }
+                />
+                <TooltipPopup side="top">
+                  <PrStatusTooltipContent status={prStatus} />
+                </TooltipPopup>
+              </Tooltip>
+            )}
+            {!pr && currentLinkedPr ? (
+              <a
+                href={currentLinkedPr.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                onPointerDown={(event) => event.stopPropagation()}
+                onClick={handlePrClick}
+                className="text-muted-foreground"
+                aria-label={`PR #${currentLinkedPr.number}, status pending`}
+              >
+                <PullRequestGlyph.pullRequest className="size-3" />
+              </a>
+            ) : null}
+            {canOperateThread && renamingThreadKey === threadKey ? (
+              <input
+                ref={handleRenameInputRef}
+                className="min-w-0 flex-1 truncate rounded border border-ring bg-transparent px-0.5 text-sm outline-none"
+                value={renamingTitle}
+                onChange={handleRenameInputChange}
+                onKeyDown={handleRenameInputKeyDown}
+                onBlur={handleRenameInputBlur}
+                onClick={handleRenameInputClick}
+                onDoubleClick={handleRenameInputClick}
               />
-              <TooltipPopup side="top">
-                <PrStatusTooltipContent status={prStatus} />
-              </TooltipPopup>
-            </Tooltip>
-          )}
-          {!pr && currentLinkedPr ? (
-            <a
-              href={currentLinkedPr.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              onPointerDown={(event) => event.stopPropagation()}
-              onClick={handlePrClick}
-              className="text-muted-foreground"
-              aria-label={`PR #${currentLinkedPr.number}, status pending`}
-            >
-              <PullRequestGlyph.pullRequest className="size-3" />
-            </a>
+            ) : (
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <span
+                      className="min-w-0 flex-1 truncate text-sm"
+                      data-testid={`thread-title-${thread.id}`}
+                    >
+                      {thread.title}
+                    </span>
+                  }
+                />
+                <TooltipPopup side="top">{thread.title}</TooltipPopup>
+              </Tooltip>
+            )}
+          </div>
+          {thread.branch ||
+          thread.worktreePath ||
+          runningTerminalIds.length > 0 ||
+          (isRemoteThread && !isDesktopLocalThread) ? (
+            <div className="flex w-full min-w-0 items-center gap-1.5 text-3xs text-secondary-label">
+              {isRemoteThread && !isDesktopLocalThread ? (
+                <Tooltip>
+                  <TooltipTrigger
+                    render={<span className="inline-flex min-w-0 shrink-0 items-center gap-1" />}
+                  >
+                    <EnvironmentMachineIcon kind={remoteMachine} className="size-3.5 shrink-0" />
+                    <span className="max-w-20 truncate">{threadEnvironmentLabel}</span>
+                  </TooltipTrigger>
+                  <TooltipPopup>{threadEnvironmentLabel ?? "Remote"}</TooltipPopup>
+                </Tooltip>
+              ) : null}
+              <ThreadWorktreeIndicator thread={thread} />
+              {thread.branch ? (
+                <Tooltip>
+                  <TooltipTrigger render={<span className="min-w-0 truncate" />}>
+                    {thread.branch}
+                  </TooltipTrigger>
+                  <TooltipPopup>{thread.branch}</TooltipPopup>
+                </Tooltip>
+              ) : null}
+              <ThreadTerminalStatusButton
+                threadRef={threadRef}
+                terminalIds={runningTerminalIds}
+                onThreadActivate={navigateToThread}
+              />
+            </div>
           ) : null}
-          {canOperateThread && renamingThreadKey === threadKey ? (
-            <input
-              ref={handleRenameInputRef}
-              className="min-w-0 flex-1 truncate rounded border border-ring bg-transparent px-0.5 text-sm outline-none"
-              value={renamingTitle}
-              onChange={handleRenameInputChange}
-              onKeyDown={handleRenameInputKeyDown}
-              onBlur={handleRenameInputBlur}
-              onClick={handleRenameInputClick}
-              onDoubleClick={handleRenameInputClick}
-            />
-          ) : (
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <span
-                    className="min-w-0 flex-1 truncate text-sm"
-                    data-testid={`thread-title-${thread.id}`}
-                  >
-                    {thread.title}
-                  </span>
-                }
-              />
-              <TooltipPopup side="top">{thread.title}</TooltipPopup>
-            </Tooltip>
-          )}
         </div>
-        <div className="ml-auto flex shrink-0 items-center gap-1.5">
+        <div className="ml-auto flex shrink-0 items-center gap-1.5 self-center">
           {canOperatePreview && discoveredPorts.length > 0 && (
             <Tooltip>
               <TooltipTrigger
@@ -857,12 +891,6 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
               </TooltipPopup>
             </Tooltip>
           )}
-          <ThreadWorktreeIndicator thread={thread} />
-          <ThreadTerminalStatusButton
-            threadRef={threadRef}
-            terminalIds={runningTerminalIds}
-            onThreadActivate={navigateToThread}
-          />
           <div
             className={`flex min-w-12 justify-end group-hover/menu-sub-item:min-w-28 group-focus-within/menu-sub-item:min-w-28 ${
               canSettle ? "max-sm:min-w-28" : isRemoteThread ? "max-sm:min-w-24" : "max-sm:min-w-20"
@@ -986,25 +1014,6 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
             ) : null}
             <span className={threadMetaClassName}>
               <span className="inline-flex items-center gap-1">
-                {isRemoteThread && !isDesktopLocalThread && (
-                  <Tooltip>
-                    <TooltipTrigger
-                      render={
-                        <span
-                          aria-label={threadEnvironmentLabel ?? "Remote"}
-                          className="inline-flex items-center justify-center"
-                        />
-                      }
-                    >
-                      <EnvironmentMachineIcon
-                        kind={remoteMachine}
-                        className="size-3 text-muted-foreground/40"
-                      />
-                    </TooltipTrigger>
-                    <TooltipPopup side="top">{threadEnvironmentLabel}</TooltipPopup>
-                  </Tooltip>
-                )}
-                <ThreadModelIdentity thread={thread} trackRun={leaseLiveStatus} />
                 {jumpLabel ? (
                   <Tooltip>
                     <TooltipTrigger
@@ -1021,7 +1030,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                   </Tooltip>
                 ) : (
                   <span
-                    className={`inline-flex flex-col items-end text-3xs leading-tight tabular-nums ${
+                    className={`inline-flex flex-col items-end justify-center gap-0.5 text-3xs leading-tight tabular-nums ${
                       isHighlighted ? "text-foreground" : "text-secondary-label"
                     }`}
                   >
@@ -3703,6 +3712,7 @@ function useSortedLegacySidebarProjects(input: {
   const sectionThreads = useProjectSectionThreads(sidebarThreads);
   const pinnedProjectKeys = useClientSettings((settings) => settings.sidebarPinnedProjectKeys);
   const hideInactive = useClientSettings((settings) => settings.sidebarHideInactiveEnabled);
+  const pinnedOnly = useClientSettings((settings) => settings.sidebarPinnedOnlyEnabled);
   const populatedProjectKeys = new Set(
     sectionThreads.map((thread) => {
       const physicalKey =
@@ -3715,17 +3725,21 @@ function useSortedLegacySidebarProjects(input: {
   const sidebarProjectByKey = new Map(
     sidebarProjects.map((project) => [project.projectKey, project] as const),
   );
-  const sortableProjects = sidebarProjects
-    .filter(
-      (project) =>
-        populatedProjectKeys.has(project.projectKey) ||
-        (!hideInactive &&
-          projectPinPreferenceKeys(project).some((key) => pinnedProjectKeys.includes(key))),
-    )
-    .map((project) => ({
-      ...project,
-      id: project.projectKey,
-    }));
+  const sortableProjects = filterProjectSections(sidebarProjects, {
+    populatedProjectKeys,
+    pinnedProjectKeys: new Set(
+      sidebarProjects
+        .filter((project) =>
+          projectPinPreferenceKeys(project).some((key) => pinnedProjectKeys.includes(key)),
+        )
+        .map((project) => project.projectKey),
+    ),
+    hideInactive,
+    pinnedOnly,
+  }).map((project) => ({
+    ...project,
+    id: project.projectKey,
+  }));
   const sortableThreads = sectionThreads.map((thread) => {
     const physicalKey =
       projectPhysicalKeyByScopedRef.get(

@@ -608,6 +608,24 @@ export function filterSidebarV2VisibleThreads<
   );
 }
 
+export function filterProjectSections<T extends { readonly projectKey: string }>(
+  projects: readonly T[],
+  options: {
+    readonly populatedProjectKeys: ReadonlySet<string>;
+    readonly pinnedProjectKeys: ReadonlySet<string>;
+    readonly hideInactive?: boolean;
+    readonly pinnedOnly?: boolean;
+  },
+): T[] {
+  return projects.filter(
+    (project) =>
+      options.populatedProjectKeys.has(project.projectKey) ||
+      (!options.hideInactive &&
+        !options.pinnedOnly &&
+        options.pinnedProjectKeys.has(project.projectKey)),
+  );
+}
+
 export function filterProjectSectionThreads<T extends SidebarThreadSummary>(
   threads: readonly T[],
   options: {

@@ -81,7 +81,6 @@ export function ThreadActivityStatus({
           : activity & SURFACE_USE.browser
             ? { kind: "browser" as const, label: "Using Browser" }
             : null;
-  if (!tool && (!status || status.label === "Completed")) return null;
   const kind =
     tool?.kind ??
     (woke
@@ -93,35 +92,40 @@ export function ThreadActivityStatus({
           : attention
             ? "attention"
             : "working");
-  const presentation = (
-    <span
-      data-thread-activity={kind}
-      data-thread-surface-use={tool ? activity : undefined}
-      className={`inline-flex shrink-0 items-center gap-1 text-3xs ${tool ? "text-info" : (status?.colorClass ?? "")}`}
-    >
-      <TaskActivitySymbol kind={kind} />
-      <span>{tool?.label ?? status?.label}</span>
-    </span>
-  );
-  return woke && onAcknowledgeWoke ? (
-    <button
-      type="button"
-      aria-label="Dismiss Woke notification"
-      className="inline-flex cursor-pointer rounded-sm outline-none hover:underline focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-      onClick={(event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        onAcknowledgeWoke();
-      }}
-    >
-      {presentation}
-    </button>
-  ) : kind === "working" || kind === "compacting" || tool ? (
-    <ThreadModelBadge thread={thread} trackRun={enabled && trackSurfaceUse}>
-      {presentation}
+  const label = tool?.label ?? status?.label;
+  const presentation =
+    !tool && (!status || status.label === "Completed") ? null : (
+      <span
+        role="img"
+        aria-label={label}
+        data-thread-activity={kind}
+        data-thread-surface-use={tool ? activity : undefined}
+        className={`inline-flex shrink-0 items-center text-3xs ${tool ? "text-info" : (status?.colorClass ?? "")}`}
+      >
+        <TaskActivitySymbol kind={kind} />
+      </span>
+    );
+  const indicator =
+    woke && onAcknowledgeWoke ? (
+      <button
+        type="button"
+        aria-label="Dismiss Woke notification"
+        className="inline-flex cursor-pointer rounded-sm outline-none hover:underline focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+        onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          onAcknowledgeWoke();
+        }}
+      >
+        {presentation}
+      </button>
+    ) : (
+      presentation
+    );
+  return (
+    <ThreadModelBadge thread={thread} trackRun={enabled && trackSurfaceUse} statusLabel={label}>
+      {indicator}
     </ThreadModelBadge>
-  ) : (
-    presentation
   );
 }
 
