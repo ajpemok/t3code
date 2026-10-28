@@ -235,12 +235,13 @@ it.effect.each([
         occurredAt: at,
         payload,
       });
-    const assertBlocked = Effect.fnUntraced(function* (expected: boolean) {
+    const assertBlocked = Effect.fnUntraced(function* (expected: boolean, compacting = false) {
       const listed = (yield* store.getShellSnapshot()).threads.find((row) => row.id === threadId);
       for (const shell of [yield* store.getThreadShell(threadId), listed]) {
         assert.equal(shell?.activeRunId, run.id);
         assert.equal(shell?.status, "running");
         assert.equal(shell?.blockedOnThreadWait ?? false, expected);
+        assert.equal(shell?.isCompacting ?? false, compacting);
       }
     });
     const wait = {
@@ -335,7 +336,7 @@ it.effect.each([
       driver,
     };
     yield* updateItem(compaction);
-    yield* assertBlocked(false);
+    yield* assertBlocked(false, true);
     yield* updateItem({ ...compaction, status: "completed", completedAt: at });
     yield* assertBlocked(true);
     yield* updateItem({ ...wait, status: "completed", completedAt: at });

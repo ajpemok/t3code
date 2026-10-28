@@ -1582,6 +1582,22 @@ const waitsOnUser = (item: OrchestrationV2TurnItem, liveRunIds: ReadonlySet<RunI
   item.type === "link_request" ||
   (item.type === "secret_request" && item.runId !== null && liveRunIds.has(item.runId));
 
+function hasRunningCompaction(
+  activeRunId: RunId | null,
+  items: readonly OrchestrationV2TurnItem[],
+) {
+  return (
+    activeRunId !== null &&
+    items.some(
+      (item) =>
+        item.type === "compaction" &&
+        item.runId === activeRunId &&
+        item.status === "running" &&
+        item.completedAt === null,
+    )
+  );
+}
+
 export function threadShellFromProjection(
   projection: OrchestrationV2ThreadProjection,
 ): OrchestrationV2ThreadShell {
@@ -1687,6 +1703,7 @@ export function threadShellFromProjection(
         (item) => item.runId === latestRun.id && item.type === "run_interrupt_request",
       ),
     activeRunId: activeRun?.id ?? null,
+    isCompacting: hasRunningCompaction(activeRun?.id ?? null, projection.turnItems),
     blockedOnThreadWait: deriveBlockedOnThreadWait({ activeRun, turnItems: projection.turnItems }),
     activityRunStatus: activityRun?.status ?? null,
     activityRunStartedAt:
@@ -1805,6 +1822,7 @@ type ShellThreadState = {
   readonly latestRunStopRequested: boolean;
   readonly activeRunId: RunId | null;
   readonly blockedOnThreadWait: boolean;
+  readonly isCompacting: boolean;
   readonly activityRunStatus: ShellActivityRunStatus | null;
   readonly activityRunStartedAt: DateTime.Utc | null;
   readonly lastError: string | null;
@@ -1966,6 +1984,7 @@ function shellFromState(input: {
     latestRunStopRequested: input.state.latestRunStopRequested,
     activeRunId: input.state.activeRunId,
     blockedOnThreadWait: input.state.blockedOnThreadWait,
+    isCompacting: input.state.isCompacting,
     activityRunStatus: input.state.activityRunStatus,
     activityRunStartedAt: input.state.activityRunStartedAt,
     status: input.state.latestRunStatus,
@@ -6513,6 +6532,10 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
           latestRunCompletedAt,
           latestRunStopRequested,
           activeRunId: row.active_run_id === null ? null : RunId.make(row.active_run_id),
+          isCompacting: hasRunningCompaction(
+            row.active_run_id === null ? null : RunId.make(row.active_run_id),
+            pendingTurnItemsByThreadId.get(thread.id) ?? [],
+          ),
           blockedOnThreadWait: deriveBlockedOnThreadWait({
             activeRun:
               row.active_run_id === null || row.active_run_status !== "running"
