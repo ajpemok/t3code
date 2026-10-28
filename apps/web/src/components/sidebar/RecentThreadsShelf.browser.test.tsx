@@ -22,7 +22,10 @@ vi.mock("~/state/threads", () => ({
   },
 }));
 vi.mock("~/state/entities", () => ({ useProject: () => null }));
-vi.mock("~/hooks/useThreadRouteTarget", () => ({ useThreadRouteRef: () => null }));
+vi.mock("~/hooks/useThreadRouteTarget", () => ({
+  useThreadRouteRef: () => null,
+  useThreadRouteTarget: () => null,
+}));
 vi.mock("~/hooks/useCloseInactiveProjectTabs", () => ({
   useCloseInactiveProjectTabs: () => ({ showTaskContextMenu: async () => {} }),
 }));

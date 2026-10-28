@@ -1,4 +1,5 @@
 import { RegistryContext } from "@effect/atom-react";
+import "~/index.css";
 import { EnvironmentId, ProviderInstanceId, RunId, ThreadId } from "@t3tools/contracts";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { Atom, AtomRegistry } from "effect/reactivity";
