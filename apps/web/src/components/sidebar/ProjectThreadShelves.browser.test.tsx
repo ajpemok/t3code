@@ -22,7 +22,14 @@ const state = vi.hoisted(() => ({
   canOperate: true,
 }));
 vi.mock("~/hooks/useRecentThreads", () => ({
-  useRecentThreads: () => ({ entries: [], retainedKeys: new Set<string>(), showSection: false }),
+  useRecentThreads: () => ({
+    entries: [],
+    retainedKeys: new Set<string>(),
+    showSection: false,
+    dismissedCount: 0,
+  }),
+  dismissRecentThread: () => {},
+  restoreDismissedRecentThreads: () => {},
 }));
 vi.mock("~/state/entities", () => ({
   useDelegatedUnderParent: () => new Set(),
