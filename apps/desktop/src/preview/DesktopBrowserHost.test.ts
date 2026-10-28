@@ -8,6 +8,7 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
 import * as NodeEvents from "node:events";
+import * as NodePath from "node:path";
 
 import * as DesktopBrowserHost from "./DesktopBrowserHost.ts";
 
@@ -134,6 +135,155 @@ const watchPainting = (host: DesktopBrowserHost.DesktopBrowserHost["Service"]) =
   });
 
 describe("DesktopBrowserHost", () => {
+  it.effect.each(["Page.captureScreenshot", "Page.getLayoutMetrics"])(
+    "keeps %s paintable until Chromium finishes and restores it before replying",
+    (method) =>
+      Effect.gen(function* () {
+        const host = yield* DesktopBrowserHost.make;
+        const debuggee = makeDebuggee();
+        const ready = Promise.withResolvers<void>();
+        const preparing = Promise.withResolvers<void>();
+        let released = false;
+        host.attach(key, {
+          ...debuggee.tab,
+          acquireRendering: async () => {
+            preparing.resolve();
+            await ready.promise;
+            return async () => {
+              released = true;
+            };
+          },
+        });
+        const replies = yield* watchReplies(host);
+        yield* command(host, 1, method);
+        expect(debuggee.sent).toEqual([]);
+        yield* Effect.promise(() => preparing.promise);
+        const sent = debuggee.nextSend();
+        ready.resolve();
+        yield* Effect.promise(() => sent);
+        expect(released).toBe(false);
+        debuggee.releaseFirst();
+        expect(yield* Queue.take(replies)).toBe(1);
+        expect(released).toBe(true);
+      }).pipe(Effect.scoped),
+  );
+
+  it.effect("adds CSS width to screencast metadata without changing native DIP dimensions", () =>
+    Effect.gen(function* () {
+      const host = yield* DesktopBrowserHost.make;
+      const debuggee = makeDebuggee();
+      host.attach(key, { ...debuggee.tab, screencastCssWidth: (width) => width / 1.25 });
+      const frames = yield* Queue.unbounded<unknown>();
+      yield* host.events.pipe(
+        Stream.runForEach((line) => {
+          const event = decodeEvent(new TextDecoder().decode(line));
+          if (event.type !== "cdp") return Effect.void;
+          const message = JSON.parse(event.message);
+          return message.method === "Page.screencastFrame"
+            ? Queue.offer(frames, message.params)
+            : Effect.void;
+        }),
+        Effect.forkScoped,
+      );
+      yield* Effect.yieldNow;
+      const replies = yield* watchReplies(host);
+      yield* host.handleCommandLine(
+        encodeJson({
+          type: "cdp",
+          ...key,
+          message: encodeJson({ id: 1, method: "Target.setAutoAttach", params: {} }),
+        }),
+      );
+      expect(yield* Queue.take(replies)).toBe(1);
+      debuggee.emit("Page.screencastFrame", {
+        data: "frame",
+        metadata: { deviceWidth: 840, deviceHeight: 1300 },
+        sessionId: 1,
+      });
+      expect(yield* Queue.take(frames)).toMatchObject({
+        metadata: { deviceWidth: 840, deviceHeight: 1300, t3CssViewportWidth: 672 },
+      });
+      debuggee.release();
+    }).pipe(Effect.scoped),
+  );
+
+  it.effect.each(["set", "clear"] as const)(
+    "waits for the native viewport acknowledgement on %s",
+    (operation) =>
+      Effect.gen(function* () {
+        const host = yield* DesktopBrowserHost.make;
+        const debuggee = makeDebuggee();
+        const applied = Promise.withResolvers<void>();
+        const sizes: Array<{ width: number; height: number } | null> = [];
+        host.attach(key, {
+          ...debuggee.tab,
+          applyViewport: (size) => {
+            sizes.push(size);
+            return applied.promise;
+          },
+        });
+        const reader = yield* takeEvents(host, 2).pipe(Effect.forkScoped);
+        yield* Effect.yieldNow;
+        yield* host.handleCommandLine(
+          encodeJson({
+            type: "cdp",
+            ...key,
+            message: encodeJson({
+              id: 41,
+              sessionId: "t3-preview-page",
+              method:
+                operation === "set"
+                  ? "Emulation.setDeviceMetricsOverride"
+                  : "Emulation.clearDeviceMetricsOverride",
+              params:
+                operation === "set"
+                  ? { width: 390, height: 844, deviceScaleFactor: 0, mobile: false }
+                  : {},
+            }),
+          }),
+        );
+        expect(sizes).toEqual([operation === "set" ? { width: 390, height: 844 } : null]);
+        expect(reader.pollUnsafe()).toBeUndefined();
+        applied.resolve();
+        const [, reply] = yield* Fiber.join(reader);
+        expect(reply).toMatchObject({ type: "cdp" });
+        expect(JSON.parse((reply as { message: string }).message)).toMatchObject({
+          id: 41,
+          result: {},
+        });
+      }).pipe(Effect.scoped),
+  );
+
+  it.effect("reports native viewport failure without acknowledging a successful resize", () =>
+    Effect.gen(function* () {
+      const host = yield* DesktopBrowserHost.make;
+      host.attach(key, {
+        ...makeDebuggee().tab,
+        applyViewport: async () => {
+          throw new Error("synthetic native failure");
+        },
+      });
+      const reader = yield* takeEvents(host, 2).pipe(Effect.forkScoped);
+      yield* Effect.yieldNow;
+      yield* host.handleCommandLine(
+        encodeJson({
+          type: "cdp",
+          ...key,
+          message: encodeJson({
+            id: 42,
+            sessionId: "t3-preview-page",
+            method: "Emulation.setDeviceMetricsOverride",
+            params: { width: 390, height: 844, deviceScaleFactor: 0, mobile: false },
+          }),
+        }),
+      );
+      const [, reply] = yield* Fiber.join(reader);
+      const response = JSON.parse((reply as { message: string }).message);
+      expect(response).toMatchObject({ id: 42, error: { message: "synthetic native failure" } });
+      expect(response).not.toHaveProperty("result");
+    }).pipe(Effect.scoped),
+  );
+
   it.effect("announces tabs already attached to a backend that starts later", () =>
     Effect.gen(function* () {
       const host = yield* DesktopBrowserHost.make;
@@ -885,7 +1035,13 @@ describe("DesktopBrowserHost", () => {
     Effect.gen(function* () {
       const host = yield* DesktopBrowserHost.make;
       const debuggee = makeDebuggee();
-      host.attach(key, debuggee.tab);
+      let releases = 0;
+      host.attach(key, {
+        ...debuggee.tab,
+        acquireRendering: async () => async () => {
+          releases += 1;
+        },
+      });
       const replies = yield* watchReplies(host);
       const painting = yield* watchPainting(host);
       const raw = (message: Record<string, unknown>) =>
@@ -901,6 +1057,7 @@ describe("DesktopBrowserHost", () => {
       debuggee.release();
       yield* settle;
       expect(painting).toEqual([true]);
+      expect(releases).toBe(0);
 
       yield* raw({
         id: 6,
@@ -909,6 +1066,7 @@ describe("DesktopBrowserHost", () => {
       });
       yield* settle;
       expect(painting).toEqual([true, false]);
+      expect(releases).toBe(1);
     }).pipe(Effect.scoped),
   );
 
@@ -936,7 +1094,7 @@ describe("DesktopBrowserHost", () => {
       );
       debuggee.emit("Browser.downloadWillBegin", { guid: "guid-1", suggestedFilename: "r.csv" });
       expect(host.placeDownload(debuggee.tab.webContents, item)).toBe(true);
-      expect(paths).toEqual(["/srv/downloads/guid-1"]);
+      expect(paths).toEqual([NodePath.join("/srv/downloads", "guid-1")]);
     }),
   );
 

@@ -11,6 +11,7 @@ import {
   DesktopPreviewSetAudioMutedInputSchema,
   DesktopPreviewSetColorSchemeInputSchema,
   DesktopPreviewSetZoomFactorInputSchema,
+  DesktopPreviewSetViewportInputSchema,
   BrowserImportResult,
   BrowserImportSource,
   DesktopPreviewClearDataInputSchema,
@@ -175,6 +176,15 @@ const setZoomFactor = DesktopIpc.makeIpcMethod({
     yield* manager.setZoomFactor(tabId, zoomFactor);
   }),
 });
+const setViewport = DesktopIpc.makeIpcMethod({
+  channel: IpcChannels.PREVIEW_SET_VIEWPORT_CHANNEL,
+  payload: DesktopPreviewSetViewportInputSchema,
+  result: Schema.Void,
+  handler: Effect.fn("desktop.ipc.preview.setViewport")(function* ({ tabId, viewport }) {
+    const manager = yield* PreviewManager.PreviewManager;
+    yield* manager.setViewport(tabId, viewport);
+  }),
+});
 const setColorScheme = DesktopIpc.makeIpcMethod({
   channel: IpcChannels.PREVIEW_SET_COLOR_SCHEME_CHANNEL,
   payload: DesktopPreviewSetColorSchemeInputSchema,
@@ -215,6 +225,7 @@ export const startRecording = DesktopIpc.makeIpcMethod({
     const options = Option.map(settings, (value) => ({
       showKeyPresses: value.browserRecordingShowKeyPresses,
       showMousePresses: value.browserRecordingShowMousePresses,
+      pointer: value.browserRecordingPointer,
     }));
     return yield* manager
       .startRecording(tabId, Option.getOrUndefined(options))
@@ -431,6 +442,7 @@ export const methods = [
   hardReload,
   setColorScheme,
   setZoomFactor,
+  setViewport,
   setAudioMuted,
   openDevTools,
   clearCookies,
