@@ -1,5 +1,9 @@
 # Settings and project overrides
 
+On web and desktop, **Settings → A3 Fork** groups custom sidebar, Recent threads,
+header, context usage and recording pointer controls. Recording pointers require
+the desktop app. Sidebar shortcuts remain in **Settings → Keybindings**.
+
 On web and desktop, the "Applying settings for …" sentence at the top of Settings pages picks
 the project and environment a change applies to. Pages that only hold device preferences, such as
 Appearance, don't show it. They start at **All projects** and **All environments**
