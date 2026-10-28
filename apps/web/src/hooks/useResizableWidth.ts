@@ -15,6 +15,7 @@ export interface UseResizableWidthOptions {
   readonly minWidth: number;
   readonly maxWidth: number;
   readonly edge: "left" | "right";
+  readonly viewportWidth?: number;
 }
 
 export interface ResizableWidthHandlers {
@@ -31,7 +32,7 @@ export function useResizableWidth(options: UseResizableWidthOptions): {
   readonly width: number;
   readonly handlers: ResizableWidthHandlers;
 } {
-  const { storageKey, defaultWidth, minWidth, maxWidth, edge } = options;
+  const { storageKey, defaultWidth, minWidth, maxWidth, edge, viewportWidth } = options;
 
   const clamp = (value: number): number => {
     if (!Number.isFinite(value)) return defaultWidth;
@@ -48,9 +49,19 @@ export function useResizableWidth(options: UseResizableWidthOptions): {
       return defaultWidth;
     }
   };
-  const [widthState, setWidthState] = useState(() => ({ storageKey, width: readWidth() }));
+  const [widthState, setWidthState] = useState(() => ({
+    storageKey,
+    width: readWidth(),
+    viewportWidth,
+  }));
   if (widthState.storageKey !== storageKey) {
-    setWidthState({ storageKey, width: readWidth() });
+    setWidthState({ storageKey, width: readWidth(), viewportWidth });
+  } else if (widthState.viewportWidth !== viewportWidth) {
+    const delta =
+      viewportWidth === undefined || widthState.viewportWidth === undefined
+        ? 0
+        : viewportWidth - widthState.viewportWidth;
+    setWidthState({ storageKey, width: clamp(widthState.width + delta), viewportWidth });
   }
 
   const clampedWidth = clamp(widthState.width);
@@ -72,7 +83,11 @@ export function useResizableWidth(options: UseResizableWidthOptions): {
         return nextWidth;
       },
       finish(finalWidth) {
-        setWidthState({ storageKey: startStorageKey, width: finalWidth });
+        setWidthState((current) => ({
+          storageKey: startStorageKey,
+          width: finalWidth,
+          viewportWidth: current.viewportWidth,
+        }));
         try {
           setLocalStorageItem(startStorageKey, finalWidth, WidthSchema);
         } catch (error) {
