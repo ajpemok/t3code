@@ -5,7 +5,7 @@ need a separate branch and working directory.
 
 ## Project Sections and Header
 
-Turn on **Project Sections** in **Settings → Appearance** to group threads into
+Turn on **Project Sections** in **Settings → A3 Fork** to group threads into
 collapsible project trees. Turn it off to return to the flat list. Collapse choices
 are saved on this client. Both views show active and idle threads; settled and snoozed
 threads stay in the bottom-aligned **Settled** and **Snoozed** sections. Expand either
@@ -21,7 +21,7 @@ The same action pins its eligible threads. Unpinning the project removes that sa
 header preference and unpins its eligible threads. Settled and snoozed threads stay hidden.
 
 Use **Show Pinned Threads Only** in the sidebar toolbar, or **Pinned Threads Only**
-in **Settings → Appearance**, to hide unpinned parent threads. This combines with
+in **Settings → A3 Fork**, to hide unpinned parent threads. This combines with
 **Hide Inactive** in either view. Subagents follow their parent's visibility;
 **Snoozed** and **Settled** remain available. Assign **Sidebar: Show Pinned Threads
 Only/All Threads** in **Settings → Keybindings** for a shortcut.
@@ -39,7 +39,7 @@ input requests. An idle parent stays available while one of its subagents works.
 This filter also hides empty pinned project headers; turning it off restores them.
 
 **Recent** keeps the last five finished threads within the past hour. In
-**Settings → Appearance → Recent Threads**, change the count or age limit. Set
+**Settings → A3 Fork → Recent Threads**, change the count or age limit. Set
 age to **0** for the last N regardless of age. The count includes subagents when
 **Include Recent Subagents** and **Show Subagents** are on.
 
@@ -50,7 +50,7 @@ Switch the **Recent Section** or normal-list retention off independently.
 Pinned Only still applies; snoozed, settled and archived threads stay out of Recent.
 
 Choose **Show** or **Hide** from the **Subagents** menu beside the
-sidebar controls or in **Settings → Appearance**. **Show** includes idle children
+sidebar controls or in **Settings → A3 Fork**. **Show** includes idle children
 and respects Hide Inactive. **Visible Subagents** sets the initial count per parent;
 expand the remaining children when needed. Project summaries count active and inactive
 threads and subagents separately. These choices apply to both views.

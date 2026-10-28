@@ -1,6 +1,13 @@
-# Maintaining AJPEMOK
+# Maintaining A3 Fork
 
-AJPEMOK follows official T3 Code nightlies with a small set of local repairs and interface changes.
+A3 Fork follows official T3 Code nightlies with a small set of local repairs and interface changes.
+The existing AJPEMOK source paths and package identity are retained.
+
+Custom controls live in **Settings → A3 Fork**. Saved preference keys remain stable.
+The selected icon source is `assets/a3-fork/icon-1024.png`; the Windows ICO and web
+sizes are exported from it. Keep those exports when refreshing: upstream's Icon
+Composer project does not contain the A3 artwork. Desktop and web select the fork
+assets through the existing nightly entries in `scripts/lib/brand-assets.ts`.
 [upstream.json](upstream.json) records the official source base; [Changes](CHANGES.md) lists every fork change, its files and the behaviour to preserve during conflicts.
 Update both when refreshing the fork or changing its scope.
 Git records previous bases and patch revisions.
