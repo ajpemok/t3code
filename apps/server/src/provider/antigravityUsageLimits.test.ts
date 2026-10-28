@@ -50,6 +50,7 @@ const summary = {
 const fixture = Effect.fn("AntigravityUsageTest.fixture")(function* (
   options: {
     summary?: unknown;
+    gateGeminiOnClientVersion?: boolean;
     /** Per-host quota summaries; hosts not listed fall back to `summary`. */
     summaryByHost?: Record<string, unknown>;
     models?: unknown;
@@ -107,6 +108,34 @@ const fixture = Effect.fn("AntigravityUsageTest.fixture")(function* (
         );
       }
       expect(JSON.parse(body)).toEqual({ project: "project-id" });
+      if (options.gateGeminiOnClientVersion && request.url.endsWith(":retrieveUserQuotaSummary")) {
+        const currentClient = request.headers["user-agent"]?.startsWith("antigravity/hub/2.24.0 ");
+        return HttpClientResponse.fromWeb(
+          request,
+          Response.json({
+            groups: currentClient
+              ? [
+                  {
+                    buckets: [
+                      {
+                        bucketId: "gemini-5h",
+                        window: "5h",
+                        remainingFraction: 0.82384795,
+                        resetTime: "2026-10-21T07:10:41Z",
+                      },
+                      {
+                        bucketId: "gemini-weekly",
+                        window: "weekly",
+                        remainingFraction: 0.85014075,
+                        resetTime: "2026-10-26T23:49:21Z",
+                      },
+                    ],
+                  },
+                ]
+              : [{ buckets: [{ bucketId: "3p-5h", window: "5h", remainingFraction: 1 }] }],
+          }),
+        );
+      }
       return HttpClientResponse.fromWeb(
         request,
         request.url.endsWith(":retrieveUserQuotaSummary")
@@ -125,6 +154,27 @@ const fixture = Effect.fn("AntigravityUsageTest.fixture")(function* (
 });
 
 describe("Antigravity subscription limits", () => {
+  it.effect("requests the client version that exposes real Gemini quota buckets", () =>
+    Effect.gen(function* () {
+      const { probe } = yield* fixture({ gateGeminiOnClientVersion: true });
+      const limits = yield* probe;
+      expect(limits.windows).toEqual([
+        expect.objectContaining({
+          id: "gemini-5h",
+          kind: "session",
+          resetsAt: "2026-10-21T07:10:41.000Z",
+        }),
+        expect.objectContaining({
+          id: "gemini-weekly",
+          kind: "weekly",
+          resetsAt: "2026-10-26T23:49:21.000Z",
+        }),
+      ]);
+      expect(limits.windows[0]!.usedPercent).toBeCloseTo(17.615205);
+      expect(limits.windows[1]!.usedPercent).toBeCloseTo(14.985925);
+    }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+  );
+
   it.effect("reports separate Gemini and shared Claude/GPT five-hour and weekly limits", () =>
     Effect.gen(function* () {
       const { probe, requests } = yield* fixture();
