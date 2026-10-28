@@ -224,7 +224,7 @@ it.each(["running", "completed", "cancelled", "failed", "interrupted", "rolled_b
     );
     expect(sidebarExecutionModel(thread, null)).toEqual({
       selection: thread.modelSelection,
-      source: "selected",
+      source: status === "running" ? "pending" : "selected",
     });
   },
 );

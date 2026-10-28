@@ -247,7 +247,8 @@ a later completed turn can appear again. Keep the optional normal-list retention
 Working and Goal statuses include a compact model name. The shared hover/focus
 card shows the full model, provider and available reasoning/speed options. The
 badge follows the active run's settings. If the composer has different selected
-settings, the card shows them separately under Next Turn. Finished runs do not
+settings, the card shows them separately under Next Turn. While the active run's
+settings load, do not display the next-turn speed as its running speed. Finished runs do not
 override the current selection. Speed uses the option
 value, so provider display labels cannot change its meaning. Unknown model
 or option values stay visible rather than being replaced by catalog defaults.

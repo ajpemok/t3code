@@ -15,12 +15,11 @@ const EMPTY_CAPABILITIES = createModelCapabilities({ optionDescriptors: [] });
 export function sidebarExecutionModel(
   thread: SidebarThreadSummary,
   projection: ThreadStructure | null,
-): { selection: ModelSelection; source: "reported" | "run" | "selected" } {
+): { selection: ModelSelection; source: "reported" | "run" | "selected" | "pending" } {
   const runId = thread.runtime?.activeRunId ?? thread.latestRun?.runId;
+  const activeStatuses = ["preparing", "queued", "starting", "running", "waiting"];
   const run = projection?.runs.find(
-    (candidate) =>
-      candidate.id === runId &&
-      ["preparing", "queued", "starting", "running", "waiting"].includes(candidate.status),
+    (candidate) => candidate.id === runId && activeStatuses.includes(candidate.status),
   );
   const providerThreadId = run?.providerThreadId ?? projection?.thread.activeProviderThreadId;
   const reported = projection?.providerThreads.find(
@@ -47,7 +46,11 @@ export function sidebarExecutionModel(
       source: run ? "run" : "reported",
     };
   }
-  return { selection, source: run ? "run" : "selected" };
+  const status = thread.runtime?.activeRunId ? thread.runtime.status : thread.latestRun?.status;
+  return {
+    selection,
+    source: run ? "run" : runId && activeStatuses.includes(status ?? "") ? "pending" : "selected",
+  };
 }
 
 export function sidebarModelDetails(

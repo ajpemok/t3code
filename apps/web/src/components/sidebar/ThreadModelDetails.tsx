@@ -32,8 +32,10 @@ function useModelDetails(thread: SidebarThreadSummary, readRun: boolean) {
   );
   const { selection, source } = sidebarExecutionModel(thread, projection);
   const provider = providers.find((candidate) => candidate.instanceId === selection.instanceId);
+  const details = sidebarModelDetails(selection, provider);
   return {
-    ...sidebarModelDetails(selection, provider),
+    ...details,
+    speed: source === "pending" ? null : details.speed,
     provider,
     source,
     nextTurn:
@@ -78,6 +80,7 @@ function ModelFields({
 }
 
 function ModelSettings({ details }: { readonly details: ReturnType<typeof useModelDetails> }) {
+  if (details.source === "pending") return <p>Loading running settings…</p>;
   return (
     <>
       <ModelFields
@@ -123,7 +126,11 @@ export function ThreadModelIdentity({
             aria-label={[
               statusLabel,
               details.modelName,
-              details.speed ? `${details.speed.label} mode` : "Speed not reported",
+              details.source === "pending"
+                ? "Loading running settings"
+                : details.speed
+                  ? `${details.speed.label} mode`
+                  : "Speed not reported",
             ]
               .filter(Boolean)
               .join(" · ")}
