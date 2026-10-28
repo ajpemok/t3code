@@ -2,6 +2,8 @@
 
 import {
   type BrowserRecordingFrameRate,
+  type BrowserRecordingPointer,
+  DEFAULT_BROWSER_RECORDING_POINTER,
   PROVIDER_SEND_TURN_MAX_FILE_BYTES,
   type PreviewAutomationClickInput,
   type PreviewAutomationConsoleEntry,
@@ -19,6 +21,7 @@ import {
   type PreviewAutomationWaitForInput,
 } from "@t3tools/contracts";
 import { constVoid } from "effect/Function";
+import { recordingPointerImage } from "@t3tools/shared/recordingPointer";
 import type { CDPSession, ConsoleMessage, Frame, Locator, Page } from "playwright-core";
 import * as NodeCrypto from "node:crypto";
 import { BrowserControlInterrupted } from "./SessionControl.ts";
@@ -414,7 +417,7 @@ const pngSize = (base64: string) => {
  * A page's display ratio and CSS viewport, read in an isolated world since page script can
  * reassign `devicePixelRatio`, `innerWidth`, and `innerHeight` in its own, and its page zoom.
  */
-const readPageMetrics = async (cdp: CDPSession) => {
+export const readPageMetrics = async (cdp: CDPSession) => {
   const { frameTree } = await cdp.send("Page.getFrameTree");
   const { executionContextId } = await cdp.send("Page.createIsolatedWorld", {
     frameId: frameTree.frame.id,
@@ -442,6 +445,25 @@ const readPageMetrics = async (cdp: CDPSession) => {
   throw new Error(
     "The page's zoom kept changing while the snapshot read its size. Try the snapshot again.",
   );
+};
+
+export const setDesktopViewport = async (
+  cdp: CDPSession,
+  size: { readonly width: number; readonly height: number } | null,
+) => {
+  if (size === null) {
+    await cdp.send("Emulation.clearDeviceMetricsOverride");
+    return;
+  }
+  const { zoom } = await readPageMetrics(cdp);
+  if (!Number.isFinite(zoom) || zoom <= 0) throw new Error("The desktop page zoom is unavailable.");
+  // CDP expects device-independent pixels; the request is in CSS pixels.
+  await cdp.send("Emulation.setDeviceMetricsOverride", {
+    width: Math.max(1, Math.round(size.width * zoom)),
+    height: Math.max(1, Math.round(size.height * zoom)),
+    deviceScaleFactor: 0,
+    mobile: false,
+  });
 };
 
 // Never pass a clip scale: Chromium mirrors the top-left of the page into a `backdrop-filter`
@@ -495,6 +517,7 @@ const shrinkPng = async (cdp: CDPSession, png: string, scale: number) => {
 };
 
 type SnapshotInput = {
+  readonly signal?: AbortSignal;
   readonly page: Page;
   readonly cdp: CDPSession;
   /** Headless pages render at the scale the server set; a desktop page at its display's. */
@@ -526,6 +549,7 @@ const capture = async (
   deadline: number,
 ): Promise<PreviewAutomationSnapshot> => {
   const { renderScale, viewport } = await renderingOf(input);
+  input.signal?.throwIfAborted();
   // A late metrics reply must not begin a capture after viewers have resumed.
   if (Date.now() >= deadline) throw tooBusy();
   const scale = Math.min(1, MAX_SCREENSHOT_WIDTH / (viewport.width * renderScale));
@@ -534,6 +558,7 @@ const capture = async (
   const generation = state.generation;
   const { readers, read } = await openReaders(input.page, input.cdp);
   const before = await read();
+  input.signal?.throwIfAborted();
   // Bracket the tree with value reads to detect changes; await tree completion before retrying failed captures.
   const pageAndScreenshot = Promise.all([
     input.page.evaluate(SNAPSHOT_SCRIPT) as Promise<
@@ -569,6 +594,7 @@ const capture = async (
     if (frame && unread.includes(frame)) throw tooBusy();
   }
   const [page, data] = await pageAndScreenshot;
+  input.signal?.throwIfAborted();
   if (state.generation !== generation) throw pageChanged();
   const mask = (text: string) => (dotted ? text.replace(dotted, MASKED_VALUE) : text);
   // Redacted before the cut, so a payload crossing it can't leave its start showing, and before
@@ -611,6 +637,7 @@ export const snapshot = async (input: SnapshotInput): Promise<PreviewAutomationS
   // Retry only before the deadline and the next snapshot, whose refs a later retry would revoke.
   const captured = capture(input, deadline).catch((cause: unknown) =>
     Date.now() < deadline &&
+    !input.signal?.aborted &&
     snapshotTurns.get(input.page) === turn &&
     !(cause instanceof Error && cause.message === VALUE_TOO_LONG)
       ? capture(input, deadline)
@@ -898,7 +925,11 @@ export const parseNetError = (errorText: string) => {
   return { description, code: NET_ERROR_CODES[description] ?? -2 };
 };
 
-export const recordingEncoderScript = (frameRate: BrowserRecordingFrameRate) => `(() => {
+export const recordingEncoderScript = (
+  frameRate: BrowserRecordingFrameRate,
+  pointer: BrowserRecordingPointer = DEFAULT_BROWSER_RECORDING_POINTER,
+  showMousePresses = true,
+) => `(() => {
   const canvas = document.createElement("canvas");
   const context = canvas.getContext("2d");
   const chunks = [];
@@ -910,7 +941,11 @@ export const recordingEncoderScript = (frameRate: BrowserRecordingFrameRate) => 
   let frame = null;
   let cursor = null;
   let ring = null;
-  const AGENT_CURSOR_PATH = new Path2D("M4.037 4.688a.495.495 0 0 1 .651-.651l16 6.5a.5.5 0 0 1-.063.947l-6.124 1.58a2 2 0 0 0-1.438 1.435l-1.579 6.126a.5.5 0 0 1-.947.063z");
+  const pointer = ${JSON.stringify(pointer)};
+  const cursorImage = new Image();
+  cursorImage.src = ${JSON.stringify(recordingPointerImage(pointer))};
+  const cursorReady = cursorImage.decode();
+  void cursorReady.catch(() => {});
   let ringTimer = null;
   let scale = 1;
   let offsetX = 0;
@@ -929,43 +964,41 @@ export const recordingEncoderScript = (frameRate: BrowserRecordingFrameRate) => 
     context.drawImage(frame, offsetX, offsetY, width, height);
     scale = (width / frame.width) * frame.cssScale;
     if (ring) {
-      const age = (performance.now() - ring.at) / 400;
+      const age = (performance.now() - ring.at) / pointer.haloDurationMs;
       if (age < 1) {
         context.beginPath();
-        context.arc(offsetX + ring.x * scale, offsetY + ring.y * scale, (8 + 18 * age) * scale, 0, Math.PI * 2);
-        context.strokeStyle = "rgba(59,130,246," + (0.9 * (1 - age)) + ")";
+        context.arc(offsetX + ring.x * scale, offsetY + ring.y * scale, pointer.haloRadius * (1 + age * 0.5) * scale, 0, Math.PI * 2);
+        context.strokeStyle = pointer.haloColor;
+        context.globalAlpha = 0.9 * (1 - age);
         context.lineWidth = 3 * scale;
         context.stroke();
+        context.globalAlpha = 1;
       }
     }
-    if (cursor) {
-      // The agent cursor (lucide MousePointer2, as in the live panel), never the human arrow.
-      const s = 20 / 24 * scale;
+    if (cursor && pointer.enabled) {
+      const width = pointer.size * scale;
+      const height = width / pointer.imageAspectRatio;
       context.save();
-      context.translate(offsetX + cursor.x * scale - 2 * scale, offsetY + cursor.y * scale - 2 * scale);
-      context.scale(s, s);
-      context.lineWidth = 2;
-      context.lineJoin = "round";
-      context.lineCap = "round";
-      context.fillStyle = "#fff";
-      context.strokeStyle = "#2563eb";
       context.shadowColor = "rgba(0,0,0,0.25)";
       context.shadowBlur = 2;
-      context.fill(AGENT_CURSOR_PATH);
-      context.shadowColor = "transparent";
-      context.stroke(AGENT_CURSOR_PATH);
+      context.drawImage(cursorImage, offsetX + cursor.x * scale - pointer.hotspotX * width, offsetY + cursor.y * scale - pointer.hotspotY * height, width, height);
       context.restore();
     }
   };
   window.__t3Recorder = {
     async frame(base64, cssWidth) {
       if (tooLarge) return false;
+      await cursorReady;
       const bytes = Uint8Array.from(atob(base64), (char) => char.charCodeAt(0));
       const bitmap = await createImageBitmap(new Blob([bytes], { type: "image/jpeg" }));
       if (tooLarge) { bitmap.close(); return false; }
+      const first = !recorder;
+      bitmap.cssScale = bitmap.width / cssWidth;
       if (!recorder) {
         canvas.width = bitmap.width;
         canvas.height = bitmap.height;
+        frame = bitmap;
+        paint();
         const mimeType = ["video/mp4;codecs=avc1.640033", "video/webm;codecs=vp9", "video/webm"].find((type) => MediaRecorder.isTypeSupported(type));
         const bitsPerSecond = Math.min(50e6, Math.max(2.5e6, bitmap.width * bitmap.height * ${frameRate} * 0.05));
         recorder = new MediaRecorder(canvas.captureStream(${frameRate}), { mimeType, videoBitsPerSecond: bitsPerSecond });
@@ -989,25 +1022,24 @@ export const recordingEncoderScript = (frameRate: BrowserRecordingFrameRate) => 
           }
           chunks.push(event.data);
         };
-        recorder.start(1000);
       }
       // Frame px per page CSS px, before fitting into the canvas.
-      bitmap.cssScale = bitmap.width / cssWidth;
-      frame?.close();
+      if (frame !== bitmap) frame?.close();
       frame = bitmap;
       paint();
+      if (first) recorder.start(1000);
       await started;
       return true;
     },
     cursor(x, y, click) {
       if (tooLarge) return;
       cursor = { x, y };
-      if (click) {
+      if (click && ${showMousePresses}) {
         ring = { x, y, at: performance.now() };
         clearInterval(ringTimer);
         ringTimer = setInterval(() => {
           paint();
-          if (performance.now() - ring.at > 400) { ring = null; clearInterval(ringTimer); paint(); }
+          if (performance.now() - ring.at > pointer.haloDurationMs) { ring = null; clearInterval(ringTimer); paint(); }
         }, 33);
       }
       paint();
