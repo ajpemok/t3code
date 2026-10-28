@@ -1,10 +1,8 @@
 import { Button } from "../ui/button";
 import { type ContextWindowSnapshot, formatContextWindowTokens } from "~/lib/contextWindow";
 import { Popover, PopoverPopup, PopoverTrigger } from "../ui/popover";
-import {
-  formatContextWindowCompactionMessage,
-  formatContextWindowCost,
-} from "./ContextWindowMeter.logic";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { formatContextWindowCost } from "./ContextWindowMeter.logic";
 import { Minimize2Icon } from "lucide-react";
 import { composerFloatingLayerProps } from "./composerEventScope";
 
@@ -25,14 +23,14 @@ export function ContextWindowMeter(props: {
   compactDisabled?: boolean | undefined;
   compactDisabledReason?: string | null | undefined;
 }) {
-  const { usage, modelDisplayName, onCompact, compactDisabled, compactDisabledReason } = props;
+  const { usage, onCompact, compactDisabled, compactDisabledReason } = props;
   const usedPercentage = formatPercentage(usage.usedPercentage);
   const normalizedPercentage = Math.max(0, Math.min(100, usage.usedPercentage ?? 0));
   const radius = 9.75;
   const circumference = 2 * Math.PI * radius;
   const dashOffset = circumference * (1 - normalizedPercentage / 100);
   const totalProcessedTokens = usage.totalProcessedTokens ?? null;
-  const showTotalProcessed = totalProcessedTokens !== null && totalProcessedTokens > 0;
+  const showTotalProcessed = totalProcessedTokens !== null;
   const isOverloaded = normalizedPercentage > 90;
   const usageColor = isOverloaded
     ? "var(--color-error)"
@@ -46,9 +44,8 @@ export function ContextWindowMeter(props: {
         closeDelay={onCompact ? 150 : 0}
         render={
           <Button
-            size="icon-sm"
+            size="xs"
             variant="ghost-muted"
-            className="size-7"
             aria-label={
               usage.maxTokens !== null && usedPercentage
                 ? `Context window ${usedPercentage} used`
@@ -83,6 +80,17 @@ export function ContextWindowMeter(props: {
                 />
               </svg>
             </span>
+            <span data-composer-usage-figure className="text-xs tabular-nums">
+              {usedPercentage ?? `${formatContextWindowTokens(usage.usedTokens)} tokens`}
+            </span>
+            {usedPercentage ? (
+              <span
+                data-composer-usage-figure
+                className="composer-context-total text-xs tabular-nums"
+              >
+                · {formatContextWindowTokens(totalProcessedTokens ?? usage.usedTokens)} tokens
+              </span>
+            ) : null}
           </Button>
         }
       />
@@ -136,6 +144,24 @@ export function ContextWindowMeter(props: {
               </span>
             </div>
           ) : null}
+          {[
+            ["Input tokens", usage.inputTokens],
+            ["Cached input tokens", usage.cachedInputTokens],
+            ["Output tokens", usage.outputTokens],
+            ["Reasoning tokens", usage.reasoningOutputTokens],
+          ].map(([label, value]) =>
+            typeof value === "number" ? (
+              <div
+                key={label}
+                className="flex items-center justify-between gap-3 text-2xs leading-4"
+              >
+                <span className="text-secondary-label">{label}</span>
+                <span className="font-medium tabular-nums text-secondary-label">
+                  {formatContextWindowTokens(value)}
+                </span>
+              </div>
+            ) : null,
+          )}
           {usage.cost != null ? (
             <div className="flex items-center justify-between gap-3 text-2xs leading-4">
               <span className="text-secondary-label">Cost</span>
@@ -144,30 +170,27 @@ export function ContextWindowMeter(props: {
               </span>
             </div>
           ) : null}
-          {usage.compactsAutomatically ? (
-            <div className="mt-1 text-pretty text-secondary-label text-2xs font-medium">
-              {formatContextWindowCompactionMessage(modelDisplayName, usage.autoCompactThreshold)}
-            </div>
-          ) : null}
-          {onCompact ? (
-            <>
+          <Tooltip disabled={!compactDisabled && !!onCompact}>
+            <TooltipTrigger
+              render={<span tabIndex={compactDisabled || !onCompact ? 0 : undefined} />}
+            >
               <Button
                 size="xs"
                 variant="outline"
                 className="mt-1 w-full justify-center"
-                disabled={compactDisabled}
+                disabled={compactDisabled || !onCompact}
                 onClick={onCompact}
               >
                 <Minimize2Icon aria-hidden="true" />
-                Compact context
+                {compactDisabled || !onCompact ? "Compact Unavailable" : "Compact context"}
               </Button>
-              {compactDisabled && compactDisabledReason ? (
-                <div className="text-pretty text-secondary-label text-2xs">
-                  {compactDisabledReason}
-                </div>
-              ) : null}
-            </>
-          ) : null}
+            </TooltipTrigger>
+            <TooltipPopup>
+              {!onCompact
+                ? "This provider does not support manual compaction"
+                : (compactDisabledReason ?? "Compacting is unavailable right now")}
+            </TooltipPopup>
+          </Tooltip>
         </div>
       </PopoverPopup>
     </Popover>
