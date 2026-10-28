@@ -286,16 +286,16 @@
   position: relative;
   display: inline-flex;
   flex: none;
-  width: 13px;
-  height: 13px;
+  width: 14px;
+  height: 14px;
   align-items: center;
   justify-content: center;
   color: currentColor;
 }
 
 .task-activity-symbol > svg {
-  width: 13px;
-  height: 13px;
+  width: 14px;
+  height: 14px;
   stroke-width: 1.6;
 }
 
