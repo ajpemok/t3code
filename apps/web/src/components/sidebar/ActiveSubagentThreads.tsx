@@ -255,7 +255,7 @@ export function ActiveSubagentThreads({
                 params={buildThreadRouteParams(ref)}
                 aria-label={`Open ${retainedKeys.has(childKey) ? "recent " : mode === "active" ? "active " : ""}subagent: ${child.title}`}
                 title={child.title}
-                className="flex min-w-0 flex-1 items-center gap-1.5 rounded-sm py-1 outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring"
+                className="flex min-w-0 flex-1 items-center gap-1.5 rounded-sm py-1 text-inherit outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring"
               >
                 <GitForkIcon
                   className="size-3.5 shrink-0 text-sidebar-muted-foreground"
@@ -263,6 +263,7 @@ export function ActiveSubagentThreads({
                 />
                 <span className="min-w-0 flex-1 truncate">{child.title}</span>
               </Link>
+              {recentEntry ? <RecentThreadDismissButton entry={recentEntry} /> : null}
               <span className="inline-flex shrink-0 flex-col items-end justify-center gap-0.5 text-3xs leading-tight text-secondary-label">
                 <ThreadActivityStatus
                   thread={child}
@@ -276,7 +277,6 @@ export function ActiveSubagentThreads({
                   nowLabel="now"
                 />
               </span>
-              {recentEntry ? <RecentThreadDismissButton entry={recentEntry} /> : null}
             </div>
           </li>
         );
