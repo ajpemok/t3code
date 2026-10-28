@@ -1,6 +1,6 @@
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
 import { scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environment";
-import { ChevronDownIcon, SquarePenIcon } from "lucide-react";
+import { ChevronDownIcon, PinIcon, PinOffIcon, SquarePenIcon } from "lucide-react";
 import { memo } from "react";
 
 import { cn } from "~/lib/utils";
@@ -9,6 +9,8 @@ import { useUiStateStore } from "../../uiStateStore";
 import { resolveSidebarFolderDot, resolveThreadLastVisitedAt } from "../Sidebar.logic";
 import { ProjectFavicon } from "../ProjectFavicon";
 import { Button } from "../ui/button";
+import { SidebarActivityCounts } from "./SidebarActivityCounts";
+import { projectTintColor } from "~/projectIdentity";
 
 const FOLDER_DOT_CLASS_NAME = {
   attention: "bg-warning",
@@ -29,13 +31,11 @@ export function sidebarFolderRowId(projectKey: string) {
   return `folder:${projectKey}`;
 }
 
-/**
- * A project folder in the boring sidebar. It reads like a shelf header: a trailing
- * count and chevron, with the count and a status dot only while it is closed, so a
- * closed folder still says when a hidden thread needs you.
- */
 export const SidebarProjectFolderHeader = memo(function SidebarProjectFolderHeader(props: {
   group: SidebarProjectSnapshot;
+  threads: readonly EnvironmentThreadShell[];
+  pinned: boolean;
+  onTogglePin: (group: SidebarProjectSnapshot) => void;
   collapsed: boolean;
   hiddenThreads: readonly EnvironmentThreadShell[];
   onToggle: (group: SidebarProjectSnapshot) => void;
@@ -45,22 +45,19 @@ export const SidebarProjectFolderHeader = memo(function SidebarProjectFolderHead
   const { group, collapsed, hiddenThreads } = props;
   const rowId = sidebarFolderRowId(group.projectKey);
   const localLastVisitedAtById = useUiStateStore((state) => state.threadLastVisitedAtById);
-  const dot = collapsed
-    ? resolveSidebarFolderDot(
-        hiddenThreads.map((thread) => ({
-          ...thread,
-          lastVisitedAt: resolveThreadLastVisitedAt(
-            thread.lastVisitedAt,
-            localLastVisitedAtById[
-              scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id))
-            ],
-          ),
-        })),
-      )
-    : null;
+  const dot = resolveSidebarFolderDot(
+    (collapsed ? hiddenThreads : props.threads).map((thread) => ({
+      ...thread,
+      lastVisitedAt: resolveThreadLastVisitedAt(
+        thread.lastVisitedAt,
+        localLastVisitedAtById[scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id))],
+      ),
+    })),
+  );
   return (
     <li
       data-testid="sidebar-project-folder"
+      data-project-color={projectTintColor(group)}
       className="group/project-folder relative mt-2 list-none first:mt-0"
     >
       <button
@@ -74,20 +71,27 @@ export const SidebarProjectFolderHeader = memo(function SidebarProjectFolderHead
           event.preventDefault();
           props.onContextMenu(group, { x: event.clientX, y: event.clientY });
         }}
-        className="flex h-8 w-full cursor-pointer items-center gap-2.5 rounded-(--control-radius) px-(--sidebar-row-content-inset) text-left outline-none hover:bg-sidebar-row-hover focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+        className="project-tint-row flex h-9 w-full cursor-pointer items-center gap-2.5 px-(--sidebar-row-content-inset) text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
       >
         <ProjectFavicon project={group} className="size-4 shrink-0" />
         <span className="min-w-0 flex-1 truncate text-sm font-medium text-sidebar-foreground/90">
           {group.displayName}
         </span>
         {dot ? (
-          <span className={cn("size-1.5 shrink-0 rounded-full", FOLDER_DOT_CLASS_NAME[dot])}>
+          <span
+            className={cn("size-1.5 shrink-0 rounded-full", FOLDER_DOT_CLASS_NAME[dot])}
+            style={
+              dot === "working"
+                ? { backgroundColor: "var(--project-accent, var(--primary))" }
+                : undefined
+            }
+          >
             <span className="sr-only">{FOLDER_DOT_LABEL[dot]}</span>
           </span>
         ) : null}
-        {collapsed && hiddenThreads.length > 0 ? (
-          <span className="shrink-0 text-xs tabular-nums text-sidebar-muted-foreground group-hover/project-folder:invisible pointer-coarse:invisible">
-            {hiddenThreads.length}
+        {props.threads.length > 0 ? (
+          <span className="shrink-0 group-hover/project-folder:invisible group-focus-within/project-folder:invisible pointer-coarse:invisible">
+            <SidebarActivityCounts threads={props.threads} />
           </span>
         ) : null}
         <ChevronDownIcon
@@ -100,6 +104,15 @@ export const SidebarProjectFolderHeader = memo(function SidebarProjectFolderHead
       </button>
       {/* Sits over the count, which hides on hover, and left of the chevron. */}
       <span className="absolute inset-y-0 right-6 flex items-center opacity-0 focus-within:opacity-100 group-hover/project-folder:opacity-100 pointer-coarse:opacity-100">
+        <Button
+          data-sidebar-action-for={rowId}
+          size="icon-xs"
+          variant="ghost-muted"
+          aria-label={`${props.pinned ? "Unpin" : "Pin"} ${group.displayName} and its threads`}
+          onClick={() => props.onTogglePin(group)}
+        >
+          {props.pinned ? <PinOffIcon aria-hidden /> : <PinIcon aria-hidden />}
+        </Button>
         <Button
           data-sidebar-action-for={rowId}
           size="icon-xs"

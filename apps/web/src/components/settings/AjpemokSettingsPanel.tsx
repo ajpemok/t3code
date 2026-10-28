@@ -38,9 +38,12 @@ export function AjpemokSettingsPanel() {
           control={
             <Switch
               aria-label="Project Sections"
-              checked={settings.legacySidebarEnabled}
+              checked={settings.boringSidebarEnabled || settings.legacySidebarEnabled}
               onCheckedChange={(checked) =>
-                updateSettings({ legacySidebarEnabled: Boolean(checked) })
+                updateSettings({
+                  boringSidebarEnabled: Boolean(checked),
+                  legacySidebarEnabled: false,
+                })
               }
             />
           }
