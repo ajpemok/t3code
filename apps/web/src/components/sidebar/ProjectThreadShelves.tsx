@@ -37,7 +37,7 @@ import { CollapsibleSectionHeader } from "../ui/collapsible-section-header";
 import { stackedThreadToast, toastManager } from "../ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 
-export function useProjectThreadSections(threads: readonly SidebarThreadSummary[]) {
+function useProjectThreadSections(threads: readonly SidebarThreadSummary[]) {
   const delegatedUnderParent = useDelegatedUnderParent();
   const hideInactive = useClientSettings((settings) => settings.sidebarHideInactiveEnabled);
   const pinnedOnly = useClientSettings((settings) => settings.sidebarPinnedOnlyEnabled);
