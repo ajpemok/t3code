@@ -530,6 +530,13 @@ export const ClientSettingsSchema = Schema.Struct({
   sidebarRecentThreadMaxAgeMinutes: Schema.Int.check(
     Schema.isBetween({ minimum: 0, maximum: 1440 }),
   ).pipe(Schema.withDecodingDefault(Effect.succeed(60))),
+  sidebarRecentSubagentCount: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 50 })).pipe(
+    Schema.withDecodingDefault(Effect.succeed(5)),
+  ),
+  sidebarRecentSubagentMaxAgeMinutes: Schema.Int.check(
+    Schema.isBetween({ minimum: 0, maximum: 1440 }),
+  ).pipe(Schema.withDecodingDefault(Effect.succeed(60))),
+  sidebarTodaySectionEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   sidebarPinnedOnlyEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   sidebarPinnedProjectKeys: Schema.Array(Schema.String).pipe(
     Schema.withDecodingDefault(Effect.succeed([])),
@@ -1793,6 +1800,13 @@ export const ClientSettingsPatch = Schema.Struct({
   sidebarRecentThreadMaxAgeMinutes: Schema.optionalKey(
     Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 1440 })),
   ),
+  sidebarRecentSubagentCount: Schema.optionalKey(
+    Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 50 })),
+  ),
+  sidebarRecentSubagentMaxAgeMinutes: Schema.optionalKey(
+    Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 1440 })),
+  ),
+  sidebarTodaySectionEnabled: Schema.optionalKey(Schema.Boolean),
   sidebarPinnedOnlyEnabled: Schema.optionalKey(Schema.Boolean),
   sidebarPinnedProjectKeys: Schema.optionalKey(Schema.Array(Schema.String)),
   ajpemokHeaderScene: Schema.optionalKey(Schema.String),
