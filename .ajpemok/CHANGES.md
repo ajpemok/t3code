@@ -291,13 +291,15 @@ Native mobile and development icons retain their upstream assets.
 
 Display AJP3 Fork in desktop branding, window/About names, the web shell and web-app
 manifest. Retain channel labels, Electron's internal storage name and the token-safe
-native User-Agent format. macOS display metadata uses AJP3 Fork while the bundle name,
-path and ID stay stable.
+native User-Agent format. macOS localises the visible bundle name to AJP3 Fork.
+Keep the unlocalised name equal to the physical bundle name so Finder and Dock
+accept the localisation; the path and ID stay stable.
 
 | Files                                             | Fork Responsibility                                                           |
 | ------------------------------------------------- | ----------------------------------------------------------------------------- |
 | `scripts/lib/brand-assets.ts`                     | Select fork assets through the existing nightly packaging paths.              |
 | `scripts/build-desktop-artifact.ts`               | macOS display metadata with stable package identity.                          |
+| `assets/a3-fork/InfoPlist.strings`                | Localised Finder and Dock name with the original bundle filename.             |
 | `apps/desktop/src/app/DesktopEnvironment.ts`      | Desktop display name and unchanged channel selection.                         |
 | `apps/desktop/src/app/DesktopAppIdentity.ts`      | Stable Electron storage name alongside fork display branding.                 |
 | `apps/desktop/src/app/DesktopAppIdentity.test.ts` | Runtime/About names, valid User-Agent token and stable app ID.                |
