@@ -5,7 +5,7 @@ need a separate branch and working directory.
 
 ## Project Sections and Header
 
-Turn on **Project Sections** in **Settings → A3 Fork** to group threads into
+Turn on **Project Sections** in **Settings → AJP3 Fork** to group threads into
 collapsible project folders. Pinned threads stay above the folders. Turn Project
 Sections off to return to the flat list. Collapse choices
 are saved on this client. Both views show active and idle threads; settled and snoozed
@@ -22,7 +22,7 @@ The same action pins its eligible threads. Unpinning the project removes that sa
 header preference and unpins its eligible threads. Settled and snoozed threads stay hidden.
 
 Use **Show Pinned Threads Only** in the sidebar toolbar, or **Pinned Threads Only**
-in **Settings → A3 Fork**, to hide unpinned parent threads. This combines with
+in **Settings → AJP3 Fork**, to hide unpinned parent threads. This combines with
 **Hide Inactive** in either view. Subagents follow their parent's visibility;
 **Snoozed** and **Settled** remain available. Assign **Sidebar: Show Pinned Threads
 Only/All Threads** in **Settings → Keybindings** for a shortcut.
@@ -39,19 +39,20 @@ Use **Hide Inactive Threads and Projects** to focus both views on current work a
 input requests. An idle parent stays available while one of its subagents works.
 This filter also hides empty pinned project headers; turning it off restores them.
 
-**Recent** keeps the last five finished threads within the past hour. In
-**Settings → A3 Fork → Recent Threads**, change the count or age limit. Set
-age to **0** for the last N regardless of age. The count includes subagents when
-**Include Recent Subagents** and **Show Subagents** are on.
+**Recent** keeps the last five finished threads and five finished subagents within
+the past hour. In **Settings → AJP3 Fork → Recent Threads**, change their separate
+count and age limits. Set age to **0** for the last N regardless of age.
+**Today** lists other completions from the past 24 hours. Both sections have
+Threads and Subagents tabs. Snoozed, settled and archived threads stay out of both.
 
 **Keep Recent Threads Visible** also keeps these threads in the normal project
 list while Hide Inactive is on, including parents needed to reach recent
 subagents. It defaults on so a thread stays within reach when its turn ends.
 Switch the **Recent Section** or normal-list retention off independently.
-Pinned Only still applies; snoozed, settled and archived threads stay out of Recent.
+Pinned Only still applies to both sections.
 
 Choose **Show** or **Hide** from the **Subagents** menu beside the
-sidebar controls or in **Settings → A3 Fork**. **Show** includes idle children
+sidebar controls or in **Settings → AJP3 Fork**. **Show** includes idle children
 and respects Hide Inactive. **Visible Subagents** sets the initial count per parent;
 expand the remaining children when needed. Project summaries count active and inactive
 threads and subagents separately. These choices apply to both views.
