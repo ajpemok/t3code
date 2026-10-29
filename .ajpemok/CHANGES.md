@@ -164,7 +164,9 @@ the active run, in both shell readers, so completed or older work cannot keep it
 
 - Reuse upstream project folders, collapse state and keyboard navigation through the Project Sections setting. Retire the deleted legacy sidebar.
 - Show active/waiting/idle state with a coloured indicator; preserve the original thread status text.
-- Put the indicator at the far right and replace it with pin/new controls on hover or keyboard focus.
+- Keep the pin beside the project icon in folders, cards and shelves. Fill pinned icons with the project accent; leave unpinned icons outlined. Keep New Thread on hover or keyboard focus.
+- Reserve aligned provider, speed, action and time columns across normal, snoozed and settled rows. Keep snooze clocks fixed when labels differ and preserve positions on hover; reduce the detail column at compact widths.
+- Right-align model names with timestamps. Nested subagents share the row inset and responsive detail columns; their titles and dismiss buttons shrink separately.
 - Pin or unpin eligible project threads together. Explicit project pins retain empty headers; settled, effectively snoozed and archived tasks stay outside the project trees.
 - Keep the tree guide stable during expansion and use the project colour.
 - Offer New thread in empty project sections through the existing project/environment handler.
@@ -175,6 +177,7 @@ the active run, in both shell readers, so completed or older work cannot keep it
 | ---------------------------------------------------------------- | -------------------------------------------------------------------- |
 | `apps/web/src/components/Sidebar.tsx`                            | Shared flat/folder filters, project pinning and native shelves.      |
 | `apps/web/src/components/sidebar/SidebarProjectFolderHeader.tsx` | Project colour, pin control and activity counts on upstream folders. |
+| `apps/web/src/components/sidebar/SidebarPinButton.tsx`           | Shared, always-visible pin control and accent treatment.             |
 | `apps/web/src/components/Sidebar.logic.ts`                       | Project activity and eligible-thread derivation.                     |
 | `apps/web/src/components/Sidebar.logic.test.ts`                  | Activity and pin eligibility fixtures.                               |
 | `packages/contracts/src/settings.ts`                             | Header setting defaults/patch schema and context-meter default.      |
@@ -245,9 +248,12 @@ a later completed turn can appear again. Keep the optional normal-list retention
 ## Read-Only Model Details
 
 Working and Goal statuses include a compact model name. The shared hover/focus
-card shows the full model, provider and available reasoning/speed options. It
-prefers the recorded run and provider report over next-turn settings. Saved
-thread settings are labelled when run information is unavailable. Unknown model
+card shows the full model, provider and available reasoning/speed options. The
+badge follows the active run's settings. If the composer has different selected
+settings, the card shows them separately under Next Turn. While the active run's
+settings load, do not display the next-turn speed as its running speed. Finished runs do not
+override the current selection. Speed uses the option
+value, so provider display labels cannot change its meaning. Unknown model
 or option values stay visible rather than being replaced by catalog defaults.
 Root rows reuse their visible detail lease; child rows load details only while
 the card is open. Grouped, flat and subagent rows share model presentation.
@@ -329,15 +335,25 @@ Keep effects intermittent and avoid continuous repainting.
 
 ## Computer and Browser Use Indicators
 
-| Files                                                           | Fork Responsibility                                                     |
-| --------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| `apps/web/src/lib/threadSurfaceUse.ts`                          | Classify current running tool activity, including both T3 MCP prefixes. |
-| `apps/web/src/lib/threadSurfaceUse.test.ts`                     | Classifier regressions.                                                 |
-| `apps/web/src/components/sidebar/ThreadSurfaceUseIndicator.tsx` | Compact tool indicator.                                                 |
+| Files                                                           | Fork Responsibility                                                                                                    |
+| --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `apps/web/src/lib/threadSurfaceUse.ts`                          | Classify current tools, controlled sessions and five-second recent activity across computer, browser and device calls. |
+| `apps/web/src/lib/threadSurfaceUse.test.ts`                     | Surface, completion, ownership and recent-activity regressions.                                                        |
+| `apps/web/src/components/sidebar/ThreadSurfaceUseIndicator.tsx` | Shared live/recent indicators, native control state and one-shot ending effects.                                       |
+| `apps/web/src/browser/ServerBrowserSurface.tsx`                 | Report existing stream control and disconnect events to the client preview state.                                      |
+| `apps/web/src/previewStateStore.ts`                             | Retain known agent control when a viewer detaches; clear it on takeover, close, disconnect and server replacement.     |
+| `apps/web/src/components/preview/usePreviewSession.ts`          | Keep known active browser sessions subscribed while their visible sidebar row is in the background.                    |
+| `apps/web/src/previewStateStore.test.ts`                        | Multiple viewers, environment isolation, close and replacement regressions.                                            |
 
 The sidebar integration reads quiet current-run data only for visible running threads and releases unused leases.
 Preserve that bounded subscription when upstream changes thread projections.
-An open tab or retained browser ownership alone does not mean a tool is running.
+Specific browser, computer or device activity replaces the generic Working glyph in one fixed slot. Viewer cleanup on task selection must not clear session ownership.
+An agent-controlled T3 browser or open device session keeps its surface visible
+only while that thread is running. Other completed surface calls remain for five
+seconds with a Recent label and one short ending effect; a newer action resets
+that deadline. Use the existing deadline store, control events and device
+subscription. Do not add polling or treat arbitrary open tabs as agent activity.
+Reduced motion disables the ending effect; hidden and offscreen effects pause.
 Opaque wrappers can remain unclassified; avoid fabricating activity from missing metadata.
 Use the composer's Standard default and let an explicit speed choice override
 provider reports across the Fast and service-tier option names. Keep provider
