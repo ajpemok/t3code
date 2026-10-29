@@ -544,6 +544,10 @@ Runtime state, private evidence, credentials, model files and generated installe
 The independent Stream Deck plugin and ComfyStudio work are outside this patch set.
 Floating-browser behaviour was left unchanged after the user found the existing setting.
 
+3877 adds configurable thread-details rows and moves undo notices into the sidebar footer.
+Keep those upstream controls alongside the fork project tint and custom settings page.
+The configured project folder also coexists with upstream scratch-thread promotion.
+
 ## Focused Checks
 
 Use `vp test run <file>` for the relevant existing tests listed above and affected-package `typecheck` scripts after conflicts.
