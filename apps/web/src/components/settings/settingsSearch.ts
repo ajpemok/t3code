@@ -623,10 +623,12 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "add-project-starts-in",
-    title: "Add project starts in",
+    title: "Project Folder",
     to: "/settings/threads",
     scope: "environment-defaults",
-    searchTerms: ["base directory folder browser path home"],
+    searchTerms: [
+      "add project starts in base directory folder browser path home new create repository",
+    ],
   },
   {
     id: "unpin-confirmation",

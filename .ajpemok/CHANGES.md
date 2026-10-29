@@ -499,6 +499,29 @@ remain available without that opt-in. Account credentials stay outside builds.
 | `scripts/build-desktop-artifact.test.ts` | Offline, configured, missing-module and stale-configuration bundle cases. |
 | `scripts/lib/public-config.ts`           | Export the shared resolver for fork packaging validation.                 |
 
+## Project Folder
+
+Use the existing environment-level Project Folder preference for both Add Project
+browsing and newly created repositories. Resolve `~` on the destination server.
+Read the setting for each creation; changing it does not relocate existing projects
+or scratch folders. Keep the current managed-project root when the setting is empty.
+Publish the resolved root in initial config and settings updates so connected web,
+desktop and mobile clients update previews without reconnecting. The additive update
+field is optional for older servers. Agent, scheduler and CLI creation use the same service.
+
+| Files                                                              | Fork Responsibility                                                      |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------------ |
+| `apps/server/src/project/ManagedProjectFolders.ts`                 | Resolve configured roots and create named projects there.                |
+| `apps/server/src/project/ManagedProjectFolders.test.ts`            | Tilde expansion, live changes, reset and scratch separation.             |
+| `apps/server/src/ws.ts`                                            | Resolved root in initial config, live updates and late editor snapshots. |
+| `apps/server/src/ws.test.ts`                                       | Buffered config updates retain the matching resolved root.               |
+| `packages/contracts/src/server.ts`                                 | Optional resolved-root field on settings updates.                        |
+| `packages/client-runtime/src/state/serverConfigProjection.ts`      | Merge current roots while preserving older-server compatibility.         |
+| `packages/client-runtime/src/state/serverConfigProjection.test.ts` | Immediate root updates and absent-field compatibility.                   |
+| `apps/web/src/components/settings/SettingsPanels.tsx`              | Explain the folder preference's browsing and creation scope.             |
+| `apps/web/src/components/settings/settingsSearch.ts`               | Discoverable Project Folder label and original search terms.             |
+| `docs/user/project-settings.md`                                    | Folder selection and remote-home behaviour.                              |
+
 ## Fork Maintenance Files
 
 | Files                            | Fork Responsibility                                                          |

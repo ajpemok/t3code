@@ -1495,12 +1495,12 @@ export function ThreadsSettingsPanel() {
           serverScoped
           settingKeys={["addProjectBaseDirectory"]}
           {...searchableSetting("add-project-starts-in")}
-          description='Leave empty to use "~/" when the Add Project browser opens.'
+          description='Start Add Project here and create new repositories here. Leave empty to browse "~/" and create new projects in T3 Code’s data folder.'
           resetAction={
             settings.addProjectBaseDirectory !==
             DEFAULT_UNIFIED_SETTINGS.addProjectBaseDirectory ? (
               <SettingResetButton
-                label="add project base directory"
+                label="project folder"
                 onClick={() =>
                   updateSettings({
                     addProjectBaseDirectory: DEFAULT_UNIFIED_SETTINGS.addProjectBaseDirectory,
@@ -1517,7 +1517,7 @@ export function ThreadsSettingsPanel() {
               onCommit={(next) => updateSettings({ addProjectBaseDirectory: next })}
               placeholder={mixedAddProjectBaseDirectory ? "Mixed" : "~/"}
               spellCheck={false}
-              aria-label="Add project base directory"
+              aria-label="Project folder"
             />
           }
         />

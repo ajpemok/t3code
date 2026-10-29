@@ -32,13 +32,14 @@ describe("applyServerConfigProjection settingsUpdated", () => {
       },
     };
     const current = Option.some({
-      config: { settings } as unknown as ServerConfig,
+      config: { settings, newProjectsRoot: "/old/projects" } as unknown as ServerConfig,
       latestEvent: {} as ServerConfigStreamEvent,
       source: "live" as const,
     });
     const next = applyServerConfigProjection(current, {
       type: "settingsUpdated",
       payload: {
+        newProjectsRoot: "/home/user/Code/Projects",
         settings: {
           favorites: [{ provider: "claude", model: "opus" }],
           providerInstances: {
@@ -52,5 +53,13 @@ describe("applyServerConfigProjection settingsUpdated", () => {
     expect(nextSettings.favorites).toBe(settings.favorites);
     expect(nextSettings.providerInstances.codex).toBe(settings.providerInstances.codex);
     expect(nextSettings.providerInstances.claude.config.launchArgs).toBe("--verbose");
+    expect(Option.getOrThrow(next).config.newProjectsRoot).toBe("/home/user/Code/Projects");
+    const oldServerUpdate = applyServerConfigProjection(next, {
+      type: "settingsUpdated",
+      payload: { settings: nextSettings },
+    } as unknown as ServerConfigStreamEvent);
+    expect(Option.getOrThrow(oldServerUpdate).config.newProjectsRoot).toBe(
+      "/home/user/Code/Projects",
+    );
   });
 });
