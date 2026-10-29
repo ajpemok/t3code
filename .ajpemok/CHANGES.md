@@ -194,6 +194,8 @@ Remote-environment metadata belongs beside the project name.
 
 Show/Hide accepts legacy saved `active` values as Show; Hide Inactive supplies the
 shared active-only filter.
+Pinned Only uses a filled primary button while enabled. Activity counts stay in
+project headers rather than the top toolbar.
 
 | Files                                                                    | Fork Responsibility                                                                                                                   |
 | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
@@ -336,23 +338,24 @@ Keep effects intermittent and avoid continuous repainting.
 
 ## Computer and Browser Use Indicators
 
-| Files                                                           | Fork Responsibility                                                                                                    |
-| --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `apps/web/src/lib/threadSurfaceUse.ts`                          | Classify current tools, controlled sessions and five-second recent activity across computer, browser and device calls. |
-| `apps/web/src/lib/threadSurfaceUse.test.ts`                     | Surface, completion, ownership and recent-activity regressions.                                                        |
-| `apps/web/src/components/sidebar/ThreadSurfaceUseIndicator.tsx` | Shared live/recent indicators, native control state and one-shot ending effects.                                       |
-| `apps/web/src/browser/ServerBrowserSurface.tsx`                 | Report existing stream control and disconnect events to the client preview state.                                      |
-| `apps/web/src/previewStateStore.ts`                             | Retain known agent control when a viewer detaches; clear it on takeover, close, disconnect and server replacement.     |
-| `apps/web/src/components/preview/usePreviewSession.ts`          | Keep known active browser sessions subscribed while their visible sidebar row is in the background.                    |
-| `apps/web/src/previewStateStore.test.ts`                        | Multiple viewers, environment isolation, close and replacement regressions.                                            |
+| Files                                                           | Fork Responsibility                                                                                                |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `apps/web/src/lib/threadSurfaceUse.ts`                          | Classify live tools, retain external computer/browser use through the turn and expire other recent surface calls.  |
+| `apps/web/src/lib/threadSurfaceUse.test.ts`                     | Surface, completion, ownership and recent-activity regressions.                                                    |
+| `apps/web/src/components/sidebar/ThreadSurfaceUseIndicator.tsx` | Shared live/recent indicators, native control state and one-shot ending effects.                                   |
+| `apps/web/src/browser/ServerBrowserSurface.tsx`                 | Report existing stream control and disconnect events to the client preview state.                                  |
+| `apps/web/src/previewStateStore.ts`                             | Retain known agent control when a viewer detaches; clear it on takeover, close, disconnect and server replacement. |
+| `apps/web/src/components/preview/usePreviewSession.ts`          | Keep known active browser sessions subscribed while their visible sidebar row is in the background.                |
+| `apps/web/src/previewStateStore.test.ts`                        | Multiple viewers, environment isolation, close and replacement regressions.                                        |
 
 The sidebar integration reads quiet current-run data only for visible running threads and releases unused leases.
 Preserve that bounded subscription when upstream changes thread projections.
 Specific browser, computer or device activity replaces the generic Working glyph in one fixed slot. Viewer cleanup on task selection must not clear session ownership.
 An agent-controlled T3 browser or open device session keeps its surface visible
-only while that thread is running. Other completed surface calls remain for five
-seconds with a Recent label and one short ending effect; a newer action resets
-that deadline. Use the existing deadline store, control events and device
+only while that thread is running. Successful external computer/browser calls retain
+the latest surface for that running turn, labelled Use This Turn between live calls.
+Other completed surface calls remain for five seconds with a Recent label and one
+short ending effect; a newer action resets that deadline. Use the existing deadline store, control events and device
 subscription. Do not add polling or treat arbitrary open tabs as agent activity.
 Reduced motion disables the ending effect; hidden and offscreen effects pause.
 Opaque wrappers can remain unclassified; avoid fabricating activity from missing metadata.
