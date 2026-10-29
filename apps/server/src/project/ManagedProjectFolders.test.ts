@@ -27,6 +27,7 @@ import * as ProjectFaviconResolver from "./ProjectFaviconResolver.ts";
 import * as ProjectService from "./ProjectService.ts";
 import * as RepositoryIdentityResolver from "./RepositoryIdentityResolver.ts";
 import * as ManagedProjectFolders from "./ManagedProjectFolders.ts";
+import * as HostProcess from "@t3tools/shared/HostProcess";
 
 const layerGitWorkflow = (vcsProcess?: Layer.Layer<VcsProcess.VcsProcess>) =>
   GitWorkflow.layer.pipe(
@@ -87,6 +88,7 @@ const withScratch = <A, E>(
     E,
     | ManagedProjectFolders.ManagedProjectFolders
     | ProjectService.ProjectService
+    | ServerSettings.ServerSettingsService
     | NodeServices.NodeServices
     | Scope.Scope
   >,
@@ -377,6 +379,23 @@ it.effect("starts a named project as a committed repository, and suffixes a take
           "main",
         );
         assert.equal(yield* gitOutput(first.workspaceRoot, ["status", "--porcelain"]), "");
+        const settings = yield* ServerSettings.ServerSettingsService;
+        const home = path.join(baseDir, "home");
+        yield* settings.updateSettings({ addProjectBaseDirectory: "~/Code/Projects" });
+        const configured = yield* folders
+          .createNamedProject({ name: "Configured" })
+          .pipe(Effect.provideService(HostProcess.HomeDirectory, home));
+        assert.equal(configured.workspaceRoot, path.join(home, "Code/Projects/configured"));
+        assert.equal(Option.getOrThrow(yield* folders.scratchRoot), path.join(baseDir, "scratch"));
+        yield* settings.updateSettings({
+          addProjectBaseDirectory: path.join(baseDir, "elsewhere"),
+        });
+        const changed = yield* folders.createNamedProject({ name: "Changed" });
+        assert.equal(changed.workspaceRoot, path.join(baseDir, "elsewhere/changed"));
+        assert.isTrue(yield* fileSystem.exists(first.workspaceRoot));
+        yield* settings.updateSettings({ addProjectBaseDirectory: "" });
+        const reset = yield* folders.createNamedProject({ name: "Reset" });
+        assert.equal(reset.workspaceRoot, path.join(root, "reset"));
       }),
     ),
   ),

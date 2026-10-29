@@ -1,6 +1,6 @@
 # Settings and project overrides
 
-On web and desktop, **Settings → A3 Fork** groups custom sidebar, Recent threads,
+On web and desktop, **Settings → AJP3 Fork** groups custom sidebar, Recent threads,
 header, context usage and recording pointer controls. Recording pointers require
 the desktop app. Sidebar shortcuts remain in **Settings → Keybindings**.
 
@@ -13,6 +13,12 @@ Preferences saved on this device, such as appearance, confirmations and browser 
 show and ignore the selection. Everything else is stored on a server. Choose one environment to
 edit its settings, or leave **All environments** to edit every connected environment at once.
 Offline environments keep their current values; this is a bulk edit, not a synced global default.
+
+In **Settings → Threads → Project Folder**, choose where to browse for projects
+and create new repositories. `~/Code/Projects` uses the home folder of the selected
+environment, including when connected remotely. Changes apply to the next creation;
+existing projects and scratch threads stay in their current folders. Leave the value
+empty to browse your home folder and create new repositories in T3 Code's data folder.
 
 Choose a project to override settings for it on the selected environments. A layers icon beside
 each server row's title shows where the value comes from: the built-in default, the environment,
