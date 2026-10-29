@@ -201,7 +201,7 @@ describe("DesktopAppIdentity", () => {
         assert.isDefined(runtimeName);
         assert.equal(runtimeName, `T3 Code ${stage}`);
         assert.match(runtimeName.replaceAll(" ", ""), /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/);
-        assert.equal(calls.setAboutPanelOptions[0]?.applicationName, `A3 Fork (${stage})`);
+        assert.equal(calls.setAboutPanelOptions[0]?.applicationName, `AJP3 Fork (${stage})`);
         const runtime = yield* DesktopEnvironment.DesktopEnvironment;
         assert.equal(
           runtime.appUserModelId,

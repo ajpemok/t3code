@@ -91,7 +91,7 @@ export const SETTINGS_SECTION_LABELS: Readonly<Record<SettingsPath, string>> = {
   "/settings/projects": "Projects",
   "/settings/general": "General",
   "/settings/appearance": "Appearance",
-  "/settings/ajpemok": "A3 Fork",
+  "/settings/ajpemok": "AJP3 Fork",
   "/settings/chat": "Chat",
   "/settings/diffs": "Diffs & pull requests",
   "/settings/keybindings": "Keybindings",
@@ -789,6 +789,24 @@ export const SETTINGS_SEARCH_ITEMS = [
     title: "Recent Thread Age Limit",
     to: "/settings/ajpemok",
     searchTerms: ["recent minutes hour duration time age unlimited"],
+  },
+  {
+    id: "sidebar-today-section",
+    title: "Today Section",
+    to: "/settings/ajpemok",
+    searchTerms: ["today completed finished tasks 24 hours threads subagents"],
+  },
+  {
+    id: "sidebar-recent-subagent-count",
+    title: "Recent Subagent Count",
+    to: "/settings/ajpemok",
+    searchTerms: ["recent children agents last N limit maximum"],
+  },
+  {
+    id: "sidebar-recent-subagent-age",
+    title: "Recent Subagent Age Limit",
+    to: "/settings/ajpemok",
+    searchTerms: ["recent subagents children minutes hour duration age unlimited"],
   },
   {
     id: "sidebar-pinned-only",

@@ -91,9 +91,9 @@ Keep the current upstream request identity if it already includes or supersedes 
 This fork does not include the earlier experimental quota-source merge, freshness changes or local quota exporter.
 Synthetic parsing/header checks do not establish live quota accuracy.
 
-## A3 Fork Settings
+## AJP3 Fork Settings
 
-Group custom controls under **Settings → A3 Fork**: sidebar layout and filters,
+Group custom controls under **Settings → AJP3 Fork**: sidebar layout and filters,
 subagent visibility/count, Recent threads, header, context usage and recording pointers.
 Keep saved preference keys, sidebar shortcuts and desktop-only recording restrictions.
 Search and old anchored links lead to the new page. Standard browser recording controls
@@ -226,8 +226,11 @@ extra indentation and separation from their parent. Parent and child model colum
 
 ## Recent Finished Threads
 
-Both sidebars have a Recent shelf. Default to five finished threads within sixty
-minutes; a zero age limit keeps the last N regardless of age. Separate client
+Both sidebars have Recent and Today shelves, each with independent Threads and
+Subagents tabs. Today sits below Recent and lists other completions from the past
+24 hours, including settled threads. Recent has independent thread and subagent
+count/age limits, each defaulting to five within sixty minutes; a zero age limit
+keeps the last N regardless of age. Separate client
 preferences control the shelf, normal-list retention under Hide Inactive and
 including subagents. Subagents still respect Show/Hide. Preserve ancestor
 visibility so a recent child remains reachable. Pinned Only applies to the
@@ -239,12 +242,17 @@ transcript subscription or server mutation is needed for this client view.
 Recent entries and retained subagents can be dismissed individually, with Undo
 and a restore action in Recent. Dismissal is local to the client and completion;
 a later completed turn can appear again. Keep the optional normal-list retention.
+Today excludes Recent and dismissed completions without extending normal-list retention.
+Use native settled pages only through the 24-hour frontier. Read omitted idle
+children through native family reads after opening a Subagents tab, keeping those
+reads until the shelf collapses. Do not subscribe to transcripts for these shelves.
 
 | Files                                                                 | Fork Responsibility                                                           |
 | --------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
 | `apps/web/src/components/sidebar/recentThreads.logic.ts`              | Completion ordering, count/age bounds, exclusions and ancestor keys.          |
 | `apps/web/src/components/sidebar/recentThreads.logic.test.ts`         | Boundaries, parking, native children, environments and normal-list retention. |
 | `apps/web/src/hooks/useRecentThreads.ts`                              | Shared quiet-shell derivation, saved preferences and minute clock.            |
+| `apps/web/src/hooks/useCompletedThreadHistory.ts`                     | Scoped native history and on-demand subagent-family reads.                    |
 | `apps/web/src/components/sidebar/RecentThreadsShelf.tsx`              | Shared Recent section, collapse, links and existing context actions.          |
 | `apps/web/src/components/sidebar/RecentThreadDismissButton.tsx`       | Shared dismissal action for Recent and retained child rows.                   |
 | `apps/web/src/components/sidebar/RecentThreadsShelf.browser.test.tsx` | Collapse, finished-thread display and removal on resume.                      |
@@ -274,45 +282,46 @@ Idle icon rows must not acquire transcript leases before hover or focus.
 | `apps/web/src/components/sidebar/threadModelDetails.logic.test.ts`    | Run settings, Standard/Fast and unavailable/stale catalog cases.      |
 | `apps/web/src/components/sidebar/ThreadModelDetails.browser.test.tsx` | Hover details and no child detail lease before opening.               |
 
-## A3 Fork Icon
+## AJP3 Fork Icon
 
 Use the selected pink/blue A3 monogram with an integrated fork for nightly desktop
 packages and web favicons. Keep the existing app ID, installation name, data home,
 version and update channel so official nightlies and fork builds replace one another.
 Native mobile and development icons retain their upstream assets.
 
-Display A3 Fork in desktop branding, window/About names, the web shell and web-app
+Display AJP3 Fork in desktop branding, window/About names, the web shell and web-app
 manifest. Retain channel labels, Electron's internal storage name and the token-safe
-native User-Agent format. macOS display metadata uses A3 Fork while the bundle name,
+native User-Agent format. macOS display metadata uses AJP3 Fork while the bundle name,
 path and ID stay stable.
 
-| Files                                             | Fork Responsibility                                              |
-| ------------------------------------------------- | ---------------------------------------------------------------- |
-| `scripts/lib/brand-assets.ts`                     | Select fork assets through the existing nightly packaging paths. |
-| `scripts/build-desktop-artifact.ts`               | macOS display metadata with stable package identity.             |
-| `apps/desktop/src/app/DesktopEnvironment.ts`      | Desktop display name and unchanged channel selection.            |
-| `apps/desktop/src/app/DesktopAppIdentity.ts`      | Stable Electron storage name alongside fork display branding.    |
-| `apps/desktop/src/app/DesktopAppIdentity.test.ts` | Runtime/About names, valid User-Agent token and stable app ID.   |
-| `apps/web/src/branding.ts`                        | Web branding fallback.                                           |
-| `apps/web/index.html`                             | Initial page and splash labels.                                  |
-| `apps/web/public/manifest.webmanifest`            | Installed web-app name with unchanged web identity.              |
-| `assets/a3-fork/icon-1024.png`                    | Selected artwork and shared macOS/Linux source.                  |
-| `assets/a3-fork/icon-windows.ico`                 | Windows renditions from 16 to 256 pixels.                        |
-| `assets/a3-fork/favicon.ico`                      | Web 16/32-pixel ICO.                                             |
-| `assets/a3-fork/favicon-16x16.png`                | Small browser favicon.                                           |
-| `assets/a3-fork/favicon-32x32.png`                | Browser favicon.                                                 |
-| `assets/a3-fork/apple-touch-180.png`              | Web touch icon.                                                  |
+| Files                                             | Fork Responsibility                                                           |
+| ------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `scripts/lib/brand-assets.ts`                     | Select fork assets through the existing nightly packaging paths.              |
+| `scripts/build-desktop-artifact.ts`               | macOS display metadata with stable package identity.                          |
+| `apps/desktop/src/app/DesktopEnvironment.ts`      | Desktop display name and unchanged channel selection.                         |
+| `apps/desktop/src/app/DesktopAppIdentity.ts`      | Stable Electron storage name alongside fork display branding.                 |
+| `apps/desktop/src/app/DesktopAppIdentity.test.ts` | Runtime/About names, valid User-Agent token and stable app ID.                |
+| `apps/web/src/branding.ts`                        | Web branding fallback.                                                        |
+| `apps/web/index.html`                             | Initial page and splash labels.                                               |
+| `apps/web/public/manifest.webmanifest`            | Installed web-app name with unchanged web identity.                           |
+| `.ajpemok/sign-macos.cjs`                         | Pinned local signing identity, staged nested code and preserved entitlements. |
+| `assets/a3-fork/icon-1024.png`                    | Selected artwork and shared macOS/Linux source.                               |
+| `assets/a3-fork/icon-windows.ico`                 | Windows renditions from 16 to 256 pixels.                                     |
+| `assets/a3-fork/favicon.ico`                      | Web 16/32-pixel ICO.                                                          |
+| `assets/a3-fork/favicon-16x16.png`                | Small browser favicon.                                                        |
+| `assets/a3-fork/favicon-32x32.png`                | Browser favicon.                                                              |
+| `assets/a3-fork/apple-touch-180.png`              | Web touch icon.                                                               |
 
 ## Sydney Header and Wordmark
 
-- Replace the sidebar title with A3 Fork, with a stronger A3 and no extra logo before it.
+- Replace the sidebar title with AJP3 Fork, with a stronger AJP3 and no extra logo before it.
 - Offer twelve Sydney scenes, defaulting to Copper Skyline.
 - Use brief hover/focus and idle light sweeps; pause effects for hidden/unfocused windows and honour reduced motion.
 
 | Files                                                              | Fork Responsibility                                             |
 | ------------------------------------------------------------------ | --------------------------------------------------------------- |
 | `apps/web/src/components/sidebar/SidebarChrome.tsx`                | Fork wordmark and header integration.                           |
-| `apps/web/src/components/sidebar/AjpemokBackdrop.tsx`              | A3 Fork wordmark, scene rendering and bounded motion.           |
+| `apps/web/src/components/sidebar/AjpemokBackdrop.tsx`              | AJP3 Fork wordmark, scene rendering and bounded motion.         |
 | `apps/web/src/components/sidebar/AjpemokBackdrop.browser.test.tsx` | Header rendering and motion fixtures.                           |
 | `apps/web/src/components/sidebar/ajpemokHeaderScenes.ts`           | Scene IDs, labels, imports and fallback.                        |
 | `apps/web/src/components/SidebarStageBackdrop.tsx`                 | Remove the unused wrapper; retain stage artwork used elsewhere. |

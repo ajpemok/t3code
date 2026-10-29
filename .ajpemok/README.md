@@ -1,9 +1,9 @@
-# Maintaining A3 Fork
+# Maintaining AJP3 Fork
 
-A3 Fork follows official T3 Code nightlies with a small set of local repairs and interface changes.
+AJP3 Fork follows official T3 Code nightlies with a small set of local repairs and interface changes.
 The existing AJPEMOK source paths and package identity are retained.
 
-Custom controls live in **Settings → A3 Fork**. Saved preference keys remain stable.
+Custom controls live in **Settings → AJP3 Fork**. Saved preference keys remain stable.
 The selected icon source is `assets/a3-fork/icon-1024.png`; the Windows ICO and web
 sizes are exported from it. Keep those exports when refreshing: upstream's Icon
 Composer project does not contain the A3 artwork. Desktop and web select the fork
@@ -185,6 +185,25 @@ revision and retire superseded staging after its replacement is qualified.
 macOS already has upstream DMG targets for arm64, x64 and universal builds.
 Use a Mac with the documented Xcode/Rust prerequisites and qualify the fork there; Windows checks do not establish macOS acceptance.
 Signing, passkeys and notarisation have additional requirements in the build guide.
+
+### Seoul Local Signing
+
+macOS builds use `$HOME/.local/share/a3-fork-signing/identity.json` when present.
+`T3CODE_LOCAL_SIGNING_CONFIG` can select a different manifest explicitly. The manifest
+pins the certificate fingerprint and login keychain; it contains no private key.
+An absent default leaves upstream signing unchanged; an invalid configured identity
+stops packaging. The `afterSign` hook signs nested code with
+that identity before electron-builder creates archives and updater metadata.
+It preserves existing entitlements and rejects installed application paths.
+Do not use `--signed` for this local certificate: that upstream flag also requires
+an Apple provisioning profile for passkeys. Local signing does not supply Developer ID,
+notarisation or Apple's restricted entitlements.
+
+Keep the same certificate across updates. Its private key stays in Seoul's login
+keychain. The first signed fork build may need one approval for the existing Electron
+key; subsequent fork builds should retain that app requirement. Switching to an
+official nightly can prompt again because its signer differs. Check the certificate's
+expiry before renewing; replacing it changes the signing identity.
 
 ### 7. Publish and Hand Over
 
