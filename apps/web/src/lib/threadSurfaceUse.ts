@@ -72,3 +72,28 @@ export function recentThreadSurfaceUse(
   }
   return [...expiries].map(([surface, expiresAt]) => ({ surface, expiresAt }));
 }
+
+export function retainedThreadSurfaceUse(
+  items: readonly ActivityItem[],
+  runId: RunId | null,
+): number {
+  if (runId === null) return 0;
+  let surface = 0;
+  let completedAt = -Infinity;
+  for (const item of items) {
+    if (
+      item.runId !== runId ||
+      item.status !== "completed" ||
+      item.completedAt === null ||
+      item.toolNonExecutionKind
+    )
+      continue;
+    const candidate = itemSurface(item) & (SURFACE_USE.computer | SURFACE_USE.browser);
+    const timestamp = DateTime.toEpochMillis(item.completedAt);
+    if (candidate && timestamp >= completedAt) {
+      surface = candidate;
+      completedAt = timestamp;
+    }
+  }
+  return surface;
+}
