@@ -398,6 +398,9 @@ Memory reclamation depends on the existing resource lifecycle and has not been m
 
 ## Context, Token and Weekly Quota Usage
 
+Upstream 3867 adds an optional Usage section in thread details. Keep its Labs
+setting independent of the fork's composer context and weekly quota controls.
+
 | Files                                                              | Fork Responsibility                                                    |
 | ------------------------------------------------------------------ | ---------------------------------------------------------------------- |
 | `apps/web/src/components/chat/ContextWindowMeter.tsx`              | Context percentage, available token counts and detailed usage popover. |
