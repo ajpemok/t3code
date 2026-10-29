@@ -557,7 +557,11 @@ function useSidebarThreads(input: {
     folderGroups === null
       ? null
       : groupedFolders
-          .filter((folder) => visibleProjectKeys.has(folder.group.projectKey) || (keepEmpty && !hideInactive && !pinnedOnly))
+          .filter(
+            (folder) =>
+              visibleProjectKeys.has(folder.group.projectKey) ||
+              (keepEmpty && !hideInactive && !pinnedOnly),
+          )
           .map((folder) => {
             const collapsed = !resolveProjectExpanded(
               projectExpandedById,
