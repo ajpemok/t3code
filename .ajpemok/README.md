@@ -195,6 +195,10 @@ An absent default leaves upstream signing unchanged; an invalid configured ident
 stops packaging. The `afterSign` hook signs nested code with
 that identity before electron-builder creates archives and updater metadata.
 It preserves existing entitlements and rejects installed application paths.
+SSH builds sign through a temporary one-shot job in the logged-in user's Aqua
+session, where the login keychain is available. The job and its temporary files
+are removed after signing; no login item or background signer remains. If Seoul
+has no logged-in GUI session or its keychain is locked, signing fails explicitly.
 Do not use `--signed` for this local certificate: that upstream flag also requires
 an Apple provisioning profile for passkeys. Local signing does not supply Developer ID,
 notarisation or Apple's restricted entitlements.

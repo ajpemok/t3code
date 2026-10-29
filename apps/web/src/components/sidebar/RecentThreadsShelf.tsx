@@ -69,7 +69,7 @@ function RecentRow({
       </Link>
       {dismissible ? <RecentThreadDismissButton entry={entry} /> : null}
       <ThreadModelIdentity thread={thread} />
-      <span className="shrink-0 text-3xs text-secondary-label">
+      <span className="w-12 shrink-0 text-right text-3xs text-secondary-label tabular-nums">
         <RelativeTime timestamp={finishedAt} nowLabel="now" />
       </span>
     </li>
