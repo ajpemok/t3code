@@ -73,6 +73,38 @@ it("preserves a provider choice absent from the cached catalog", () => {
   ).toContainEqual({ id: "reasoningEffort", label: "Reasoning", value: "ultra" });
 });
 
+it.each([
+  { value: "priority", catalogLabel: "Fast (2x)", label: "Priority", expedited: true },
+  { value: "default", catalogLabel: "Normal routing", label: "Standard", expedited: false },
+])(
+  "recognises $value by its value instead of the catalogue label",
+  ({ value, catalogLabel, label, expedited }) => {
+    const catalog = {
+      ...provider,
+      models: provider.models.map((model) => ({
+        ...model,
+        capabilities: {
+          optionDescriptors: [
+            {
+              id: "serviceTier",
+              label: "Speed",
+              type: "select" as const,
+              options: [{ id: value, label: catalogLabel }],
+              currentValue: value,
+            },
+          ],
+        },
+      })),
+    };
+    expect(
+      sidebarModelDetails(
+        { instanceId, model: "gpt-6.1-sol", options: [{ id: "serviceTier", value }] },
+        catalog,
+      ).speed,
+    ).toEqual({ label, expedited });
+  },
+);
+
 it("matches the composer's Standard default when the provider defaults to Fast", () => {
   const fastDefaultProvider = {
     ...provider,
@@ -137,50 +169,65 @@ it("does not mistake an unknown service tier for Standard or Fast", () => {
   ).toBeNull();
 });
 
-it("keeps the executing run's model when next-turn settings change", () => {
-  const projection = makeThreadProjectionFixture();
-  const runId = RunId.make("running");
-  const executing = { instanceId, model: "gpt-6.1-sol" };
-  const thread = makeThreadFixture({
-    modelSelection: { instanceId, model: "next-turn-model" },
-    latestRun: {
-      runId,
-      status: "running",
-      requestedAt: null,
-      startedAt: null,
-      completedAt: null,
-      assistantMessageId: null,
-    },
-  });
-  expect(
-    sidebarExecutionModel(thread, {
-      ...projection,
-      runs: [
-        {
-          id: runId,
-          threadId: thread.id,
-          ordinal: 1,
-          providerInstanceId: instanceId,
-          modelSelection: executing,
-          providerThreadId: null,
-          userMessageId: MessageId.make("message"),
-          rootNodeId: null,
-          activeAttemptId: null,
-          status: "running",
-          requestedAt: projection.updatedAt,
-          startedAt: null,
-          completedAt: null,
-          checkpointId: null,
-          contextHandoffId: null,
-        },
-      ],
-    }),
-  ).toEqual({ selection: executing, source: "run" });
-  expect(sidebarExecutionModel(thread, null)).toEqual({
-    selection: thread.modelSelection,
-    source: "selected",
-  });
-});
+it.each(["running", "completed", "cancelled", "failed", "interrupted", "rolled_back"] as const)(
+  "uses executing settings only while the run is active (%s)",
+  (status) => {
+    const projection = makeThreadProjectionFixture();
+    const runId = RunId.make("running");
+    const executing = {
+      instanceId,
+      model: "gpt-6.1-sol",
+      options: [{ id: "serviceTier", value: "default" }],
+    };
+    const thread = makeThreadFixture({
+      modelSelection: {
+        instanceId,
+        model: "next-turn-model",
+        options: [{ id: "serviceTier", value: "priority" }],
+      },
+      latestRun: {
+        runId,
+        status,
+        requestedAt: null,
+        startedAt: null,
+        completedAt: null,
+        assistantMessageId: null,
+      },
+    });
+    expect(
+      sidebarExecutionModel(thread, {
+        ...projection,
+        runs: [
+          {
+            id: runId,
+            threadId: thread.id,
+            ordinal: 1,
+            providerInstanceId: instanceId,
+            modelSelection: executing,
+            providerThreadId: null,
+            userMessageId: MessageId.make("message"),
+            rootNodeId: null,
+            activeAttemptId: null,
+            status,
+            requestedAt: projection.updatedAt,
+            startedAt: null,
+            completedAt: null,
+            checkpointId: null,
+            contextHandoffId: null,
+          },
+        ],
+      }),
+    ).toEqual(
+      status === "running"
+        ? { selection: executing, source: "run" }
+        : { selection: thread.modelSelection, source: "selected" },
+    );
+    expect(sidebarExecutionModel(thread, null)).toEqual({
+      selection: thread.modelSelection,
+      source: status === "running" ? "pending" : "selected",
+    });
+  },
+);
 
 it("fills missing options from a matching provider report without losing explicit settings", () => {
   const projection = makeThreadProjectionFixture();
