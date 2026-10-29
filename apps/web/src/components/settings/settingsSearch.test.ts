@@ -188,7 +188,7 @@ describe("searchSettings", () => {
 });
 
 describe("settings search targets", () => {
-  it("finds fork controls together in the A3 Fork section", () => {
+  it("finds fork controls together in the AJP3 Fork section", () => {
     expect(SETTINGS_NAV_GROUPS.flatMap((group) => group.paths)).toContain("/settings/ajpemok");
     for (const id of [
       "legacy-sidebar",
@@ -201,6 +201,9 @@ describe("settings search targets", () => {
       "sidebar-recent-subagents",
       "sidebar-recent-count",
       "sidebar-recent-age",
+      "sidebar-today-section",
+      "sidebar-recent-subagent-count",
+      "sidebar-recent-subagent-age",
       "ajpemok-header-scene",
       "ajpemok-header-motion",
       "legacy-context-window-indicator",
@@ -209,7 +212,7 @@ describe("settings search targets", () => {
       expect(SETTINGS_SEARCH_ITEMS.find((item) => item.id === id)?.to).toBe("/settings/ajpemok");
       expect(getSettingsSearchTargetScope(id)?.scope).toBeNull();
     }
-    expect(searchSettings("A3 context")[0]?.id).toBe("legacy-context-window-indicator");
+    expect(searchSettings("AJP3 context")[0]?.id).toBe("legacy-context-window-indicator");
   });
 
   it("requires an environment for the resolved telemetry export destination", () => {

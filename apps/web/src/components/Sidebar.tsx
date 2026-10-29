@@ -604,13 +604,14 @@ function useSidebarThreads(input: {
   }
   return {
     ...partition,
-    hasRecentThreads:
-      recent.showSection &&
-      recent.entries.some(
-        ({ thread }) =>
-          scopedProjectKeys === null ||
-          scopedProjectKeys.has(`${thread.environmentId}:${thread.projectId}`),
-      ),
+    hasRecentThreads: [
+      ...(recent.showSection ? recent.entries : []),
+      ...(recent.showToday ? recent.today : []),
+    ].some(
+      ({ thread }) =>
+        scopedProjectKeys === null ||
+        scopedProjectKeys.has(`${thread.environmentId}:${thread.projectId}`),
+    ),
     workingThreads,
     pinnedThreads,
     activeThreads,

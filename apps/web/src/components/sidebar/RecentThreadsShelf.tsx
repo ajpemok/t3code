@@ -6,6 +6,7 @@ import {
 } from "@t3tools/client-runtime/environment";
 import * as Schema from "effect/Schema";
 import { GitForkIcon, Undo2Icon } from "lucide-react";
+import { useId, useState } from "react";
 import { useRecentThreads, restoreDismissedRecentThreads } from "~/hooks/useRecentThreads";
 import { useLocalStorage } from "~/hooks/useLocalStorage";
 import { useCloseInactiveProjectTabs } from "~/hooks/useCloseInactiveProjectTabs";
@@ -22,13 +23,18 @@ import { ThreadModelIdentity } from "./ThreadModelDetails";
 import { RecentThreadDismissButton } from "./RecentThreadDismissButton";
 import { Button } from "../ui/button";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { useCompletedThreadHistory } from "~/hooks/useCompletedThreadHistory";
+
+const SHELF_KIND = Schema.Literals(["threads", "subagents"]);
 
 function RecentRow({
   entry,
   onContextMenu,
+  dismissible,
 }: {
   readonly entry: RecentThreadEntry;
   readonly onContextMenu: ReturnType<typeof useCloseInactiveProjectTabs>["showTaskContextMenu"];
+  readonly dismissible: boolean;
 }) {
   const { thread, finishedAt, parentTitle } = entry;
   const ref = scopeThreadRef(thread.environmentId, thread.id);
@@ -61,7 +67,7 @@ function RecentRow({
       >
         {thread.title}
       </Link>
-      <RecentThreadDismissButton entry={entry} />
+      {dismissible ? <RecentThreadDismissButton entry={entry} /> : null}
       <ThreadModelIdentity thread={thread} />
       <span className="shrink-0 text-3xs text-secondary-label">
         <RelativeTime timestamp={finishedAt} nowLabel="now" />
@@ -70,33 +76,56 @@ function RecentRow({
   );
 }
 
-export function RecentThreadsShelf({
+function CompletedShelf({
+  name,
+  entries,
+  dismissedCount = 0,
   scopedProjectKeys,
-  className = "mt-auto px-2 pt-2",
 }: {
+  readonly name: "Recent" | "Today";
+  readonly entries: readonly RecentThreadEntry[];
+  readonly dismissedCount?: number;
   readonly scopedProjectKeys?: ReadonlySet<string> | null;
-  readonly className?: string;
 }) {
-  const recent = useRecentThreads();
+  const id = useId();
   const selected = useThreadRouteRef();
   const [expanded, setExpanded] = useLocalStorage(
-    "t3code:sidebar:recent-expanded",
+    `t3code:sidebar:${name.toLowerCase()}-expanded`,
     true,
     Schema.Boolean,
   );
-  const entries =
+  const [kind, setKind] = useLocalStorage(
+    `t3code:sidebar:${name.toLowerCase()}-kind`,
+    "threads",
+    SHELF_KIND,
+  );
+  const [readSubagents, setReadSubagents] = useState(kind === "subagents");
+  const [visibleCount, setVisibleCount] = useState(5);
+  const selectKind = (next: "threads" | "subagents") => {
+    if (next === "subagents") setReadSubagents(true);
+    setKind(next);
+  };
+  const history = useCompletedThreadHistory({
+    enabled: expanded,
+    includeSubagents: readSubagents || kind === "subagents",
+    includeSettled: name === "Today",
+    scopedProjectKeys: scopedProjectKeys ?? null,
+  });
+  const scopedEntries =
     scopedProjectKeys == null
-      ? recent.entries
-      : recent.entries.filter(({ thread }) =>
+      ? entries
+      : entries.filter(({ thread }) =>
           scopedProjectKeys.has(`${thread.environmentId}:${thread.projectId}`),
         );
   const inactiveTabs = useCloseInactiveProjectTabs({
-    threads: entries.map((entry) => entry.thread),
+    threads: scopedEntries.map((entry) => entry.thread),
     selectedThreadKey: selected ? scopedThreadKey(selected) : null,
   });
-  if (!recent.showSection) return null;
+  const visible = scopedEntries.filter(
+    ({ thread }) => isSidebarSubagentThread(thread) === (kind === "subagents"),
+  );
   return (
-    <section aria-label="Recent" className={className}>
+    <section aria-label={name}>
       <div className="flex items-center">
         <div className="min-w-0 flex-1">
           <CollapsibleSectionHeader
@@ -104,10 +133,10 @@ export function RecentThreadsShelf({
             onClick={() => setExpanded(!expanded)}
             tone="muted"
           >
-            Recent ({entries.length})
+            {name} ({scopedEntries.length})
           </CollapsibleSectionHeader>
         </div>
-        {recent.dismissedCount > 0 ? (
+        {name === "Recent" && dismissedCount > 0 ? (
           <Tooltip>
             <TooltipTrigger
               render={
@@ -126,16 +155,121 @@ export function RecentThreadsShelf({
         ) : null}
       </div>
       {expanded ? (
-        <ul>
-          {entries.map((entry) => (
-            <RecentRow
-              key={scopedThreadKey(scopeThreadRef(entry.thread.environmentId, entry.thread.id))}
-              entry={entry}
-              onContextMenu={inactiveTabs.showTaskContextMenu}
-            />
-          ))}
-        </ul>
+        <>
+          <div
+            role="tablist"
+            aria-label={`${name} tasks`}
+            className="flex gap-1 px-2 pb-1"
+            onKeyDown={(event) => {
+              if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+              event.preventDefault();
+              const next =
+                event.key === "Home"
+                  ? "threads"
+                  : event.key === "End"
+                    ? "subagents"
+                    : kind === "threads"
+                      ? "subagents"
+                      : "threads";
+              selectKind(next);
+              event.currentTarget
+                .querySelector<HTMLButtonElement>(`[data-kind="${next}"]`)
+                ?.focus();
+            }}
+          >
+            {(["threads", "subagents"] as const).map((tab) => (
+              <button
+                type="button"
+                role="tab"
+                key={tab}
+                data-kind={tab}
+                id={`${id}-${tab}`}
+                aria-controls={`${id}-panel`}
+                aria-selected={kind === tab}
+                tabIndex={kind === tab ? 0 : -1}
+                onClick={() => selectKind(tab)}
+                className="min-h-7 rounded-sm px-2 text-2xs text-sidebar-muted-foreground hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring aria-selected:bg-accent aria-selected:text-sidebar-foreground"
+              >
+                {tab === "threads" ? "Threads" : "Subagents"} (
+                {
+                  scopedEntries.filter(
+                    ({ thread }) => isSidebarSubagentThread(thread) === (tab === "subagents"),
+                  ).length
+                }
+                )
+              </button>
+            ))}
+          </div>
+          <div role="tabpanel" id={`${id}-panel`} aria-labelledby={`${id}-${kind}`}>
+            <ul>
+              {(name === "Today" ? visible.slice(0, visibleCount) : visible).map((entry) => (
+                <RecentRow
+                  key={scopedThreadKey(scopeThreadRef(entry.thread.environmentId, entry.thread.id))}
+                  entry={entry}
+                  onContextMenu={inactiveTabs.showTaskContextMenu}
+                  dismissible={name === "Recent"}
+                />
+              ))}
+            </ul>
+            {name === "Today" && visible.length > visibleCount ? (
+              <Button
+                variant="ghost-muted"
+                size="xs"
+                onClick={() => setVisibleCount(visibleCount + 5)}
+              >
+                Show More
+              </Button>
+            ) : null}
+            {history.failed ? (
+              <button
+                type="button"
+                onClick={history.retry}
+                className="px-4 py-1 text-2xs text-sidebar-foreground underline"
+              >
+                Retry loading history
+              </button>
+            ) : history.loading ? (
+              <p role="status" className="px-4 py-1 text-2xs text-sidebar-muted-foreground">
+                Loading history…
+              </p>
+            ) : visible.length === 0 ? (
+              <p className="px-4 py-1 text-2xs text-sidebar-muted-foreground">
+                No finished {kind}.
+              </p>
+            ) : null}
+          </div>
+        </>
       ) : null}
     </section>
+  );
+}
+
+export function RecentThreadsShelf({
+  scopedProjectKeys,
+  className = "mt-auto px-2 pt-2",
+}: {
+  readonly scopedProjectKeys?: ReadonlySet<string> | null;
+  readonly className?: string;
+}) {
+  const recent = useRecentThreads();
+  if (!recent.showSection && !recent.showToday) return null;
+  return (
+    <div className={className}>
+      {recent.showSection ? (
+        <CompletedShelf
+          name="Recent"
+          entries={recent.entries}
+          dismissedCount={recent.dismissedCount}
+          scopedProjectKeys={scopedProjectKeys ?? null}
+        />
+      ) : null}
+      {recent.showToday ? (
+        <CompletedShelf
+          name="Today"
+          entries={recent.today}
+          scopedProjectKeys={scopedProjectKeys ?? null}
+        />
+      ) : null}
+    </div>
   );
 }

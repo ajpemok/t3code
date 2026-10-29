@@ -2,7 +2,12 @@ import { EnvironmentId, RunId, ThreadId } from "@t3tools/contracts";
 import { expect, it } from "vite-plus/test";
 import { makeThreadFixture, type ThreadFixtureOverrides } from "~/test-fixtures";
 import { filterProjectSectionThreads, subagentsByParent } from "../Sidebar.logic";
-import { recentThreads, recentThreadVisibilityKeys } from "./recentThreads.logic";
+import {
+  recentThreads,
+  recentThreadVisibilityKeys,
+  todayThreads,
+  completedHistoryPageRequests,
+} from "./recentThreads.logic";
 
 const now = "2026-10-28T12:00:00.000Z";
 const options = { now, count: 5, maxAgeMinutes: 60, includeSubagents: true };
@@ -31,6 +36,31 @@ it("limits finished threads by count and age, with zero age allowing older resul
   ).toEqual(threads.slice(0, 5).map((thread) => thread.id));
   expect(recentThreads([old], options)).toEqual([]);
   expect(recentThreads([old], { ...options, maxAgeMinutes: 0 })).toMatchObject([{ thread: old }]);
+  const children = threads.slice(0, 3).map((thread) => ({
+    ...thread,
+    id: ThreadId.make(`child-${thread.id}`),
+    lineage: {
+      rootThreadId: old.id,
+      parentThreadId: old.id,
+      relationshipToParent: "subagent" as const,
+    },
+  }));
+  expect(
+    recentThreads([...threads, ...children], {
+      ...options,
+      count: 1,
+      subagentCount: 2,
+      subagentMaxAgeMinutes: 60,
+    }),
+  ).toHaveLength(3);
+  expect(
+    recentThreads([...threads, ...children], {
+      ...options,
+      count: 1,
+      subagentCount: 2,
+      subagentMaxAgeMinutes: 1,
+    }),
+  ).toHaveLength(1);
 });
 
 it("dismisses only the selected completion and shows a later completion again", () => {
@@ -46,6 +76,53 @@ it("dismisses only the selected completion and shows a later completion again", 
   const next = finished("thread", "2026-10-28T11:59:00.000Z");
   expect(recentThreads([next], { ...options, dismissed })).toMatchObject([{ thread: next }]);
   expect(recentThreads([first], { ...options, dismissed: {} })).toMatchObject([{ thread: first }]);
+});
+
+it("lists other completions from the past 24 hours in Today, including settled threads", () => {
+  const recent = finished("recent", "2026-10-28T11:59:00.000Z");
+  const earlier = finished("earlier", "2026-10-28T02:00:00.000Z", { settledOverride: "settled" });
+  const sameIdElsewhere = { ...recent, environmentId: EnvironmentId.make("other") };
+  const atCutoff = finished("cutoff", "2026-10-27T12:00:00.000Z");
+  const future = finished("future", "2026-10-29T00:00:00.000Z");
+  const snoozed = finished("snoozed", now, {
+    snoozedAt: now,
+    snoozedUntil: "2026-10-29T00:00:00Z",
+  });
+  const threads = [earlier, recent, sameIdElsewhere, atCutoff, future, snoozed];
+  expect(
+    todayThreads(
+      threads,
+      [{ thread: recent, finishedAt: recent.latestRun!.completedAt!, parentTitle: null }],
+      options,
+    ).map(({ thread }) => thread),
+  ).toEqual([sameIdElsewhere, earlier]);
+  expect(
+    todayThreads([recent], [], {
+      ...options,
+      dismissed: { "environment-test:recent": recent.latestRun!.completedAt! },
+    }),
+  ).toEqual([]);
+  const id = EnvironmentId.make("environment-test");
+  const requested = new Map([[id, 1]]);
+  const page = {
+    older: null,
+    pages: {
+      reads: [],
+      frontier: { settledAt: "2026-10-28T02:00:00.000Z" },
+      status: "ready" as const,
+    },
+  };
+  const environments = new Map([[id, page]]);
+  const cutoff = Date.parse(now) - 86400000;
+  expect(completedHistoryPageRequests(requested, environments, cutoff).get(id)).toBe(2);
+  expect(
+    completedHistoryPageRequests(
+      requested,
+      new Map([[id, { ...page, pages: { ...page.pages, status: "pending" } }]]),
+      cutoff,
+    ),
+  ).toBe(requested);
+  expect(completedHistoryPageRequests(requested, environments, Date.parse(now))).toBe(requested);
 });
 
 it("does not bring parked, archived, empty or newly active threads into Recent", () => {
