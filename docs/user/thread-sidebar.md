@@ -156,7 +156,7 @@ moves and the agent keeps working in the same place. Other threads in that folde
 move with it. Rename the project in its settings, and use **Initialize Git** to
 get branch and diff controls.
 
-### Start in the background
+### Start in the Background
 
 In a desktop browser or the desktop app, press `Cmd+Enter` on macOS or `Ctrl+Enter`
 on Windows and Linux to start a new thread and immediately open another draft. The
@@ -395,7 +395,7 @@ To choose what the thread details card shows, right-click the card or open
 shortcuts, such as Open in editor and project scripts. **Reset to default** brings
 back the standard rows.
 
-## Snooze until later
+## Snooze Until Later
 
 To change the choices in the snooze menu, open **Settings → Threads → Snooze options**.
 Each option is a duration, such as 3 hours, or a time on a day, such as 9:00 PM
