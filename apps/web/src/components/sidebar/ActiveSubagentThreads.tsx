@@ -138,21 +138,21 @@ function VisibleSubagentsMenuGroup() {
 
 export function PinnedThreadsToggle() {
   const enabled = useClientSettings((settings) => settings.sidebarPinnedOnlyEnabled);
-  const label = enabled ? "Show All Threads" : "Show Pinned Threads Only";
+  const label = enabled ? "Pinned Only Is On; Show All Threads" : "Show Pinned Threads Only";
   return (
     <Tooltip>
       <TooltipTrigger
         render={
           <Button
             size="icon-xs"
-            variant={enabled ? "secondary" : "ghost-muted"}
+            variant={enabled ? "default" : "ghost-muted"}
             aria-label={label}
             aria-pressed={enabled}
             onClick={() => void updateClientSettings({ sidebarPinnedOnlyEnabled: !enabled })}
           />
         }
       >
-        <PinIcon className="size-3.5" />
+        <PinIcon className="size-3.5" fill={enabled ? "currentColor" : "none"} />
       </TooltipTrigger>
       <TooltipPopup side="top">{label}</TooltipPopup>
     </Tooltip>

@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vite-plus/test";
 import { RunId } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
-import { recentThreadSurfaceUse, resolveThreadSurfaceUse, SURFACE_USE } from "./threadSurfaceUse";
+import {
+  recentThreadSurfaceUse,
+  retainedThreadSurfaceUse,
+  resolveThreadSurfaceUse,
+  SURFACE_USE,
+} from "./threadSurfaceUse";
 
 const runId = RunId.make("current");
 const running = { runId, status: "running" as const, completedAt: null };
@@ -54,6 +59,35 @@ describe("resolveThreadSurfaceUse", () => {
     ).toBe(0);
     const completedAt = DateTime.makeUnsafe("2026-10-25T01:00:00Z");
     const completed = { ...running, status: "completed" as const, completedAt };
+    const computer = {
+      ...completed,
+      toolName: "node_repl.js",
+      input: { code: "await sky.list_apps();" },
+    };
+    expect(retainedThreadSurfaceUse([computer], runId)).toBe(SURFACE_USE.computer);
+    expect(retainedThreadSurfaceUse([computer], RunId.make("next"))).toBe(0);
+    expect(retainedThreadSurfaceUse([computer], null)).toBe(0);
+    expect(retainedThreadSurfaceUse([{ ...computer, status: "failed" }], runId)).toBe(0);
+    expect(
+      retainedThreadSurfaceUse([{ ...computer, toolNonExecutionKind: "approval" }], runId),
+    ).toBe(0);
+    expect(
+      retainedThreadSurfaceUse([{ ...completed, toolName: "mcp__t3__preview_snapshot" }], runId),
+    ).toBe(0);
+    expect(
+      retainedThreadSurfaceUse(
+        [
+          {
+            ...completed,
+            toolSurface: "browser",
+            completedAt: DateTime.makeUnsafe("2026-10-25T01:00:01Z"),
+          },
+          computer,
+          { ...completed, toolName: "functions.exec" },
+        ],
+        runId,
+      ),
+    ).toBe(SURFACE_USE.browser);
     expect(
       recentThreadSurfaceUse(
         [
