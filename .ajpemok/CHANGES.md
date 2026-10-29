@@ -196,6 +196,8 @@ Show/Hide accepts legacy saved `active` values as Show; Hide Inactive supplies t
 shared active-only filter.
 Pinned Only uses a filled primary button while enabled. Activity counts stay in
 project headers rather than the top toolbar.
+Nested subagent rows keep a two-line status area centred in a taller row, with
+extra indentation and separation from their parent. Parent and child model columns share the same compact width.
 
 | Files                                                                    | Fork Responsibility                                                                                                                   |
 | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
