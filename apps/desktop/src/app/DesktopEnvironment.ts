@@ -86,7 +86,7 @@ export class DesktopEnvironment extends Context.Service<
   }
 >()("@t3tools/desktop/app/DesktopEnvironment") {}
 
-const APP_BASE_NAME = "A3 Fork";
+const APP_BASE_NAME = "AJP3 Fork";
 
 function resolveDesktopAppStageLabel(input: {
   readonly isDevelopment: boolean;

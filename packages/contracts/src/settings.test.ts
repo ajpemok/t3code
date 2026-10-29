@@ -87,6 +87,9 @@ describe("recent thread preferences", () => {
       sidebarRecentIncludeSubagents: true,
       sidebarRecentThreadCount: 5,
       sidebarRecentThreadMaxAgeMinutes: 60,
+      sidebarRecentSubagentCount: 5,
+      sidebarRecentSubagentMaxAgeMinutes: 60,
+      sidebarTodaySectionEnabled: true,
     });
     const patch = {
       sidebarRecentSectionEnabled: false,
@@ -94,6 +97,9 @@ describe("recent thread preferences", () => {
       sidebarRecentIncludeSubagents: false,
       sidebarRecentThreadCount: 12,
       sidebarRecentThreadMaxAgeMinutes: 0,
+      sidebarRecentSubagentCount: 3,
+      sidebarRecentSubagentMaxAgeMinutes: 120,
+      sidebarTodaySectionEnabled: false,
     };
     expect(decodeClientSettingsPatch(patch)).toEqual(patch);
     expect(decodeClientSettings(encodeClientSettings(decodeClientSettings(patch)))).toMatchObject(
@@ -104,6 +110,10 @@ describe("recent thread preferences", () => {
       { sidebarRecentThreadCount: 51 },
       { sidebarRecentThreadMaxAgeMinutes: -1 },
       { sidebarRecentThreadMaxAgeMinutes: 1441 },
+      { sidebarRecentSubagentCount: 0 },
+      { sidebarRecentSubagentCount: 51 },
+      { sidebarRecentSubagentMaxAgeMinutes: -1 },
+      { sidebarRecentSubagentMaxAgeMinutes: 1441 },
     ])
       expect(() => decodeClientSettingsPatch(invalid)).toThrow();
   });

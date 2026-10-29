@@ -78,10 +78,10 @@ export function AjpemokBackdrop() {
 export function AjpemokWordmark() {
   return (
     <span
-      aria-label="A3 Fork"
+      aria-label="AJP3 Fork"
       className="inline-flex min-w-0 items-center gap-1.5 whitespace-nowrap text-xs tracking-widest"
     >
-      <span className="font-bold">A3</span>
+      <span className="font-bold">AJP3</span>
       <span className="font-medium opacity-65">Fork</span>
     </span>
   );
