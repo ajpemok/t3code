@@ -2831,7 +2831,12 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     extraResources: [
       ...DESKTOP_EXTRA_RESOURCES,
       ...(platform === "mac"
-        ? [{ from: "assets/a3-fork/InfoPlist.strings", to: "en.lproj/InfoPlist.strings" }]
+        ? [
+            {
+              from: "apps/desktop/prod-resources/ajp3/InfoPlist.strings",
+              to: "en.lproj/InfoPlist.strings",
+            },
+          ]
         : []),
       ...(platform === "linux" ? LINUX_CAPTURE_EXTRA_RESOURCES : []),
       ...(platform === "linux" ? LINUX_BROWSER_SECRET_EXTRA_RESOURCES : []),

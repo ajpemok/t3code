@@ -299,7 +299,7 @@ accept the localisation; the path and ID stay stable.
 | ------------------------------------------------- | ----------------------------------------------------------------------------- |
 | `scripts/lib/brand-assets.ts`                     | Select fork assets through the existing nightly packaging paths.              |
 | `scripts/build-desktop-artifact.ts`               | macOS display metadata with stable package identity.                          |
-| `assets/a3-fork/InfoPlist.strings`                | Localised Finder and Dock name with the original bundle filename.             |
+| `apps/desktop/resources/ajp3/InfoPlist.strings`   | Localised Finder and Dock name with the original bundle filename.             |
 | `apps/desktop/src/app/DesktopEnvironment.ts`      | Desktop display name and unchanged channel selection.                         |
 | `apps/desktop/src/app/DesktopAppIdentity.ts`      | Stable Electron storage name alongside fork display branding.                 |
 | `apps/desktop/src/app/DesktopAppIdentity.test.ts` | Runtime/About names, valid User-Agent token and stable app ID.                |
