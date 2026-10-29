@@ -1,15 +1,12 @@
 import { useAtomValue } from "@effect/atom-react";
-import type { EnvironmentId, ThreadId, ProjectId } from "@t3tools/contracts";
+import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { resolveSidebarSubagentVisibility } from "@t3tools/contracts";
 import { AsyncResult, Atom } from "effect/reactivity";
 import { useEffect } from "react";
 import { isSidebarSubagentThread } from "~/components/Sidebar.logic";
-import { completedHistoryPageRequests } from "~/components/sidebar/recentThreads.logic";
 import { appAtomRegistry } from "~/rpc/atomRegistry";
-import { useOlderSettledShelf } from "~/state/olderSettledShelf";
 import { environmentThreadShells, threadFamilies } from "~/state/threads";
 import { useClientSettings } from "./useSettings";
-import { useNowMinute } from "./useNowMinute";
 
 const rootsAtom = Atom.family((scope: string) =>
   Atom.make((get) => {
@@ -22,6 +19,7 @@ const rootsAtom = Atom.family((scope: string) =>
             !isSidebarSubagentThread(thread) &&
             thread.archivedAt === null &&
             thread.deletedAt === null &&
+            thread.settledOverride !== "settled" &&
             (keys === null || keys.includes(`${thread.environmentId}:${thread.projectId}`)),
         )
         .map((thread) => [thread.environmentId, thread.id])
@@ -45,38 +43,12 @@ const familyStatusAtom = Atom.family((key: string) =>
 export function useCompletedThreadHistory(input: {
   readonly enabled: boolean;
   readonly includeSubagents: boolean;
-  readonly includeSettled: boolean;
   readonly scopedProjectKeys?: ReadonlySet<string> | null;
 }) {
   const rootsKey = useAtomValue(
     rootsAtom(JSON.stringify(input.scopedProjectKeys ? [...input.scopedProjectKeys].sort() : null)),
   );
   const roots = JSON.parse(rootsKey) as [EnvironmentId, ThreadId][];
-  const scopes = [...new Set(roots.map(([id]) => id))].map((environmentId) => ({
-    environmentId,
-    projectIds:
-      input.scopedProjectKeys == null
-        ? null
-        : [...input.scopedProjectKeys].flatMap((key) => {
-            const prefix = `${environmentId}:`;
-            return key.startsWith(prefix) ? [key.slice(prefix.length) as ProjectId] : [];
-          }),
-  }));
-  const readSettled = input.enabled && input.includeSettled;
-  const shelf = useOlderSettledShelf({ scopes, expanded: readSettled, visibleCount: 0 });
-  const minute = useNowMinute();
-  const wanted = readSettled
-    ? completedHistoryPageRequests(
-        shelf.pages,
-        shelf.environments,
-        Date.parse(`${minute}:00.000Z`) - 86400000,
-      )
-    : shelf.pages;
-  const { grow, pages } = shelf;
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- reads omitted settled families only through the past-day frontier while a completed shelf is open
-  useEffect(() => {
-    if (wanted !== pages) grow(wanted);
-  }, [wanted, pages, grow]);
   const showSubagents = useClientSettings(
     (s) =>
       resolveSidebarSubagentVisibility(s) !== "hide" && (s.sidebarRecentIncludeSubagents ?? true),
@@ -94,10 +66,9 @@ export function useCompletedThreadHistory(input: {
     };
   }, [include, rootsKey]);
   return {
-    loading: shelf.loading || (status & 1) !== 0,
-    failed: shelf.failed || (status & 2) !== 0,
+    loading: (status & 1) !== 0,
+    failed: (status & 2) !== 0,
     retry: () => {
-      shelf.retry();
       if (include)
         for (const [id, root] of roots) {
           if (AsyncResult.isFailure(appAtomRegistry.get(threadFamilies.familyAtom(id, root))))

@@ -108,7 +108,6 @@ function CompletedShelf({
   const history = useCompletedThreadHistory({
     enabled: expanded,
     includeSubagents: readSubagents || kind === "subagents",
-    includeSettled: name === "Today",
     scopedProjectKeys: scopedProjectKeys ?? null,
   });
   const scopedEntries =
