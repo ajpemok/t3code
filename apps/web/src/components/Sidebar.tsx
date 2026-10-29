@@ -3433,6 +3433,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                             onSnooze={attemptSnooze}
                             onUnsnooze={attemptUnsnooze}
                             onUnpin={attemptUnpin}
+                            onPin={attemptPin}
                             onAcknowledgeWoke={acknowledgeWoke}
                             onFileDropThreads={handleThreadFileDrop}
                           />
