@@ -305,6 +305,7 @@ path and ID stay stable.
 | `apps/web/index.html`                             | Initial page and splash labels.                                               |
 | `apps/web/public/manifest.webmanifest`            | Installed web-app name with unchanged web identity.                           |
 | `.ajpemok/sign-macos.cjs`                         | Pinned local signing identity, staged nested code and preserved entitlements. |
+| `.ajpemok/sign-macos-session.cjs`                 | One-shot logged-in-session signing for SSH builds, with bounded cleanup.      |
 | `assets/a3-fork/icon-1024.png`                    | Selected artwork and shared macOS/Linux source.                               |
 | `assets/a3-fork/icon-windows.ico`                 | Windows renditions from 16 to 256 pixels.                                     |
 | `assets/a3-fork/favicon.ico`                      | Web 16/32-pixel ICO.                                                          |

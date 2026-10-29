@@ -41,6 +41,9 @@ module.exports = async function signLocalMacBuild(context) {
     path.join(app, "Contents/Info.plist"),
   ]).trim();
   if (bundleId !== "com.t3tools.t3code") throw new Error("The staged bundle identity changed.");
+  if (process.env.SSH_CONNECTION || process.env.SSH_TTY) {
+    return require("./sign-macos-session.cjs")(context, configPath);
+  }
   const requireScripts = createRequire(path.join(__dirname, "../scripts/package.json"));
   const { sign } = await import(requireScripts.resolve("@electron/osx-sign"));
   const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "ajp3-entitlements-"));
@@ -51,6 +54,8 @@ module.exports = async function signLocalMacBuild(context) {
     await sign({
       app,
       identity: config.identity,
+      // osx-sign searches generic trust; the pinned Code Signing identity is validated above.
+      identityValidation: false,
       keychain,
       platform: "darwin",
       batchCodesignCalls: true,
