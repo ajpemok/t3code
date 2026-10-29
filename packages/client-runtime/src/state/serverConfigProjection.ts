@@ -108,6 +108,9 @@ export function applyServerConfigProjection(
         config: {
           ...projection.config,
           settings: reuseUnchanged(projection.config.settings, event.payload.settings),
+          ...(event.payload.newProjectsRoot === undefined
+            ? {}
+            : { newProjectsRoot: event.payload.newProjectsRoot }),
         },
         latestEvent: event,
         source: "live",

@@ -25,6 +25,8 @@ import * as PubSub from "effect/PubSub";
 import * as Queue from "effect/Queue";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
+import * as Path from "effect/Path";
+import * as HostProcess from "@t3tools/shared/HostProcess";
 import { Headers } from "effect/http";
 import { RpcGroup, RpcMessage, RpcServer } from "effect/rpc";
 import * as SqlClient from "effect/sql/SqlClient";
@@ -662,7 +664,10 @@ it.effect(
       });
       yield* Deferred.await(discoveryStarted);
 
-      const duringDiscovery = yield* settings.updateSettings({ defaultAutoPull: true });
+      const duringDiscovery = yield* settings.updateSettings({
+        defaultAutoPull: true,
+        addProjectBaseDirectory: "~/Code/Projects",
+      });
       yield* Deferred.succeed(finishDiscovery, undefined);
       const snapshot = yield* Queue.take(responses);
       assert.equal(snapshot.type, "snapshot");
@@ -678,7 +683,16 @@ it.effect(
       yield* Deferred.await(settingsSubscribed);
 
       // Later updates expose a dropped buffered event as a value mismatch, not a timeout.
-      const latestSettings = yield* settings.updateSettings({ enableProviderUpdateChecks: false });
+      const latestSettings = yield* settings.updateSettings({
+        enableProviderUpdateChecks: false,
+        addProjectBaseDirectory: "~/Code/Elsewhere",
+      });
+      const path = yield* Path.Path;
+      const home = yield* HostProcess.HomeDirectory;
+      const expectedProjectRoots = [
+        path.join(home, "Code/Projects"),
+        path.join(home, "Code/Elsewhere"),
+      ];
       const latestKeybindings = yield* keybindings.upsertKeybindingRule({
         key: "mod+alt+z",
         command: "terminal.split",
@@ -692,6 +706,7 @@ it.effect(
         const event = yield* Queue.take(responses);
         if (event.type === "settingsUpdated") {
           assert.deepEqual(event.payload.settings, expectedSettings.shift());
+          assert.equal(event.payload.newProjectsRoot, expectedProjectRoots.shift());
         } else {
           assert.equal(event.type, "keybindingsUpdated");
           if (event.type !== "keybindingsUpdated")
