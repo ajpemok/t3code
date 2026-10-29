@@ -2830,6 +2830,9 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       : {}),
     extraResources: [
       ...DESKTOP_EXTRA_RESOURCES,
+      ...(platform === "mac"
+        ? [{ from: "assets/a3-fork/InfoPlist.strings", to: "en.lproj/InfoPlist.strings" }]
+        : []),
       ...(platform === "linux" ? LINUX_CAPTURE_EXTRA_RESOURCES : []),
       ...(platform === "linux" ? LINUX_BROWSER_SECRET_EXTRA_RESOURCES : []),
       ...(platform === "win" ? WINDOWS_SERVER_EXTRA_RESOURCES : []),
@@ -2862,7 +2865,6 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       icon: "icon.icns",
       category: "public.app-category.developer-tools",
       extendInfo: {
-        CFBundleDisplayName: "AJP3 Fork",
         // macOS 26 offers Messages/Mail codes in every text field unless opted out.
         NSAutoFillRequiresTextContentTypeForOneTimeCodeOnMac: true,
         NSLocalNetworkUsageDescription:
