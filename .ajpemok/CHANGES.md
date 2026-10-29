@@ -117,7 +117,7 @@ switches to disable correctness repairs.
 - Give the conversation a faint project wash; Thread Details uses the full project-section tint in both its inline and popover layouts.
 - Keep scratch and draft threads neutral when there is no project.
 - Use stronger dark-mode contrast, smooth active/idle colour transitions and distinct bounded Working, Waiting, Computer, Browser and T3 Browser effects. Pause them offscreen, when hidden and with reduced motion.
-- Use flat task bands with gaps; preserve the existing Working label and elapsed time.
+- Use flat task bands with gaps; keep elapsed time visible and status text in hover details.
 - Use the project accent for Working, Goals and snooze times in both sidebars, with a softer shade for subagents and the theme accent when there is no project colour.
 
 | Files                                                   | Fork Responsibility                                                 |
@@ -163,7 +163,8 @@ the active run, in both shell readers, so completed or older work cannot keep it
 ## Collapsible Project Sections
 
 - Reuse upstream project folders, collapse state and keyboard navigation through the Project Sections setting. Retire the deleted legacy sidebar.
-- Show active/waiting/idle state with a coloured indicator; preserve the original thread status text.
+- Show active/waiting/idle state with a coloured indicator and keep status text in hover details.
+- Keep upstream's one-line/two-line folder setting; add branch and PR metadata in the two-line variant.
 - Keep the pin beside the project icon in folders, cards and shelves. Fill pinned icons with the project accent; leave unpinned icons outlined. Keep New Thread on hover or keyboard focus.
 - Reserve aligned provider, speed, action and time columns across normal, snoozed and settled rows. Keep snooze clocks fixed when labels differ and preserve positions on hover; reduce the detail column at compact widths.
 - Right-align model names with timestamps. Nested subagents share the row inset and responsive detail columns; their titles and dismiss buttons shrink separately.

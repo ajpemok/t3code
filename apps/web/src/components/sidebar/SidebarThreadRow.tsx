@@ -1273,13 +1273,14 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
 
   const diff = latestRunDiff(thread);
   // Only the provider icon would remain, so the row drops the line instead of leaving it blank.
-  const metaLineEmpty = variant === "folder" || (
-    !thread.branch &&
-    !showsScratchMachine &&
-    prBadge === null &&
-    diff === null &&
-    !isRemote &&
-    runningTerminalIds.length === 0);
+  const metaLineEmpty =
+    variant === "folder" ||
+    (!thread.branch &&
+      !showsScratchMachine &&
+      prBadge === null &&
+      diff === null &&
+      !isRemote &&
+      runningTerminalIds.length === 0);
 
   return (
     <li
