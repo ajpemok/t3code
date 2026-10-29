@@ -239,7 +239,7 @@ export function ActiveSubagentThreads({
           <li key={childKey}>
             <div
               className={cn(
-                "project-tint-row project-tint-subagent group/recent [--sidebar-detail-width:clamp(2.75rem,calc(100cqi-20rem),5rem)] relative grid min-h-7 min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-1.5 ps-2 pe-(--sidebar-row-content-inset) text-xs text-sidebar-foreground/85",
+                "project-tint-row project-tint-subagent group/recent [--sidebar-detail-width:clamp(2.75rem,calc(100cqi-20rem),4rem)] relative grid min-h-10 min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 py-1 ps-2 pe-(--sidebar-row-content-inset) text-xs text-sidebar-foreground/85",
                 selected?.environmentId === ref.environmentId &&
                   selected.threadId === ref.threadId &&
                   "project-tint-selected",
