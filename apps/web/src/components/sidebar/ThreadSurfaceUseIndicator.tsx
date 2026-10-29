@@ -12,6 +12,7 @@ import {
 import braveLogo from "~/assets/brave.svg";
 import {
   recentThreadSurfaceUse,
+  retainedThreadSurfaceUse,
   resolveThreadSurfaceUse,
   SURFACE_USE,
 } from "~/lib/threadSurfaceUse";
@@ -96,7 +97,7 @@ export function ThreadActivityStatus({
   readonly trackSurfaceUse?: boolean;
   readonly onAcknowledgeWoke?: (() => void) | undefined;
 }) {
-  const { activity, primaryActivity, recentOnly, recent } = useSurfaceUse(
+  const { activity, primaryActivity, retainedOnly, recentOnly, recent } = useSurfaceUse(
     enabled && trackSurfaceUse ? scopedThreadKey(threadRef) : null,
   );
   const attention =
@@ -130,9 +131,11 @@ export function ThreadActivityStatus({
             ? "attention"
             : "working");
   const label = tool
-    ? recentOnly & tool.bit
-      ? tool.label.replace("Using", "Recently Used")
-      : tool.label
+    ? retainedOnly & tool.bit
+      ? `${tool.label.replace("Using ", "")} Use This Turn`
+      : recentOnly & tool.bit
+        ? tool.label.replace("Using", "Recently Used")
+        : tool.label
     : status?.label;
   const endsAt =
     tool && recentOnly & tool.bit
@@ -177,6 +180,7 @@ export function ThreadActivityStatus({
 
 const EMPTY_SURFACE_USE = {
   activity: 0,
+  retained: 0,
   recent: recentThreadSurfaceUse([], null, 0),
   syncPreview: false,
 };
@@ -218,6 +222,7 @@ const surfaceUseAtom = Atom.family((key: string | null) =>
         deviceSession,
       ),
       recent: recentThreadSurfaceUse(items, thread.runtime.activeRunId, Date.now()),
+      retained: retainedThreadSurfaceUse(items, thread.runtime.activeRunId),
     };
   }).pipe(Atom.setIdleTTL(0)),
 );
@@ -231,16 +236,17 @@ function useSurfaceUse(key: string | null) {
     useRecentSurface(state, SURFACE_USE.t3Browser) |
     useRecentSurface(state, SURFACE_USE.device);
   return {
-    activity: state.activity | recent,
-    primaryActivity: state.activity || recent,
-    recentOnly: recent & ~state.activity,
+    activity: state.activity | state.retained | recent,
+    primaryActivity: state.activity || recent || state.retained,
+    retainedOnly: state.retained & ~state.activity,
+    recentOnly: recent & ~(state.activity | state.retained),
     recent: state.recent,
   };
 }
 
 function useRecentSurface(state: typeof EMPTY_SURFACE_USE, bit: number) {
   const expiresAt =
-    state.activity & bit
+    (state.activity | state.retained) & bit
       ? null
       : (state.recent.find((item) => item.surface === bit)?.expiresAt ?? null);
   const expired = useDeadlinePassed(expiresAt);
@@ -256,35 +262,32 @@ export function ThreadSurfaceUseIndicator({
   readonly enabled: boolean;
   readonly workingFallback?: boolean;
 }) {
-  const { primaryActivity, recentOnly, recent } = useSurfaceUse(
+  const { primaryActivity, retainedOnly, recentOnly, recent } = useSurfaceUse(
     enabled ? scopedThreadKey(threadRef) : null,
   );
   const surface = [
-    { bit: SURFACE_USE.t3Browser, kind: "t3-browser" as const, label: "Using T3 browser" },
-    { bit: SURFACE_USE.device, kind: "device" as const, label: "Using device" },
-    { bit: SURFACE_USE.browser, kind: "browser" as const, label: "Using browser" },
-    { bit: SURFACE_USE.computer, kind: "computer" as const, label: "Using computer" },
+    { bit: SURFACE_USE.t3Browser, kind: "t3-browser" as const, label: "Using T3 Browser" },
+    { bit: SURFACE_USE.device, kind: "device" as const, label: "Using Device" },
+    { bit: SURFACE_USE.browser, kind: "browser" as const, label: "Using Browser" },
+    { bit: SURFACE_USE.computer, kind: "computer" as const, label: "Using Computer" },
   ].find(({ bit }) => primaryActivity & bit);
   if (!surface) return workingFallback ? <TaskActivitySymbol kind="working" /> : null;
   const { bit, kind, label } = surface;
+  const description =
+    retainedOnly & bit
+      ? `${label.replace("Using ", "")} Use This Turn`
+      : recentOnly & bit
+        ? label.replace("Using", "Recently Used")
+        : label;
   const endsAt =
     recentOnly & bit ? recent.find((item) => item.surface === bit)?.expiresAt : undefined;
   return (
     <span data-thread-surface-use className="inline-flex size-3.5 shrink-0 items-center text-info">
       <Tooltip key={`${bit}:${endsAt ?? "active"}`}>
-        <TooltipTrigger
-          render={
-            <span
-              aria-label={recentOnly & bit ? label.replace("Using", "Recently used") : label}
-              className="inline-flex"
-            />
-          }
-        >
+        <TooltipTrigger render={<span aria-label={description} className="inline-flex" />}>
           <SurfaceUseSymbol kind={kind} endsAt={endsAt} />
         </TooltipTrigger>
-        <TooltipPopup>
-          {recentOnly & bit ? label.replace("Using", "Recently used") : label}
-        </TooltipPopup>
+        <TooltipPopup>{description}</TooltipPopup>
       </Tooltip>
     </span>
   );
