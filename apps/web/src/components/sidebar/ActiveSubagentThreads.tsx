@@ -239,7 +239,7 @@ export function ActiveSubagentThreads({
           <li key={childKey}>
             <div
               className={cn(
-                "project-tint-row project-tint-subagent group/recent relative flex min-h-7 min-w-0 items-center gap-1.5 px-2 text-xs text-sidebar-foreground/85",
+                "project-tint-row project-tint-subagent group/recent [--sidebar-detail-width:clamp(2.75rem,calc(100cqi-20rem),5rem)] relative grid min-h-7 min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-1.5 ps-2 pe-(--sidebar-row-content-inset) text-xs text-sidebar-foreground/85",
                 selected?.environmentId === ref.environmentId &&
                   selected.threadId === ref.threadId &&
                   "project-tint-selected",
@@ -250,21 +250,23 @@ export function ActiveSubagentThreads({
                 void inactiveTabs.showTaskContextMenu(ref, { x: event.clientX, y: event.clientY });
               }}
             >
-              <Link
-                to="/$environmentId/$threadId"
-                params={buildThreadRouteParams(ref)}
-                aria-label={`Open ${retainedKeys.has(childKey) ? "recent " : mode === "active" ? "active " : ""}subagent: ${child.title}`}
-                title={child.title}
-                className="flex min-w-0 flex-1 items-center gap-1.5 rounded-sm py-1 text-inherit outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring"
-              >
-                <GitForkIcon
-                  className="size-3.5 shrink-0 text-sidebar-muted-foreground"
-                  aria-hidden
-                />
-                <span className="min-w-0 flex-1 truncate">{child.title}</span>
-              </Link>
-              {recentEntry ? <RecentThreadDismissButton entry={recentEntry} /> : null}
-              <span className="inline-flex shrink-0 flex-col items-end justify-center gap-0.5 text-3xs leading-tight text-secondary-label">
+              <div className="flex min-w-0 items-center gap-1.5">
+                <Link
+                  to="/$environmentId/$threadId"
+                  params={buildThreadRouteParams(ref)}
+                  aria-label={`Open ${retainedKeys.has(childKey) ? "recent " : mode === "active" ? "active " : ""}subagent: ${child.title}`}
+                  title={child.title}
+                  className="flex min-w-0 flex-1 items-center gap-1.5 rounded-sm py-1 text-inherit outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring"
+                >
+                  <GitForkIcon
+                    className="size-3.5 shrink-0 text-sidebar-muted-foreground"
+                    aria-hidden
+                  />
+                  <span className="min-w-0 flex-1 truncate">{child.title}</span>
+                </Link>
+                {recentEntry ? <RecentThreadDismissButton entry={recentEntry} /> : null}
+              </div>
+              <span className="grid min-w-0 grid-rows-[0.875rem_auto] items-center justify-items-end gap-y-0.5 text-3xs leading-tight text-secondary-label">
                 <ThreadActivityStatus
                   thread={child}
                   threadRef={ref}
@@ -272,10 +274,12 @@ export function ActiveSubagentThreads({
                   trackSurfaceUse={false}
                   status={status}
                 />
-                <RelativeTime
-                  timestamp={child.latestUserMessageAt ?? child.updatedAt ?? child.createdAt}
-                  nowLabel="now"
-                />
+                <span className="w-(--sidebar-detail-width,5rem) truncate text-right tabular-nums">
+                  <RelativeTime
+                    timestamp={child.latestUserMessageAt ?? child.updatedAt ?? child.createdAt}
+                    nowLabel="now"
+                  />
+                </span>
               </span>
             </div>
           </li>

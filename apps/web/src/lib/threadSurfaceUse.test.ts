@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vite-plus/test";
 import { RunId } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
-import { resolveThreadSurfaceUse, SURFACE_USE } from "./threadSurfaceUse";
+import { recentThreadSurfaceUse, resolveThreadSurfaceUse, SURFACE_USE } from "./threadSurfaceUse";
 
 const runId = RunId.make("current");
 const running = { runId, status: "running" as const, completedAt: null };
 
 describe("resolveThreadSurfaceUse", () => {
-  it("distinguishes computer, browser and T3 browser calls without treating ownership as activity", () => {
+  it("distinguishes computer, browser and T3 browser calls and active browser control", () => {
     expect(resolveThreadSurfaceUse([{ ...running, toolSurface: "computer" }], runId)).toBe(
       SURFACE_USE.computer,
     );
@@ -23,6 +23,21 @@ describe("resolveThreadSurfaceUse", () => {
     expect(
       resolveThreadSurfaceUse([{ ...running, toolName: "mcp__t3_code__t3_thread_read" }], runId),
     ).toBe(0);
+    expect(resolveThreadSurfaceUse([], runId, true)).toBe(SURFACE_USE.t3Browser);
+    expect(
+      resolveThreadSurfaceUse(
+        [{ ...running, status: "completed", toolSurface: "browser" }],
+        runId,
+        true,
+      ),
+    ).toBe(SURFACE_USE.t3Browser);
+    expect(resolveThreadSurfaceUse([], runId, false)).toBe(0);
+    expect(resolveThreadSurfaceUse([], null, true)).toBe(0);
+    expect(resolveThreadSurfaceUse([], runId, false, true)).toBe(SURFACE_USE.device);
+    expect(resolveThreadSurfaceUse([], null, false, true)).toBe(0);
+    expect(
+      resolveThreadSurfaceUse([{ ...running, toolName: "mcp__t3__device_screenshot" }], runId),
+    ).toBe(SURFACE_USE.device);
   });
 
   it("ignores completed, failed, waiting and previous-run calls", () => {
@@ -37,6 +52,57 @@ describe("resolveThreadSurfaceUse", () => {
         runId,
       ),
     ).toBe(0);
+    const completedAt = DateTime.makeUnsafe("2026-10-25T01:00:00Z");
+    const completed = { ...running, status: "completed" as const, completedAt };
+    expect(
+      recentThreadSurfaceUse(
+        [
+          { ...completed, toolSurface: "computer" },
+          { ...completed, toolSurface: "browser" },
+          { ...completed, toolName: "mcp__t3__preview_snapshot" },
+          { ...completed, toolName: "mcp__t3__device_screenshot" },
+          { ...completed, status: "failed", toolSurface: "browser" },
+          { ...completed, runId: RunId.make("old"), toolSurface: "browser" },
+        ],
+        runId,
+        DateTime.toEpochMillis(completedAt),
+      ),
+    ).toEqual(
+      [1, 2, 4, 8].map((surface) => ({
+        surface,
+        expiresAt: DateTime.toEpochMillis(completedAt) + 5_000,
+      })),
+    );
+    expect(
+      recentThreadSurfaceUse(
+        [
+          { ...completed, toolName: "mcp__t3__preview_close" },
+          { ...completed, toolName: "mcp__t3__device_close" },
+        ],
+        runId,
+        DateTime.toEpochMillis(completedAt),
+      ),
+    ).toEqual([]);
+    expect(
+      recentThreadSurfaceUse(
+        [{ ...completed, toolSurface: "browser" }],
+        runId,
+        DateTime.toEpochMillis(completedAt) + 5_000,
+      ),
+    ).toEqual([]);
+    const newerAt = DateTime.makeUnsafe("2026-10-25T01:00:01Z");
+    expect(
+      recentThreadSurfaceUse(
+        [
+          { ...completed, completedAt: newerAt, toolSurface: "browser" },
+          { ...completed, toolSurface: "browser" },
+        ],
+        runId,
+        DateTime.toEpochMillis(completedAt),
+      ),
+    ).toEqual([
+      { surface: SURFACE_USE.browser, expiresAt: DateTime.toEpochMillis(newerAt) + 5_000 },
+    ]);
     expect(resolveThreadSurfaceUse([{ ...running, toolSurface: "browser" }], null)).toBe(0);
     expect(
       resolveThreadSurfaceUse(
