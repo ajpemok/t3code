@@ -228,7 +228,8 @@ extra indentation and separation from their parent. Parent and child model colum
 
 Both sidebars have Recent and Today shelves, each with independent Threads and
 Subagents tabs. Today sits below Recent and lists other completions from the past
-24 hours, including settled threads. Recent has independent thread and subagent
+24 hours. Settled threads and their descendants stay exclusively in Settled.
+Recent has independent thread and subagent
 count/age limits, each defaulting to five within sixty minutes; a zero age limit
 keeps the last N regardless of age. Separate client
 preferences control the shelf, normal-list retention under Hide Inactive and
@@ -243,8 +244,8 @@ Recent entries and retained subagents can be dismissed individually, with Undo
 and a restore action in Recent. Dismissal is local to the client and completion;
 a later completed turn can appear again. Keep the optional normal-list retention.
 Today excludes Recent and dismissed completions without extending normal-list retention.
-Use native settled pages only through the 24-hour frontier. Read omitted idle
-children through native family reads after opening a Subagents tab, keeping those
+Read omitted idle children of unsettled threads through native family reads
+after opening a Subagents tab, keeping those
 reads until the shelf collapses. Do not subscribe to transcripts for these shelves.
 
 | Files                                                                 | Fork Responsibility                                                           |
@@ -252,7 +253,7 @@ reads until the shelf collapses. Do not subscribe to transcripts for these shelv
 | `apps/web/src/components/sidebar/recentThreads.logic.ts`              | Completion ordering, count/age bounds, exclusions and ancestor keys.          |
 | `apps/web/src/components/sidebar/recentThreads.logic.test.ts`         | Boundaries, parking, native children, environments and normal-list retention. |
 | `apps/web/src/hooks/useRecentThreads.ts`                              | Shared quiet-shell derivation, saved preferences and minute clock.            |
-| `apps/web/src/hooks/useCompletedThreadHistory.ts`                     | Scoped native history and on-demand subagent-family reads.                    |
+| `apps/web/src/hooks/useCompletedThreadHistory.ts`                     | Scoped on-demand subagent-family reads, excluding settled parents.            |
 | `apps/web/src/components/sidebar/RecentThreadsShelf.tsx`              | Shared Recent section, collapse, links and existing context actions.          |
 | `apps/web/src/components/sidebar/RecentThreadDismissButton.tsx`       | Shared dismissal action for Recent and retained child rows.                   |
 | `apps/web/src/components/sidebar/RecentThreadsShelf.browser.test.tsx` | Collapse, finished-thread display and removal on resume.                      |
