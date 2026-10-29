@@ -19,6 +19,9 @@ import type {
   PreviewStreamHostSetup,
   PreviewViewportSetting,
 } from "@t3tools/contracts";
+import { ThreadId } from "@t3tools/contracts";
+import { scopeThreadRef } from "@t3tools/client-runtime/environment";
+import { applyPreviewServerAgentControl } from "~/previewStateStore";
 import {
   type FormEvent,
   type KeyboardEvent,
@@ -358,6 +361,9 @@ export function ServerBrowserSurface(props: {
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!visible || accessDenied || hostSetup || !access || !cap || !canvas) return;
+    const activityOwner = Symbol();
+    let disposed = false;
+    const threadRef = scopeThreadRef(environmentId, ThreadId.make(threadId));
     let refreshTimer: ReturnType<typeof setTimeout> | null = null;
     const painter = createPreviewFramePainter(canvas, () => {
       if (hasFrameRef.current) return;
@@ -396,6 +402,14 @@ export function ServerBrowserSurface(props: {
           viewportChanged(viewport);
         },
         onControl: (next) => {
+          if (disposed) return;
+          applyPreviewServerAgentControl(
+            threadRef,
+            activityOwner,
+            tabId,
+            next.controller === "agent",
+            "control",
+          );
           const previous = controlRef.current;
           controlRef.current = next;
           setControl(next);
@@ -413,7 +427,8 @@ export function ServerBrowserSurface(props: {
           }
         },
         onConnectedChange: (connected) => {
-          if (connected) return;
+          if (connected || disposed) return;
+          applyPreviewServerAgentControl(threadRef, activityOwner, tabId, false);
           setFileChooser(null);
           controlRef.current = null;
           setControl(null);
@@ -437,6 +452,8 @@ export function ServerBrowserSurface(props: {
     );
     clientRef.current = client;
     return () => {
+      disposed = true;
+      applyPreviewServerAgentControl(threadRef, activityOwner, tabId, false, "viewer-detached");
       painter.stop();
       if (refreshTimer !== null) clearTimeout(refreshTimer);
       client.stop();
