@@ -291,18 +291,20 @@ version and update channel so official nightlies and fork builds replace one ano
 Native mobile and development icons retain their upstream assets.
 
 Display AJP3 Fork in desktop branding, window/About names, the web shell and web-app
-manifest. Retain channel labels, Electron's internal storage name and the token-safe
-native User-Agent format. macOS localises the visible bundle name to AJP3 Fork.
+manifest. Retain channel labels and the token-safe native User-Agent format.
+Windows uses AJP3 Fork for Electron toast registration and installer shortcuts,
+with the existing app ID, executable and explicit user-data path. Other platforms
+retain their credential identity. macOS localises the visible bundle name to AJP3 Fork.
 Keep the unlocalised name equal to the physical bundle name so Finder and Dock
 accept the localisation; the path and ID stay stable.
 
 | Files                                             | Fork Responsibility                                                           |
 | ------------------------------------------------- | ----------------------------------------------------------------------------- |
 | `scripts/lib/brand-assets.ts`                     | Select fork assets through the existing nightly packaging paths.              |
-| `scripts/build-desktop-artifact.ts`               | macOS display metadata with stable package identity.                          |
+| `scripts/build-desktop-artifact.ts`               | Native display metadata and Windows notification shortcut name.               |
 | `apps/desktop/resources/ajp3/InfoPlist.strings`   | Localised Finder and Dock name with the original bundle filename.             |
 | `apps/desktop/src/app/DesktopEnvironment.ts`      | Desktop display name and unchanged channel selection.                         |
-| `apps/desktop/src/app/DesktopAppIdentity.ts`      | Stable Electron storage name alongside fork display branding.                 |
+| `apps/desktop/src/app/DesktopAppIdentity.ts`      | Windows notification name and stable credential names elsewhere.              |
 | `apps/desktop/src/app/DesktopAppIdentity.test.ts` | Runtime/About names, valid User-Agent token and stable app ID.                |
 | `apps/web/src/branding.ts`                        | Web branding fallback.                                                        |
 | `apps/web/index.html`                             | Initial page and splash labels.                                               |
@@ -547,6 +549,9 @@ Floating-browser behaviour was left unchanged after the user found the existing 
 3877 adds configurable thread-details rows and moves undo notices into the sidebar footer.
 Keep those upstream controls alongside the fork project tint and custom settings page.
 The configured project folder also coexists with upstream scratch-thread promotion.
+
+3904 retains upstream performance and recovery improvements. The resize-hook conflict
+keeps its imperative width setter while preserving the fork viewport-width snapshot.
 
 ## Focused Checks
 

@@ -176,39 +176,49 @@ describe("DesktopAppIdentity", () => {
   );
 
   it.effect.each([
-    { stage: "Beta", environment: {} },
+    { stage: "Beta", environment: {}, expectedName: "T3 Code Beta" },
     {
       stage: "Nightly",
       environment: { appVersion: "0.0.43-nightly.20260929.2428" },
+      expectedName: "T3 Code Nightly",
     },
     {
       stage: "Dev",
       environment: { env: { VITE_DEV_SERVER_URL: "http://localhost:5173" } },
+      expectedName: "T3 Code Dev",
     },
-  ])("uses a valid native User-Agent product name for $stage", ({ stage, environment }) => {
-    const calls: ElectronAppCalls = {
-      setAboutPanelOptions: [],
-      setDockIcon: [],
-      setName: [],
-    };
+    {
+      stage: "Nightly",
+      environment: { platform: "win32" as const, appVersion: "0.0.43-nightly.20260929.2428" },
+      expectedName: "AJP3 Fork",
+    },
+  ])(
+    "uses a valid native User-Agent product name for $stage",
+    ({ stage, environment, expectedName }) => {
+      const calls: ElectronAppCalls = {
+        setAboutPanelOptions: [],
+        setDockIcon: [],
+        setName: [],
+      };
 
-    return withIdentity(
-      Effect.gen(function* () {
-        const identity = yield* DesktopAppIdentity.DesktopAppIdentity;
-        yield* identity.configure;
+      return withIdentity(
+        Effect.gen(function* () {
+          const identity = yield* DesktopAppIdentity.DesktopAppIdentity;
+          yield* identity.configure;
 
-        const runtimeName = calls.setName[0];
-        assert.isDefined(runtimeName);
-        assert.equal(runtimeName, `T3 Code ${stage}`);
-        assert.match(runtimeName.replaceAll(" ", ""), /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/);
-        assert.equal(calls.setAboutPanelOptions[0]?.applicationName, `AJP3 Fork (${stage})`);
-        const runtime = yield* DesktopEnvironment.DesktopEnvironment;
-        assert.equal(
-          runtime.appUserModelId,
-          stage === "Dev" ? "com.t3tools.t3code.dev" : "com.t3tools.t3code",
-        );
-      }),
-      { calls, environment },
-    );
-  });
+          const runtimeName = calls.setName[0];
+          assert.isDefined(runtimeName);
+          assert.equal(runtimeName, expectedName);
+          assert.match(runtimeName.replaceAll(" ", ""), /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/);
+          assert.equal(calls.setAboutPanelOptions[0]?.applicationName, `AJP3 Fork (${stage})`);
+          const runtime = yield* DesktopEnvironment.DesktopEnvironment;
+          assert.equal(
+            runtime.appUserModelId,
+            stage === "Dev" ? "com.t3tools.t3code.dev" : "com.t3tools.t3code",
+          );
+        }),
+        { calls, environment },
+      );
+    },
+  );
 });

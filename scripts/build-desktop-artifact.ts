@@ -2981,6 +2981,8 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   if (platform === "win") {
     buildConfig.npmRebuild = false;
     buildConfig.nsis = {
+      shortcutName: "AJP3 Fork",
+      uninstallDisplayName: "AJP3 Fork",
       differentialPackage: true,
       include: "apps/desktop/resources/installer.nsh",
     };

@@ -91,8 +91,12 @@ export const make = Effect.gen(function* () {
 
   const configure = Effect.gen(function* () {
     const commitHash = yield* resolveAboutCommitHash;
-    // Keep Electron's storage identity stable and its User-Agent token free of parentheses for Turnstile.
-    yield* electronApp.setName(`T3 Code ${environment.branding.stageLabel}`);
+    // Windows toast registration uses this name; other platforms retain their credential identity.
+    yield* electronApp.setName(
+      environment.platform === "win32"
+        ? environment.branding.baseName
+        : `T3 Code ${environment.branding.stageLabel}`,
+    );
     yield* electronApp.setAboutPanelOptions({
       applicationName: environment.displayName,
       applicationVersion: environment.appVersion,

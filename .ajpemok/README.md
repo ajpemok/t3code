@@ -14,8 +14,8 @@ Git records previous bases and patch revisions.
 
 ## Maintenance Branch
 
-`ajpemok/nightly-20261029.3877` groups the fork changes by feature on the recorded
-3877 base. Use this branch as the replay source for the next nightly. The published
+`ajpemok/nightly-20261030.3904` groups the fork changes by feature on the recorded
+3904 base. Use this branch as the replay source for the next nightly. The published
 3770 branches retain the earlier history. Shared
 contracts and styles serve several features, so retire repairs by comparing
 the behaviour and affected hunks, rather than skipping a whole mixed commit.
@@ -204,8 +204,11 @@ an Apple provisioning profile for passkeys. Local signing does not supply Develo
 notarisation or Apple's restricted entitlements.
 
 Keep the same certificate across updates. Its private key stays in Seoul's login
-keychain. The first signed fork build may need one approval for the existing Electron
-key; subsequent fork builds should retain that app requirement. Switching to an
+keychain. A matching designated requirement does not prove prompt-free Keychain access.
+macOS can also identify self-signed builds by their changing code hash in the
+item's partition rules, so approval may recur after updates. Confirm access with
+the owner across actual upgrades; an Apple-issued identity with a stable Team ID
+is the next signing path to qualify. Switching to an
 official nightly can prompt again because its signer differs. Check the certificate's
 expiry before renewing; replacing it changes the signing identity.
 
